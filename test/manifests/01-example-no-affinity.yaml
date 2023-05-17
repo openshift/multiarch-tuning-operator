@@ -7,7 +7,6 @@ metadata:
   annotations:
     result: "This pod should get an affinity set, but the apiserver does not validate it as the initial affinity is nil."
     fail: "yes"
-  namespace: multiarch-operator-test
 spec:
   securityContext:
     runAsNonRoot: true

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"strings"
 )
 
 const (
@@ -47,9 +48,21 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
+	// ignore the openshift-* namespace as those are infra components
+	if strings.HasPrefix(pod.Namespace, "openshift-") {
+		return a.patchedPodResponse(pod, req)
+	}
+
 	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3521-pod-scheduling-readiness
 	if pod.Spec.SchedulingGates == nil {
 		pod.Spec.SchedulingGates = []corev1.PodSchedulingGate{}
+	}
+
+	// if the gate is already present, do not try to patch (it would fail)
+	for _, schedulingGate := range pod.Spec.SchedulingGates {
+		if schedulingGate.Name == schedulingGateName {
+			return a.patchedPodResponse(pod, req)
+		}
 	}
 
 	pod.Spec.SchedulingGates = append(pod.Spec.SchedulingGates, schedulingGate)

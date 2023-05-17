@@ -4,7 +4,6 @@ metadata:
   generateName: example-no-node-affinity-
   labels:
     app: httpd
-  namespace: multiarch-operator-test
   annotations:
     result: "This pod get the affinity update from the controller. This affinity is just set to be an empty map at the beginning."
 spec:

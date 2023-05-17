@@ -4,7 +4,6 @@ metadata:
   generateName: node-affinity-conflict-
   labels:
     app: httpd
-  namespace: multiarch-operator-test
 spec:
   securityContext:
     runAsNonRoot: true

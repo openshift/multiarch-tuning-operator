@@ -14,7 +14,7 @@ spec:
   affinity: {}
   containers:
     - name: httpd
-      image: 'image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest'
+      image: 'quay.io/openshifttest/hello-openshift:multiarch'
       ports:
         - containerPort: 8080
       securityContext:

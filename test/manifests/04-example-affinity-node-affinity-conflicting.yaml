@@ -20,7 +20,7 @@ spec:
                   - arm64
   containers:
     - name: httpd
-      image: 'image-registry.openshift-image-registry.svc:5000/openshift/httpd:latest'
+      image: 'quay.io/openshifttest/hello-openshift:1.2.0'
       ports:
         - containerPort: 8080
       securityContext:

@@ -1,7 +1,0 @@
-namespace: test-multiarch-operator
-
-resources:
-  - 01-example-no-affinity.yaml
-  - 02-example-affinity-no-node-affinity.yaml
-  - 03-example-affinity-node-affinity-non-conflicting.yaml
-  - 04-example-affinity-node-affinity-conflicting.yaml

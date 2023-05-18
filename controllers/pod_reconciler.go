@@ -25,6 +25,7 @@ import (
 	"github.com/containers/image/v5/types"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,11 +37,6 @@ type PodReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
-
-// There is not Set implementation in Golang. The void struct is thought to emulate it via maps.
-type void struct{}
-
-var voidVal void
 
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update;patch
@@ -195,14 +191,14 @@ func removeSchedulingGate(pod *corev1.Pod) {
 // if an error occurs, it returns the error and a nil slice of strings.
 func inspectImages(ctx context.Context, pod *corev1.Pod) (supportedArchitectures []string, err error) {
 	// Build a set of all the images used by the pod
-	imageNamesSet := map[string]void{}
+	imageNamesSet := sets.New[string]()
 	for _, container := range append(pod.Spec.Containers, pod.Spec.InitContainers...) {
-		imageNamesSet[fmt.Sprintf("//%s", container.Image)] = voidVal
+		imageNamesSet.Insert(fmt.Sprintf("//%s", container.Image))
 	}
 	klog.V(3).Infof("Images list for pod %s/%s: %+v", pod.Namespace, pod.Name, imageNamesSet)
 	// https://github.com/containers/skopeo/blob/v1.11.1/cmd/skopeo/inspect.go#L72
 	// Iterate over the images, get their architectures and intersect (as in set intersection) them each other
-	supportedArchitecturesPerImage := make([][]string, 0, len(imageNamesSet))
+	var supportedArchitecturesSet sets.Set[string]
 	for imageName := range imageNamesSet {
 		currentImageSupportedArchitectures, err := inspectImage(ctx, pod, imageName)
 		if err != nil {
@@ -210,17 +206,19 @@ func inspectImages(ctx context.Context, pod *corev1.Pod) (supportedArchitectures
 			klog.Warningf("Error inspecting the image %s: %v", imageName, err)
 			return nil, err
 		}
-		supportedArchitecturesPerImage = append(supportedArchitecturesPerImage, currentImageSupportedArchitectures)
+		if supportedArchitecturesSet == nil {
+			supportedArchitecturesSet = currentImageSupportedArchitectures
+		} else {
+			supportedArchitecturesSet = supportedArchitecturesSet.Intersection(currentImageSupportedArchitectures)
+		}
 	}
 
-	// Intersect the supported architectures of each image once the inspection of all the images is done
-	supportedArchitectures = intersect(supportedArchitecturesPerImage...)
-	return
+	return sets.List(supportedArchitecturesSet), nil
 }
 
 // inspectImage inspects the image and returns the supported architectures. Any error when inspecting the image is returned so that
 // the caller can decide what to do.
-func inspectImage(ctx context.Context, pod *corev1.Pod, imageName string) (supportedArchitectures []string, err error) {
+func inspectImage(ctx context.Context, pod *corev1.Pod, imageName string) (supportedArchitectures sets.Set[string], err error) {
 	klog.V(5).Infof("Checking %s/%s's image %s", pod.Namespace, pod.Name, imageName)
 	// Check if the image is a manifest list
 	ref, err := docker.ParseReference(imageName)
@@ -262,9 +260,9 @@ func inspectImage(ctx context.Context, pod *corev1.Pod, imageName string) (suppo
 			klog.Warningf("Error parsing the OCI index from the raw manifest of the %s/%s's image %s: %v",
 				pod.Namespace, pod.Name, imageName, err)
 		}
-		supportedArchitectures = make([]string, 0, len(index.Manifests))
+		supportedArchitectures = sets.New[string]()
 		for _, m := range index.Manifests {
-			supportedArchitectures = append(supportedArchitectures, m.Platform.Architecture)
+			supportedArchitectures = sets.Insert(supportedArchitectures, m.Platform.Architecture)
 		}
 		return supportedArchitectures, nil
 
@@ -285,37 +283,8 @@ func inspectImage(ctx context.Context, pod *corev1.Pod, imageName string) (suppo
 				pod.Namespace, pod.Name, imageName, err)
 			return nil, err
 		}
-		return []string{config.Architecture}, nil
+		return sets.New(config.Architecture), nil
 	}
-}
-
-func intersect[T comparable](sets ...[]T) []T {
-	setMap := make(map[T]int) // Map to track element occurrences
-
-	// Count occurrences of elements in all sets
-	for _, set := range sets {
-		visited := make(map[T]void) // Track visited elements in the current set
-
-		for _, element := range set {
-			// Skip if the element has already been visited in the current set
-			if _, ok := visited[element]; ok {
-				continue
-			}
-			setMap[element]++
-		}
-	}
-
-	intersection := make([]T, 0, len(setMap))
-	setCount := len(sets)
-
-	// Check for elements that occurred in all sets, considering duplicates
-	for element, occurrences := range setMap {
-		if occurrences == setCount {
-			intersection = append(intersection, element)
-		}
-	}
-
-	return intersection
 }
 
 // SetupWithManager sets up the controller with the Manager.

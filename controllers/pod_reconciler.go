@@ -18,28 +18,44 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/containers/image/v5/docker"
 	"github.com/containers/image/v5/image"
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/types"
+	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+// SecretData struct for storing cred structure
+type AuthList struct {
+	Auths RegAuthList `json:"auths"`
+}
+type RegAuthData struct {
+	Auth string `json:"auth"`
+}
+type RegAuthList map[string]RegAuthData
+
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme    *runtime.Scheme
+	Clientset *kubernetes.Clientset
 }
 
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -74,7 +90,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	var err error
 
 	// Prepare the requirement for the node affinity.
-	architectureRequirement, err := prepareRequirement(ctx, pod)
+	architectureRequirement, err := prepareRequirement(ctx, r.Clientset, pod)
 	if err != nil {
 		klog.Errorf("unable to get the architecture requirements for pod %s/%s: %v. "+
 			"The nodeAffinity for this pod will not be set.", pod.Namespace, pod.Name, err)
@@ -97,8 +113,8 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	return ctrl.Result{}, nil
 }
 
-func prepareRequirement(ctx context.Context, pod *corev1.Pod) (corev1.NodeSelectorRequirement, error) {
-	values, err := inspectImages(ctx, pod)
+func prepareRequirement(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod) (corev1.NodeSelectorRequirement, error) {
+	values, err := inspectImages(ctx, clientset, pod)
 	// if an error occurs, we return an empty NodeSelectorRequirement and the error.
 	if err != nil {
 		return corev1.NodeSelectorRequirement{}, err
@@ -159,6 +175,18 @@ func setPodNodeAffinityRequirement(ctx context.Context, pod *corev1.Pod,
 	}
 }
 
+func getPodImagePullSecrets(pod *corev1.Pod) []string {
+	if pod.Spec.ImagePullSecrets == nil {
+		// If the imagePullSecrets array is nil, return emptylist
+		return []string{}
+	}
+	secretRefs := []string{}
+	for _, secret := range pod.Spec.ImagePullSecrets {
+		secretRefs = append(secretRefs, secret.Name)
+	}
+	return secretRefs
+}
+
 func hasSchedulingGate(pod *corev1.Pod) bool {
 	if pod.Spec.SchedulingGates == nil {
 		// If the schedulingGates array is nil, we return false
@@ -189,7 +217,7 @@ func removeSchedulingGate(pod *corev1.Pod) {
 
 // inspectImages returns the list of supported architectures for the images used by the pod.
 // if an error occurs, it returns the error and a nil slice of strings.
-func inspectImages(ctx context.Context, pod *corev1.Pod) (supportedArchitectures []string, err error) {
+func inspectImages(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod) (supportedArchitectures []string, err error) {
 	// Build a set of all the images used by the pod
 	imageNamesSet := sets.New[string]()
 	for _, container := range append(pod.Spec.Containers, pod.Spec.InitContainers...) {
@@ -200,7 +228,7 @@ func inspectImages(ctx context.Context, pod *corev1.Pod) (supportedArchitectures
 	// Iterate over the images, get their architectures and intersect (as in set intersection) them each other
 	var supportedArchitecturesSet sets.Set[string]
 	for imageName := range imageNamesSet {
-		currentImageSupportedArchitectures, err := inspectImage(ctx, pod, imageName)
+		currentImageSupportedArchitectures, err := inspectImage(ctx, clientset, pod, imageName)
 		if err != nil {
 			// The image cannot be inspected, we skip from adding the nodeAffinity
 			klog.Warningf("Error inspecting the image %s: %v", imageName, err)
@@ -218,7 +246,7 @@ func inspectImages(ctx context.Context, pod *corev1.Pod) (supportedArchitectures
 
 // inspectImage inspects the image and returns the supported architectures. Any error when inspecting the image is returned so that
 // the caller can decide what to do.
-func inspectImage(ctx context.Context, pod *corev1.Pod, imageName string) (supportedArchitectures sets.Set[string], err error) {
+func inspectImage(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod, imageName string) (supportedArchitectures sets.Set[string], err error) {
 	klog.V(5).Infof("Checking %s/%s's image %s", pod.Namespace, pod.Name, imageName)
 	// Check if the image is a manifest list
 	ref, err := docker.ParseReference(imageName)
@@ -227,10 +255,29 @@ func inspectImage(ctx context.Context, pod *corev1.Pod, imageName string) (suppo
 			pod.Namespace, pod.Name, imageName, err)
 		return nil, err
 	}
-
 	// TODO: handle private registries, credentials, TLS verification, etc.
-	// For OCP, we also need to handle the access to the internal registry via the proper RBAC rule.
+	// Get pull secrets and create a tmp auth file
+	secretAuths, err := PullSecretAuthList(ctx, clientset, pod)
+	if err != nil {
+		klog.Warningf("Error consolidating pull secrets for pod %s ns: %s", pod.Name, pod.Namespace)
+		return nil, err
+	}
+	if len(secretAuths) == 0 {
+		klog.Warningf("No pull secrets available for %s ns: %s", pod.Name, pod.Namespace)
+		return nil, err
+	}
+	secretList := AuthList{Auths: secretAuths}
+	//Marshal and write auth json file
+	authFile, err := WriteAuthFile(&secretList, pod.Name)
+	if err != nil {
+		klog.Warningf("Couldn't write auth file for %s ns: %s %v", pod.Name, pod.Namespace, err)
+		return nil, err
+	} else {
+		defer os.Remove(authFile)
+	}
+
 	src, err := ref.NewImageSource(ctx, &types.SystemContext{
+		AuthFilePath:                authFile,
 		OCIInsecureSkipTLSVerify:    true,
 		DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
 	})
@@ -285,6 +332,97 @@ func inspectImage(ctx context.Context, pod *corev1.Pod, imageName string) (suppo
 		}
 		return sets.New(config.Architecture), nil
 	}
+}
+
+// Function consolidates image pull secrets
+// - ImagePullSecrets in pod
+// - global pull secret in openshift-config
+// TODO? - default pull secret in pod namespace if no ImagePullSecrets field?
+func PullSecretAuthList(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod) (RegAuthList, error) {
+	secretAuths := make(RegAuthList)
+	secretList := getPodImagePullSecrets(pod)
+	for _, pullsecret := range secretList {
+		secret, err := clientset.CoreV1().Secrets(pod.Namespace).Get(ctx, pullsecret, metav1.GetOptions{})
+		if err != nil {
+			klog.Warningf("Error getting secret: %s namespace: %s", pullsecret, pod.Namespace)
+			return nil, err
+		}
+		var tmpAuths RegAuthList
+		if secret.Type == "kubernetes.io/dockercfg" {
+			err := json.Unmarshal(secret.Data[".dockercfg"], &tmpAuths)
+			if err != nil {
+				klog.Warningf("Error unmarshaling secret data for: %v", pullsecret)
+				return nil, err
+			}
+		} else if secret.Type == "kubernetes.io/dockerconfigjson" {
+			var objmap map[string]json.RawMessage
+			err := json.Unmarshal(secret.Data[".dockerconfigjson"], &objmap)
+			if err != nil {
+				klog.Warningf("Error unmarshaling secret data for: %v", pullsecret)
+				return nil, err
+			}
+			err = json.Unmarshal(objmap["auths"], &tmpAuths)
+			if err != nil {
+				klog.Warningf("Error unmarshaling secret data for: %v", pullsecret)
+				return nil, err
+			}
+		} else {
+			klog.Warningf("Error getting secret data for: %v", pullsecret)
+			return nil, err
+		}
+		// NOTE: Keys are overwritten with the latest in this case.
+		// TODO: decide how to handle dup keys
+		for k, v := range tmpAuths {
+			secretAuths[k] = v
+		}
+	}
+	//merge global pull secret
+	secret, err := clientset.CoreV1().Secrets("openshift-config").Get(ctx, "pull-secret", metav1.GetOptions{})
+	if err != nil {
+		klog.Warningf("Error getting global pull secret")
+		return nil, err
+	}
+	var objmap map[string]json.RawMessage
+	var tmpAuths RegAuthList
+	err = json.Unmarshal(secret.Data[".dockerconfigjson"], &objmap)
+	if err != nil {
+		klog.Warningf("Error unmarshaling secret data for the global pull secret")
+		return nil, err
+	}
+	err = json.Unmarshal(objmap["auths"], &tmpAuths)
+	if err != nil {
+		klog.Warningf("Error unmarshaling secret data for the global pull secret")
+		return nil, err
+	}
+	// NOTE: Keys are overwritten with the latest in this case.
+	// TODO: decide how to handle dup keys
+	for k, v := range tmpAuths {
+		secretAuths[k] = v
+	}
+	return secretAuths, nil
+}
+
+// Write auth json file to pass to c/Image API
+// TODO: efficient way to create in-memory file
+func WriteAuthFile(authList *AuthList, podName string) (string, error) {
+	authJson, err := json.Marshal(*authList)
+	if err != nil {
+		klog.Warningf("Error marshalling pull secrets")
+		return "", err
+	}
+	tmpFile, err := ioutil.TempFile(os.TempDir(), podName)
+	if err != nil {
+		return "", err
+	}
+	_, err = tmpFile.Write(authJson)
+	if closeerr := tmpFile.Close(); closeerr != nil {
+		klog.Warningf("Failed to close auth file %s %v", tmpFile.Name(), closeerr)
+	}
+	if err != nil {
+		os.Remove(tmpFile.Name())
+		return "", err
+	}
+	return tmpFile.Name(), err
 }
 
 // SetupWithManager sets up the controller with the Manager.

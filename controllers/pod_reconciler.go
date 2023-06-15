@@ -24,7 +24,7 @@ import (
 	"github.com/containers/image/v5/image"
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/types"
-	"io/ioutil"
+	"golang.org/x/sys/unix"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -268,16 +268,20 @@ func inspectImage(ctx context.Context, clientset *kubernetes.Clientset, pod *cor
 	}
 	secretList := AuthList{Auths: secretAuths}
 	//Marshal and write auth json file
-	authFile, err := WriteAuthFile(&secretList, pod.Name)
+	authFile, err := WriteAuthFile(&secretList, pod.Name+"-"+pod.Namespace)
 	if err != nil {
 		klog.Warningf("Couldn't write auth file for %s ns: %s %v", pod.Name, pod.Namespace, err)
 		return nil, err
 	} else {
-		defer os.Remove(authFile)
+		defer func(f *os.File) {
+			if err := f.Close(); err != nil {
+				klog.Warningf("Failed to close auth file %s %v", f.Name(), err)
+			}
+		}(authFile)
 	}
 
 	src, err := ref.NewImageSource(ctx, &types.SystemContext{
-		AuthFilePath:                authFile,
+		AuthFilePath:                authFile.Name(),
 		OCIInsecureSkipTLSVerify:    true,
 		DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
 	})
@@ -403,26 +407,45 @@ func PullSecretAuthList(ctx context.Context, clientset *kubernetes.Clientset, po
 }
 
 // Write auth json file to pass to c/Image API
-// TODO: efficient way to create in-memory file
-func WriteAuthFile(authList *AuthList, podName string) (string, error) {
+func WriteAuthFile(authList *AuthList, fileName string) (*os.File, error) {
 	authJson, err := json.Marshal(*authList)
 	if err != nil {
 		klog.Warningf("Error marshalling pull secrets")
-		return "", err
+		return nil, err
 	}
-	tmpFile, err := ioutil.TempFile(os.TempDir(), podName)
+	fd, err := writeMemFile(fileName, authJson)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	_, err = tmpFile.Write(authJson)
-	if closeerr := tmpFile.Close(); closeerr != nil {
-		klog.Warningf("Failed to close auth file %s %v", tmpFile.Name(), closeerr)
-	}
+	// filepath to our newly created in-memory file descriptor
+	fp := fmt.Sprintf("/proc/self/fd/%d", fd)
+	tmpFile := os.NewFile(uintptr(fd), fp)
+	return tmpFile, err
+}
+
+// writeMemFile creates an in memory file based on memfd_create
+// returns a file descriptor. Once all references to the file are
+// dropped it is automatically released. It is up to the caller
+// to close the returned descriptor.
+func writeMemFile(name string, b []byte) (int, error) {
+	fd, err := unix.MemfdCreate(name, 0)
 	if err != nil {
-		os.Remove(tmpFile.Name())
-		return "", err
+		return 0, fmt.Errorf("MemfdCreate: %v", err)
 	}
-	return tmpFile.Name(), err
+	err = unix.Ftruncate(fd, int64(len(b)))
+	if err != nil {
+		return 0, fmt.Errorf("Ftruncate: %v", err)
+	}
+	data, err := unix.Mmap(fd, 0, len(b), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	if err != nil {
+		return 0, fmt.Errorf("Mmap: %v", err)
+	}
+	copy(data, b)
+	err = unix.Munmap(data)
+	if err != nil {
+		return 0, fmt.Errorf("Munmap: %v", err)
+	}
+	return fd, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

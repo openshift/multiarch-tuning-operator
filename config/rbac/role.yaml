@@ -31,3 +31,29 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - multiarch.openshift.io
+  resources:
+  - podplacementconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multiarch.openshift.io
+  resources:
+  - podplacementconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multiarch.openshift.io
+  resources:
+  - podplacementconfigs/status
+  verbs:
+  - get
+  - patch
+  - update

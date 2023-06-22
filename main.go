@@ -34,7 +34,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	multiarchv1alpha1 "multiarch-operator/apis/multiarch/v1alpha1"
 	"multiarch-operator/controllers"
+	multiarchcontrollers "multiarch-operator/controllers/multiarch"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -46,6 +48,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
+	utilruntime.Must(multiarchv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -99,6 +102,13 @@ func main() {
 		Clientset: clientset,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
+		os.Exit(1)
+	}
+	if err = (&multiarchcontrollers.PodPlacementConfigReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PodPlacementConfig")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

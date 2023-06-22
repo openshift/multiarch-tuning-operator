@@ -1,0 +1,16 @@
+apiVersion: multiarch.openshift.io/v1alpha1
+kind: PodPlacementConfig
+metadata:
+  labels:
+    app.kubernetes.io/name: podplacementconfig
+    app.kubernetes.io/instance: podplacementconfig-sample
+    app.kubernetes.io/part-of: multiarch-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: multiarch-operator
+  name: podplacementconfig-sample
+spec:
+  logVerbosity: Normal
+  excludedNamespaces:
+    - hypershift-*
+    - openshift-*
+    - kube-*

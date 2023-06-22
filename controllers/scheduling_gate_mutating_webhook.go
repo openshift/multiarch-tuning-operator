@@ -19,7 +19,7 @@ var schedulingGate = corev1.PodSchedulingGate{
 	Name: schedulingGateName,
 }
 
-// +kubebuilder:webhook:path=/add-pod-scheduling-gate,mutating=true,sideEffects=None,admissionReviewVersions=v1,failurePolicy=ignore,groups="",resources=pods,verbs=create,versions=v1,name=arch-aware.scheduling-gate.openshift.io
+// +kubebuilder:webhook:path=/add-pod-scheduling-gate,mutating=true,sideEffects=None,admissionReviewVersions=v1,failurePolicy=ignore,groups="",resources=pods,verbs=create,versions=v1,name=pod-placement-scheduling-gate.multiarch.openshift.io
 // TODO: failurePolicy?
 
 // PodSchedulingGateMutatingWebHook annotates Pods

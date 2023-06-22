@@ -281,9 +281,7 @@ func inspectImage(ctx context.Context, clientset *kubernetes.Clientset, pod *cor
 	}
 
 	src, err := ref.NewImageSource(ctx, &types.SystemContext{
-		AuthFilePath:                authFile.Name(),
-		OCIInsecureSkipTLSVerify:    true,
-		DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
+		AuthFilePath: authFile.Name(),
 	})
 	if err != nil {
 		klog.Warningf("Error creating the image source: %v", err)

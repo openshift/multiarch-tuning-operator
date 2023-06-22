@@ -1,4 +1,5 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
 - core_v1_pod.yaml
+- multiarch_v1alpha1_podplacementconfig.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

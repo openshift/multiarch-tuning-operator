@@ -8,3 +8,31 @@ spec:
     spec:
       containers:
       - name: manager
+        volumeMounts:
+          - mountPath: /var/run/manager/tls
+            name: webhook-server-cert
+            readOnly: true
+          - mountPath: /etc/ssl/certs/
+            name: ca-projected-volume
+            readOnly: true
+      volumes:
+        - name: webhook-server-cert
+          secret:
+            secretName: webhook-server-cert
+            defaultMode: 420
+        - name: ca-projected-volume
+          projected:
+            sources:
+              - configMap:
+                  name: openshift-service-ca.crt
+                  items:
+                  - key: service-ca.crt
+                    path: openshift-ca.crt
+                  optional: true
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: kube-root-ca.crt
+
+

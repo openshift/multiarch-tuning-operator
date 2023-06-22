@@ -13,7 +13,7 @@ webhooks:
       namespace: system
       path: /add-pod-scheduling-gate
   failurePolicy: Ignore
-  name: arch-aware.scheduling-gate.openshift.io
+  name: pod-placement-scheduling-gate.multiarch.openshift.io
   rules:
   - apiGroups:
     - ""

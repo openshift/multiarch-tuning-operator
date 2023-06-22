@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"k8s.io/klog/v2"
 	"os"
 
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -64,6 +65,9 @@ func main() {
 	opts := zap.Options{
 		Development: true,
 	}
+	klog.InitFlags(nil)
+	flag.Set("alsologtostderr", "true")
+
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 

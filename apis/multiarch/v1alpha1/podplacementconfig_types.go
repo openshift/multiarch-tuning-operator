@@ -50,9 +50,9 @@ type PodPlacementConfigStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:path=podplacementconfigs,scope=Cluster
 // PodPlacementConfig is the Schema for the podplacementconfigs API
 type PodPlacementConfig struct {
 	metav1.TypeMeta   `json:",inline"`

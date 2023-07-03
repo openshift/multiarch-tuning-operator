@@ -20,6 +20,9 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -49,7 +52,21 @@ type PodPlacementConfigReconciler struct {
 func (r *PodPlacementConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	// Lookup the PodPlacementConfig instance for this reconcile request
+	podplacementconfig := &multiarchv1alpha1.PodPlacementConfig{}
+	if err := r.Get(ctx, types.NamespacedName{Name: "podplacementconfig-sample", Namespace: ""}, podplacementconfig); err != nil {
+		klog.Errorf("unable to fetch PodPlacementConfig %s: %v", req.Name, err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	defaultNamespaces := sets.NewString("openshift-*", "kube-*", "hypershift-*")
+	tmpDefaultSet := defaultNamespaces.Difference(sets.NewString(podplacementconfig.Spec.ExcludedNamespaces...))
+	podplacementconfig.Spec.ExcludedNamespaces = append(podplacementconfig.Spec.ExcludedNamespaces, tmpDefaultSet.List()...)
+	err := r.Client.Update(ctx, podplacementconfig)
+	if err != nil {
+		klog.Errorf("unable to update the podplacementconfig %s: %v", podplacementconfig.Name, err)
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }

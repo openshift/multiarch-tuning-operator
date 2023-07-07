@@ -20,31 +20,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/containers/image/v5/docker"
-	"github.com/containers/image/v5/image"
-	"github.com/containers/image/v5/manifest"
-	"github.com/containers/image/v5/types"
-	"golang.org/x/sys/unix"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	"os"
+	"multiarch-operator/pkg/image"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-// SecretData struct for storing cred structure
-type AuthList struct {
-	Auths RegAuthList `json:"auths"`
-}
-type RegAuthData struct {
-	Auth string `json:"auth"`
-}
-type RegAuthList map[string]RegAuthData
 
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
@@ -228,7 +214,13 @@ func inspectImages(ctx context.Context, clientset *kubernetes.Clientset, pod *co
 	// Iterate over the images, get their architectures and intersect (as in set intersection) them each other
 	var supportedArchitecturesSet sets.Set[string]
 	for imageName := range imageNamesSet {
-		currentImageSupportedArchitectures, err := inspectImage(ctx, clientset, pod, imageName)
+		secretAuths, err := pullSecretAuthList(ctx, clientset, pod)
+		if err != nil {
+			klog.Warningf("Error consolidating pull secrets for pod %s ns: %s", pod.Name, pod.Namespace)
+			return nil, err
+		}
+		klog.V(5).Infof("Checking image %s", imageName)
+		currentImageSupportedArchitectures, err := image.FacadeSingleton().GetCompatibleArchitecturesSet(ctx, imageName, secretAuths)
 		if err != nil {
 			// The image cannot be inspected, we skip from adding the nodeAffinity
 			klog.Warningf("Error inspecting the image %s: %v", imageName, err)
@@ -240,210 +232,36 @@ func inspectImages(ctx context.Context, clientset *kubernetes.Clientset, pod *co
 			supportedArchitecturesSet = supportedArchitecturesSet.Intersection(currentImageSupportedArchitectures)
 		}
 	}
-
 	return sets.List(supportedArchitecturesSet), nil
 }
 
-// inspectImage inspects the image and returns the supported architectures. Any error when inspecting the image is returned so that
-// the caller can decide what to do.
-func inspectImage(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod, imageName string) (supportedArchitectures sets.Set[string], err error) {
-	klog.V(5).Infof("Checking %s/%s's image %s", pod.Namespace, pod.Name, imageName)
-	// Check if the image is a manifest list
-	ref, err := docker.ParseReference(imageName)
-	if err != nil {
-		klog.Warningf("Error parsing the image reference for the %s/%s's image %s: %v",
-			pod.Namespace, pod.Name, imageName, err)
-		return nil, err
-	}
-	// TODO: handle private registries, credentials, TLS verification, etc.
-	// Get pull secrets and create a tmp auth file
-	secretAuths, err := PullSecretAuthList(ctx, clientset, pod)
-	if err != nil {
-		klog.Warningf("Error consolidating pull secrets for pod %s ns: %s", pod.Name, pod.Namespace)
-		return nil, err
-	}
-	if len(secretAuths) == 0 {
-		klog.Warningf("No pull secrets available for %s ns: %s", pod.Name, pod.Namespace)
-		return nil, err
-	}
-	secretList := AuthList{Auths: secretAuths}
-	//Marshal and write auth json file
-	authFile, err := WriteAuthFile(&secretList, pod.Name+"-"+pod.Namespace)
-	if err != nil {
-		klog.Warningf("Couldn't write auth file for %s ns: %s %v", pod.Name, pod.Namespace, err)
-		return nil, err
-	} else {
-		defer func(f *os.File) {
-			if err := f.Close(); err != nil {
-				klog.Warningf("Failed to close auth file %s %v", f.Name(), err)
-			}
-		}(authFile)
-	}
-
-	src, err := ref.NewImageSource(ctx, &types.SystemContext{
-		AuthFilePath: authFile.Name(),
-	})
-	if err != nil {
-		klog.Warningf("Error creating the image source: %v", err)
-		return nil, err
-	}
-	defer func(src types.ImageSource) {
-		err := src.Close()
-		if err != nil {
-			klog.Warningf("Error closing the image source for the %s/%s's image %s: %v",
-				pod.Namespace, pod.Name, imageName, err)
-		}
-	}(src)
-
-	rawManifest, _, err := src.GetManifest(ctx, nil)
-	if err != nil {
-		klog.Infof("Error getting the image manifest: %v", err)
-		return nil, err
-	}
-	if manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest)) {
-		klog.V(5).Infof("%s/%s's image %s is a manifest list... getting the list of supported architectures",
-			pod.Namespace, pod.Name, imageName)
-		// The image is a manifest list
-		index, err := manifest.OCI1IndexFromManifest(rawManifest)
-		if err != nil {
-			klog.Warningf("Error parsing the OCI index from the raw manifest of the %s/%s's image %s: %v",
-				pod.Namespace, pod.Name, imageName, err)
-		}
-		supportedArchitectures = sets.New[string]()
-		for _, m := range index.Manifests {
-			supportedArchitectures = sets.Insert(supportedArchitectures, m.Platform.Architecture)
-		}
-		return supportedArchitectures, nil
-
-	} else {
-		klog.V(5).Infof("%s/%s's image %s is not a manifest list... getting the supported architecture",
-			pod.Namespace, pod.Name, imageName)
-		sys := &types.SystemContext{}
-		parsedImage, err := image.FromUnparsedImage(ctx, sys, image.UnparsedInstance(src, nil))
-		if err != nil {
-			klog.Warningf("Error parsing the manifest of the %s/%s's image %s: %v",
-				pod.Namespace, pod.Name, imageName, err)
-			return nil, err
-		}
-		config, err := parsedImage.OCIConfig(ctx)
-		if err != nil {
-			// Ignore errors due to invalid images at this stage
-			klog.Warningf("Error parsing the OCI config of the %s/%s's image %s: %v",
-				pod.Namespace, pod.Name, imageName, err)
-			return nil, err
-		}
-		return sets.New(config.Architecture), nil
-	}
-}
-
-// Function consolidates image pull secrets
-// - ImagePullSecrets in pod
-// - global pull secret in openshift-config
-// TODO? - default pull secret in pod namespace if no ImagePullSecrets field?
-func PullSecretAuthList(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod) (RegAuthList, error) {
-	secretAuths := make(RegAuthList)
+// pullSecretAuthList returns the list of secrets data for the given pod given its imagePullSecrets field
+func pullSecretAuthList(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod) ([][]byte, error) {
+	secretAuths := make([][]byte, 0)
 	secretList := getPodImagePullSecrets(pod)
 	for _, pullsecret := range secretList {
 		secret, err := clientset.CoreV1().Secrets(pod.Namespace).Get(ctx, pullsecret, metav1.GetOptions{})
 		if err != nil {
 			klog.Warningf("Error getting secret: %s namespace: %s", pullsecret, pod.Namespace)
-			return nil, err
+			continue
 		}
-		var tmpAuths RegAuthList
-		if secret.Type == "kubernetes.io/dockercfg" {
-			err := json.Unmarshal(secret.Data[".dockercfg"], &tmpAuths)
-			if err != nil {
-				klog.Warningf("Error unmarshaling secret data for: %v", pullsecret)
-				return nil, err
-			}
-		} else if secret.Type == "kubernetes.io/dockerconfigjson" {
+		switch secret.Type {
+		case "kubernetes.io/dockercfg":
+			secretAuths = append(secretAuths, secret.Data[".dockercfg"])
+		case "kubernetes.io/dockerconfigjson":
 			var objmap map[string]json.RawMessage
 			err := json.Unmarshal(secret.Data[".dockerconfigjson"], &objmap)
 			if err != nil {
-				klog.Warningf("Error unmarshaling secret data for: %v", pullsecret)
-				return nil, err
+				klog.Warningf("Error unmarshaling secret data for: %s", pullsecret)
+				continue
 			}
-			err = json.Unmarshal(objmap["auths"], &tmpAuths)
-			if err != nil {
-				klog.Warningf("Error unmarshaling secret data for: %v", pullsecret)
-				return nil, err
-			}
-		} else {
-			klog.Warningf("Error getting secret data for: %v", pullsecret)
-			return nil, err
+			secretAuths = append(secretAuths, objmap["auths"])
+		default:
+			klog.Warningf("Error getting secret data for: %s", pullsecret)
+			continue
 		}
-		// NOTE: Keys are overwritten with the latest in this case.
-		// TODO: decide how to handle dup keys
-		for k, v := range tmpAuths {
-			secretAuths[k] = v
-		}
-	}
-	//merge global pull secret
-	secret, err := clientset.CoreV1().Secrets("openshift-config").Get(ctx, "pull-secret", metav1.GetOptions{})
-	if err != nil {
-		klog.Warningf("Error getting global pull secret")
-		return nil, err
-	}
-	var objmap map[string]json.RawMessage
-	var tmpAuths RegAuthList
-	err = json.Unmarshal(secret.Data[".dockerconfigjson"], &objmap)
-	if err != nil {
-		klog.Warningf("Error unmarshaling secret data for the global pull secret")
-		return nil, err
-	}
-	err = json.Unmarshal(objmap["auths"], &tmpAuths)
-	if err != nil {
-		klog.Warningf("Error unmarshaling secret data for the global pull secret")
-		return nil, err
-	}
-	// NOTE: Keys are overwritten with the latest in this case.
-	// TODO: decide how to handle dup keys
-	for k, v := range tmpAuths {
-		secretAuths[k] = v
 	}
 	return secretAuths, nil
-}
-
-// Write auth json file to pass to c/Image API
-func WriteAuthFile(authList *AuthList, fileName string) (*os.File, error) {
-	authJson, err := json.Marshal(*authList)
-	if err != nil {
-		klog.Warningf("Error marshalling pull secrets")
-		return nil, err
-	}
-	fd, err := writeMemFile(fileName, authJson)
-	if err != nil {
-		return nil, err
-	}
-	// filepath to our newly created in-memory file descriptor
-	fp := fmt.Sprintf("/proc/self/fd/%d", fd)
-	tmpFile := os.NewFile(uintptr(fd), fp)
-	return tmpFile, err
-}
-
-// writeMemFile creates an in memory file based on memfd_create
-// returns a file descriptor. Once all references to the file are
-// dropped it is automatically released. It is up to the caller
-// to close the returned descriptor.
-func writeMemFile(name string, b []byte) (int, error) {
-	fd, err := unix.MemfdCreate(name, 0)
-	if err != nil {
-		return 0, fmt.Errorf("MemfdCreate: %v", err)
-	}
-	err = unix.Ftruncate(fd, int64(len(b)))
-	if err != nil {
-		return 0, fmt.Errorf("Ftruncate: %v", err)
-	}
-	data, err := unix.Mmap(fd, 0, len(b), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
-	if err != nil {
-		return 0, fmt.Errorf("Mmap: %v", err)
-	}
-	copy(data, b)
-	err = unix.Munmap(data)
-	if err != nil {
-		return 0, fmt.Errorf("Munmap: %v", err)
-	}
-	return fd, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

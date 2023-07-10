@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -245,20 +244,11 @@ func pullSecretAuthList(ctx context.Context, clientset *kubernetes.Clientset, po
 			klog.Warningf("Error getting secret: %s namespace: %s", pullsecret, pod.Namespace)
 			continue
 		}
-		switch secret.Type {
-		case "kubernetes.io/dockercfg":
-			secretAuths = append(secretAuths, secret.Data[".dockercfg"])
-		case "kubernetes.io/dockerconfigjson":
-			var objmap map[string]json.RawMessage
-			err := json.Unmarshal(secret.Data[".dockerconfigjson"], &objmap)
-			if err != nil {
-				klog.Warningf("Error unmarshaling secret data for: %s", pullsecret)
-				continue
-			}
-			secretAuths = append(secretAuths, objmap["auths"])
-		default:
-			klog.Warningf("Error getting secret data for: %s", pullsecret)
+		if secretData, err := image.ExtractAuthFromSecret(secret); err != nil {
+			klog.Warningf("Error extracting auth from secret: %s namespace: %s", pullsecret, pod.Namespace)
 			continue
+		} else {
+			secretAuths = append(secretAuths, secretData)
 		}
 	}
 	return secretAuths, nil

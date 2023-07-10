@@ -154,13 +154,17 @@ func (i *registryInspector) storeGlobalPullSecret(pullSecret []byte) {
 func newRegistryInspector() iRegistryInspector {
 	ri := &registryInspector{}
 	err := core.NewSingleObjectEventHandler[*v1.Secret, *v1.SecretList](context.Background(),
-		"pull-secret", "openshift-config", time.Hour, func(et watch.EventType, cm *v1.Secret) {
+		"pull-secret", "openshift-config", time.Hour, func(et watch.EventType, s *v1.Secret) {
 			if et == watch.Deleted || et == watch.Bookmark {
 				klog.Warningf("Ignoring event type: %+v", et)
 				return
 			}
 			klog.Warningln("global pull secret update")
-			ri.storeGlobalPullSecret(cm.Data[".dockerconfigjson"])
+			if pullSecret, err := ExtractAuthFromSecret(s); err == nil {
+				ri.storeGlobalPullSecret(pullSecret)
+			} else {
+				klog.Warningf("Error extracting the auth from the secret: %v", err)
+			}
 		}, nil)
 	if err != nil {
 		// This is a fatal error because we cannot continue without the global pull secret controller running.

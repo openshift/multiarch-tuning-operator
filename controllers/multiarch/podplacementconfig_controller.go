@@ -18,27 +18,41 @@ package multiarch
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	multiarchv1alpha1 "multiarch-operator/apis/multiarch/v1alpha1"
+)
+
+const (
+	replaceWebhooksValueTemplate = `{ "op": "replace", "path": "/webhooks/0/namespaceSelector", "value": %s }`
 )
 
 // PodPlacementConfigReconciler reconciles a PodPlacementConfig object
 type PodPlacementConfigReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme    *runtime.Scheme
+	Clientset *kubernetes.Clientset
+}
+
+func generatePatchBytes(ops string) []byte {
+	return []byte(fmt.Sprintf("[%s]", ops))
 }
 
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs/finalizers,verbs=update
+//+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -58,11 +72,27 @@ func (r *PodPlacementConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 		klog.Errorf("unable to fetch PodPlacementConfig %s: %v", req.Name, err)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
-	defaultNamespaces := sets.NewString("openshift-*", "kube-*", "hypershift-*")
-	tmpDefaultSet := defaultNamespaces.Difference(sets.NewString(podplacementconfig.Spec.ExcludedNamespaces...))
-	podplacementconfig.Spec.ExcludedNamespaces = append(podplacementconfig.Spec.ExcludedNamespaces, tmpDefaultSet.List()...)
-	err := r.Client.Update(ctx, podplacementconfig)
+	podplacementwebhook, err := r.Clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, "multiarch-operator-mutating-webhook-configuration", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("unable to fetch mutating webhook: %v", err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	if !reflect.DeepEqual(podplacementwebhook.Webhooks[0].NamespaceSelector, podplacementconfig.Spec.NamespaceSelector) {
+		nsselectorbytes, err := json.Marshal(podplacementconfig.Spec.NamespaceSelector)
+		if err != nil {
+			klog.Errorf("unable to marshal namespaceselector: %v", err)
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		op := fmt.Sprintf(replaceWebhooksValueTemplate, string(nsselectorbytes))
+		_, err = r.Clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Patch(ctx, "multiarch-operator-mutating-webhook-configuration", types.JSONPatchType, generatePatchBytes(op), metav1.PatchOptions{})
+		if err != nil {
+			if err != nil {
+				klog.Errorf("unable to update mutatingwebhookconfiguration: %v", err)
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+		}
+	}
+	err = r.Client.Update(ctx, podplacementconfig)
 	if err != nil {
 		klog.Errorf("unable to update the podplacementconfig %s: %v", podplacementconfig.Name, err)
 		return ctrl.Result{}, err

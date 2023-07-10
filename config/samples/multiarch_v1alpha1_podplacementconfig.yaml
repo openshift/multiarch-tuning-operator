@@ -10,7 +10,7 @@ metadata:
   name: podplacementconfig-sample
 spec:
   logVerbosity: Normal
-  excludedNamespaces:
-    - hypershift-*
-    - openshift-*
-    - kube-*
+  namespaceSelector:
+      matchExpressions:
+        - key: multiarch.openshift.io/excludeNamespace
+          operator: DoesNotExist

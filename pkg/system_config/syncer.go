@@ -149,6 +149,13 @@ func (s *SystemConfigSyncer) syncer() {
 	}
 }
 
+// Namespaced RBAC rules and cluster scoped RBAC rules cannot be combined through the controller-gen RBAC generator.
+// See https://github.com/kubernetes-sigs/controller-tools/pull/839 and https://github.com/kubernetes-sigs/controller-tools/pull/839
+// This rbac rule is added manually.
+//#kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch,resourceNames=image-registry-certificates,namespace="openshift-image-registry"
+
+//+kubebuilder:rbac:groups=config.openshift.io,resources=images,verbs=get;list;watch
+
 // newSystemConfigSyncer creates a new SystemConfigSyncer object
 func newSystemConfigSyncer() IConfigSyncer {
 	ic := &SystemConfigSyncer{

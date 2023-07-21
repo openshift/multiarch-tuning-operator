@@ -1,0 +1,6 @@
+transformers:
+  - namespace.transformer.yaml
+
+resources:
+  - openshift_image_registry_role.yaml
+  - openshift_image_registry_role_binding.yaml

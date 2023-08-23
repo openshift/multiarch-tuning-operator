@@ -1,8 +1,12 @@
-# multiarch-operator
-// TODO(user): Add simple overview of use/purpose
+# multiarch-manager-operator
+An operator for managing workload placement in Openshift clusters with compute nodes of varying architectures
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+This operator aims to address problems and usability issues encountered when working with Openshift clusters with multi-architecture compute nodes.
+- **Architecture aware Pod Placement**: The operator controls placement of pods on the subset of nodes with architectures matching that of the container images
+  in the pod. The pods are gated from scheduling while the image is inspected and a nodeAffinity block based on `kuberentes.io/arch` is added with the appropriate
+  subset of architectures that the container images support. The gate is then removed and the pod is scheduled as normal and based on the affinity scheduling predicates,
+  will land on a node with the supported architecture
 
 ## Getting Started
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
@@ -78,7 +82,7 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 ## License
 
-Copyright 2023.
+Copyright 2023 Red Hat, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

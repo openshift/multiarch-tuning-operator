@@ -73,3 +73,11 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - operator.openshift.io
+  resources:
+  - imagecontentsourcepolicies
+  verbs:
+  - get
+  - list
+  - watch

@@ -13,4 +13,5 @@ type IConfigSyncer interface {
 	CleanupRegistryMirroringConfig() error
 
 	sync() error
+	getch() chan bool
 }

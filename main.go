@@ -18,9 +18,13 @@ package main
 
 import (
 	"flag"
+	ocpv1 "github.com/openshift/api/config/v1"
+	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"k8s.io/klog/v2"
+	"multiarch-operator/controllers/openshift"
 	"multiarch-operator/pkg/system_config"
 	"os"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -47,10 +51,16 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+const readonlySystemConfigResyncPeriod = 30 * time.Minute
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(multiarchv1alpha1.AddToScheme(scheme))
+
+	// TODO[OCP specific]
+	utilruntime.Must(ocpv1.Install(scheme))
+	utilruntime.Must(ocpv1alpha1.Install(scheme))
+
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -118,6 +128,38 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PodPlacementConfig")
 		os.Exit(1)
 	}
+
+	err = mgr.Add(&system_config.ConfigSyncerRunnable{})
+	if err != nil {
+		setupLog.Error(err, "unable to add the ConfigSyncerRunnable to the manager")
+		os.Exit(1)
+	}
+
+	// TODO[OCP specific]
+	err = mgr.Add(openshift.NewICSPSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(openshift.NewRegistryCertificatesSyncer(clientset))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(openshift.NewImageRegistryConfigSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(openshift.NewGlobalPullSecretSyncer(clientset))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -133,8 +175,6 @@ func main() {
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}})
-
-	system_config.SystemConfigSyncerSingleton()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

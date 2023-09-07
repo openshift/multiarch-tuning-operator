@@ -8,15 +8,11 @@ import (
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/types"
 	"golang.org/x/sys/unix"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
-	"multiarch-operator/controllers/core"
 	"multiarch-operator/pkg/system_config"
 	"os"
 	"sync"
-	"time"
 )
 
 type registryInspector struct {
@@ -158,24 +154,5 @@ func (i *registryInspector) StoreGlobalPullSecret(pullSecret []byte) {
 
 func newRegistryInspector() IRegistryInspector {
 	ri := &registryInspector{}
-	err := core.NewSingleObjectEventHandler[*v1.Secret, *v1.SecretList](context.Background(),
-		"pull-secret", "openshift-config", time.Hour, func(et watch.EventType, s *v1.Secret) {
-			if et == watch.Deleted || et == watch.Bookmark {
-				klog.Warningf("Ignoring event type: %+v", et)
-				return
-			}
-			klog.Warningln("global pull secret update")
-			if pullSecret, err := ExtractAuthFromSecret(s); err == nil {
-				ri.storeGlobalPullSecret(pullSecret)
-			} else {
-				klog.Warningf("Error extracting the auth from the secret: %v", err)
-			}
-		}, nil)
-	if err != nil {
-		// This is a fatal error because we cannot continue without the global pull secret controller running.
-		// We expect the kubernetes self-healing mechanism to restart the controller's pod and try recovering
-		// in case of temporary errors or initiate a CrashLoopBackOff.
-		klog.Fatalf("Error creating the event handler for the global pull secret: %v", err)
-	}
 	return ri
 }

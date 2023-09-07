@@ -131,6 +131,7 @@ func main() {
 
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: &controllers.PodSchedulingGateMutatingWebHook{
 		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}})
 
 	system_config.SystemConfigSyncerSingleton()

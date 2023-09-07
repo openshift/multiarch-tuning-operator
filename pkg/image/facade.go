@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	singletonImageFacade ICache
+	singletonImageFacade *Facade
 	// once is used for lazy initialization of the singletonImageFacade
 	once sync.Once
 )
@@ -20,15 +20,19 @@ func (i *Facade) GetCompatibleArchitecturesSet(ctx context.Context, imageReferen
 	return i.inspectionCache.GetCompatibleArchitecturesSet(ctx, imageReference, secrets)
 }
 
-func newImageFacade() ICache {
+func newImageFacade() *Facade {
 	return &Facade{
 		inspectionCache: newCache(),
 	}
 }
 
-func FacadeSingleton() ICache {
+func FacadeSingleton() *Facade {
 	once.Do(func() {
 		singletonImageFacade = newImageFacade()
 	})
 	return singletonImageFacade
+}
+
+func (i *Facade) StoreGlobalPullSecret(pullSecret []byte) {
+	i.inspectionCache.(*cacheProxy).registryInspector.StoreGlobalPullSecret(pullSecret)
 }

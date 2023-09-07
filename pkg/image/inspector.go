@@ -106,7 +106,7 @@ func (i *registryInspector) createAuthFile(secrets ...[]byte) (*os.File, error) 
 	}
 	for _, secret := range secrets {
 		if err := authCfgContent.unmarshallAuthsDataAndStore(secret); err != nil {
-			klog.Warningf("Error unmarshalling pull secrets")
+			klog.Warningf("Error unmarshalling pull secrets %+w", err)
 			continue
 		}
 	}
@@ -150,13 +150,13 @@ func writeMemFile(name string, b []byte) (int, error) {
 	return fd, nil
 }
 
-func (i *registryInspector) storeGlobalPullSecret(pullSecret []byte) {
+func (i *registryInspector) StoreGlobalPullSecret(pullSecret []byte) {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	i.globalPullSecret = pullSecret
 }
 
-func newRegistryInspector() iRegistryInspector {
+func newRegistryInspector() IRegistryInspector {
 	ri := &registryInspector{}
 	err := core.NewSingleObjectEventHandler[*v1.Secret, *v1.SecretList](context.Background(),
 		"pull-secret", "openshift-config", time.Hour, func(et watch.EventType, s *v1.Secret) {

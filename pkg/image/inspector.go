@@ -7,11 +7,12 @@ import (
 	"github.com/containers/image/v5/image"
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/types"
+	"github.com/go-logr/logr"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
 	"multiarch-operator/pkg/system_config"
 	"os"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sync"
 )
 
@@ -23,21 +24,22 @@ type registryInspector struct {
 
 func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (supportedArchitectures sets.Set[string], err error) {
 	// Create the auth file
-	authFile, err := i.createAuthFile(append([][]byte{i.globalPullSecret}, secrets...)...)
+	log := ctrllog.FromContext(ctx, "imageReference", imageReference)
+	authFile, err := i.createAuthFile(log, append([][]byte{i.globalPullSecret}, secrets...)...)
 	if err != nil {
-		klog.Warningf("Couldn't write auth file for: %v", err)
+		log.Error(err, "Couldn't write auth file")
 		return nil, err
 	} else {
 		defer func(f *os.File) {
 			if err := f.Close(); err != nil {
-				klog.Warningf("Failed to close auth file %s %v", f.Name(), err)
+				log.Error(err, "Failed to close auth file", "filename", f.Name())
 			}
 		}(authFile)
 	}
 	// Check if the image is a manifest list
 	ref, err := docker.ParseReference(imageReference)
 	if err != nil {
-		klog.Warningf("Error parsing the image reference for the image %s: %v", imageReference, err)
+		log.Error(err, "Error parsing the image reference for the image")
 		return nil, err
 	}
 	sys := &types.SystemContext{
@@ -49,45 +51,43 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	}
 	src, err := ref.NewImageSource(ctx, sys)
 	if err != nil {
-		klog.Warningf("Error creating the image source: %v", err)
+		log.Error(err, "Error creating the image source")
 		return nil, err
 	}
 	defer func(src types.ImageSource) {
 		err := src.Close()
 		if err != nil {
-			klog.Warningf("Error closing the image source for the image %s: %v", imageReference, err)
+			log.Error(err, "Error closing the image source for the image")
 		}
 	}(src)
 	rawManifest, _, err := src.GetManifest(ctx, nil)
 	if err != nil {
-		klog.Infof("Error getting the image manifest: %v", err)
+		log.Error(err, "Error getting the image manifest: %v")
 		return nil, err
 	}
 	supportedArchitectures = sets.New[string]()
 	if manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest)) {
-		klog.V(5).Infof("image %s is a manifest list... getting the list of supported architectures",
-			imageReference)
+		log.V(5).Info("Image is a manifest list... getting the list of supported architectures")
 		// The image is a manifest list
 		index, err := manifest.OCI1IndexFromManifest(rawManifest)
 		if err != nil {
-			klog.Warningf("Error parsing the OCI index from the raw manifest of the image %s: %v",
-				imageReference, err)
+			log.Error(err, "Error parsing the OCI index from the raw manifest of the image")
 		}
 		for _, m := range index.Manifests {
 			supportedArchitectures = sets.Insert(supportedArchitectures, m.Platform.Architecture)
 		}
 		return supportedArchitectures, nil
 	} else {
-		klog.V(5).Infof("image %s is not a manifest list... getting the supported architecture", imageReference)
+		log.V(5).Info("The image is not a manifest list... getting the supported architecture")
 		parsedImage, err := image.FromUnparsedImage(ctx, sys, image.UnparsedInstance(src, nil))
 		if err != nil {
-			klog.Warningf("Error parsing the manifest of the image %s: %v", imageReference, err)
+			log.Error(err, "Error parsing the manifest of the image")
 			return nil, err
 		}
 		config, err := parsedImage.OCIConfig(ctx)
 		if err != nil {
 			// Ignore errors due to invalid images at this stage
-			klog.Warningf("Error parsing the OCI config of the image %s: %v", imageReference, err)
+			log.Error(err, "Error parsing the OCI config of the image")
 			return nil, err
 		}
 		supportedArchitectures = sets.Insert(supportedArchitectures, config.Architecture)
@@ -95,20 +95,21 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	return supportedArchitectures, nil
 }
 
-func (i *registryInspector) createAuthFile(secrets ...[]byte) (*os.File, error) {
+func (i *registryInspector) createAuthFile(log logr.Logger, secrets ...[]byte) (*os.File, error) {
 	// Create the auth file
 	authCfgContent := &authCfg{
 		Auths: make(map[string]authData),
 	}
+
 	for _, secret := range secrets {
 		if err := authCfgContent.unmarshallAuthsDataAndStore(secret); err != nil {
-			klog.Warningf("Error unmarshalling pull secrets %+w", err)
+			log.Error(err, "Error unmarshalling pull secrets")
 			continue
 		}
 	}
 	authJson, err := authCfgContent.marshallAuths()
 	if err != nil {
-		klog.Warningf("Error marshalling pull secrets")
+		log.Error(err, "Error marshalling pull secrets")
 		return nil, err
 	}
 	// TODO: constant-name-for-now is a placeholder. Do we need this parameter at all?

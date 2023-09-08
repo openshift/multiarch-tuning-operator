@@ -2,19 +2,23 @@ package common
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	clientv1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 	"multiarch-operator/pkg/image"
 	"multiarch-operator/pkg/utils"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type GlobalPullSecretSyncer struct {
 	clientSet *kubernetes.Clientset
 	namespace string
 	name      string
+	log       logr.Logger
 }
 
 func NewGlobalPullSecretSyncer(clientSet *kubernetes.Clientset, namespace, name string) *GlobalPullSecretSyncer {
@@ -26,7 +30,9 @@ func NewGlobalPullSecretSyncer(clientSet *kubernetes.Clientset, namespace, name 
 }
 
 func (s *GlobalPullSecretSyncer) Start(ctx context.Context) (err error) {
-	klog.Warningf("starting the Openshift global pull-secret syncer")
+	s.log = log.FromContext(ctx, "handler", "GlobalPullSecretSyncer", "kind", "Secret [core/v1]",
+		"namespace", s.namespace, "name", s.name)
+	s.log.Info("Starting System Config Syncer")
 	clientSet := s.clientSet
 	// Watch the Secret that contains the global pull secret and Sync the inspector
 	globalPullSecretInformer := clientv1.NewSecretInformer(clientSet, s.namespace, 0, cache.Indexers{})
@@ -38,30 +44,31 @@ func (s *GlobalPullSecretSyncer) Start(ctx context.Context) (err error) {
 		},
 	)
 	if err != nil {
-		klog.Errorf("error registering handler for the global pull-secret configmap: %w", err)
+		s.log.Error(err, "Error registering handler for the global pull-secret configmap")
 		return err
 	}
 
 	globalPullSecretInformer.Run(ctx.Done())
 
+	s.log.Info("Stopping System Config Syncer")
 	return nil
 }
 
 func (s *GlobalPullSecretSyncer) onAddOrUpdate(obj interface{}) {
 	secret, ok := obj.(*corev1.Secret)
 	if !ok {
-		klog.Errorf("unexpected type %T, expected ConfigMap", obj)
+		s.log.Error(errors.New("undexpected type, expected v1.Secret"), "unexpected type", "type", fmt.Sprintf("%T", obj))
 		return
 	}
 	if secret.Name != s.name {
 		// Ignore other configmaps
 		return
 	}
-	klog.Infof("The global pull secret %s/%s was updated", s.namespace, s.name)
+	s.log.Info("The global pull secret was updated")
 	if pullSecret, err := utils.ExtractAuthFromSecret(secret); err == nil {
 		image.FacadeSingleton().StoreGlobalPullSecret(pullSecret)
 	} else {
-		klog.Warningf("Error extracting the auth from the secret %s/%s: %v", s.name, s.namespace, err)
+		s.log.Error(err, "Error extracting the auth from the secret")
 	}
 }
 

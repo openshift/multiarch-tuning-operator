@@ -24,12 +24,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 	"multiarch-operator/pkg/image"
 	"multiarch-operator/pkg/utils"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // PodReconciler reconciles a Pod object
@@ -54,11 +53,11 @@ type PodReconciler struct {
 // Reconcile has to watch the pod object if it has the scheduling gate with name schedulingGateName,
 // inspect the images in the pod spec, update the nodeAffinity accordingly and remove the scheduling gate.
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := ctrllog.FromContext(ctx, "namespace", req.Namespace, "name", req.Name, "action", "Reconcile")
 
 	pod := &corev1.Pod{}
 	if err := r.Get(ctx, req.NamespacedName, pod); err != nil {
-		klog.V(3).Infof("unable to fetch Pod %s/%s: %v", req.Namespace, req.Name, err)
+		log.V(3).Error(err, "Unable to fetch pod")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -66,20 +65,20 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	// verify whether the pod has the scheduling gate
 	if !hasSchedulingGate(pod) {
-		klog.V(4).Infof("pod %s/%s does not have the scheduling gate. Ignoring...", pod.Namespace, pod.Name)
+		log.V(4).Info("Pod does not have the scheduling gate. Ignoring...")
 		// if not, return
 		return ctrl.Result{}, nil
 	}
 
-	klog.V(4).Infof("Processing pod %s/%s", pod.Namespace, pod.Name)
+	log.V(4).Info("Processing pod", "namespace")
 	// The scheduling gate is found.
 	var err error
 
 	// Prepare the requirement for the node affinity.
 	architectureRequirement, err := prepareRequirement(ctx, r.Clientset, pod)
 	if err != nil {
-		klog.Errorf("unable to get the architecture requirements for pod %s/%s: %v. "+
-			"The nodeAffinity for this pod will not be set.", pod.Namespace, pod.Name, err)
+		log.Error(err, "Unable to get the architecture requirements for the pod. "+
+			"The nodeAffinity for this pod will not be set.")
 		// we still need to remove the scheduling gate. Therefore, we do not return here.
 	} else {
 		// Update the node affinity
@@ -87,12 +86,12 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Remove the scheduling gate
-	klog.V(4).Infof("Removing the scheduling gate from pod %s/%s", pod.Namespace, pod.Name)
+	log.V(4).Info("Removing the scheduling gate from pod.")
 	removeSchedulingGate(pod)
 
 	err = r.Client.Update(ctx, pod)
 	if err != nil {
-		klog.Errorf("unable to update the pod %s/%s: %v", pod.Namespace, pod.Name, err)
+		log.Error(err, "Unable to update the pod", "namespace")
 		return ctrl.Result{}, err
 	}
 
@@ -116,6 +115,7 @@ func prepareRequirement(ctx context.Context, clientset *kubernetes.Clientset, po
 // the sig-scheduling's KEP-3838: https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3838-pod-mutable-scheduling-directives.
 func setPodNodeAffinityRequirement(ctx context.Context, pod *corev1.Pod,
 	requirement corev1.NodeSelectorRequirement) {
+	log := ctrllog.FromContext(ctx, "namespace", pod.Namespace, "name", pod.Name, "action", "setPodNodeAffinityRequirement")
 	// We are ignoring the podSpec.nodeSelector field,
 	// TODO: validate this is ok when a pod has both nodeSelector and (our) nodeAffinity
 	if pod.Spec.Affinity == nil {
@@ -149,7 +149,7 @@ func setPodNodeAffinityRequirement(ctx context.Context, pod *corev1.Pod,
 		// if yes, we ignore to add it.
 		for _, expression := range nodeSelectorTerms[i].MatchExpressions {
 			if expression.Key == requirement.Key {
-				klog.V(4).Infof("the current nodeSelectorTerm already has a matchExpression for the kubernetes.io/arch label. Ignoring...")
+				log.V(4).Info("The current nodeSelectorTerm already has a matchExpression for the kubernetes.io/arch label. Ignoring...")
 				skipMatchExpressionPatch = true
 				break
 			}
@@ -204,26 +204,28 @@ func removeSchedulingGate(pod *corev1.Pod) {
 // inspectImages returns the list of supported architectures for the images used by the pod.
 // if an error occurs, it returns the error and a nil slice of strings.
 func inspectImages(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod) (supportedArchitectures []string, err error) {
+	log := ctrllog.FromContext(ctx, "namespace", pod.Namespace, "name", pod.Name, "action", "inspectImages")
 	// Build a set of all the images used by the pod
 	imageNamesSet := sets.New[string]()
 	for _, container := range append(pod.Spec.Containers, pod.Spec.InitContainers...) {
 		imageNamesSet.Insert(fmt.Sprintf("//%s", container.Image))
 	}
-	klog.V(3).Infof("Images list for pod %s/%s: %+v", pod.Namespace, pod.Name, imageNamesSet)
+	log.V(3).Info("Images list for pod", "imageNamesSet", fmt.Sprintf("%+v", imageNamesSet))
+
 	// https://github.com/containers/skopeo/blob/v1.11.1/cmd/skopeo/inspect.go#L72
 	// Iterate over the images, get their architectures and intersect (as in set intersection) them each other
 	var supportedArchitecturesSet sets.Set[string]
 	for imageName := range imageNamesSet {
 		secretAuths, err := pullSecretAuthList(ctx, clientset, pod)
 		if err != nil {
-			klog.Warningf("Error consolidating pull secrets for pod %s ns: %s", pod.Name, pod.Namespace)
+			log.Error(err, "Error consolidating pull secrets for pod")
 			return nil, err
 		}
-		klog.V(5).Infof("Checking image %s", imageName)
+		log.V(5).Info("Checking image", "imageName", imageName)
 		currentImageSupportedArchitectures, err := image.FacadeSingleton().GetCompatibleArchitecturesSet(ctx, imageName, secretAuths)
 		if err != nil {
 			// The image cannot be inspected, we skip from adding the nodeAffinity
-			klog.Warningf("Error inspecting the image %s: %v", imageName, err)
+			log.V(3).Error(err, "Error inspecting the image", "imageName", imageName)
 			return nil, err
 		}
 		if supportedArchitecturesSet == nil {
@@ -237,16 +239,17 @@ func inspectImages(ctx context.Context, clientset *kubernetes.Clientset, pod *co
 
 // pullSecretAuthList returns the list of secrets data for the given pod given its imagePullSecrets field
 func pullSecretAuthList(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod) ([][]byte, error) {
+	log := ctrllog.FromContext(ctx, "namespace", pod.Namespace, "name", pod.Name, "action", "pullSecretAuthList")
 	secretAuths := make([][]byte, 0)
 	secretList := getPodImagePullSecrets(pod)
 	for _, pullsecret := range secretList {
 		secret, err := clientset.CoreV1().Secrets(pod.Namespace).Get(ctx, pullsecret, metav1.GetOptions{})
 		if err != nil {
-			klog.Warningf("Error getting secret: %s namespace: %s", pullsecret, pod.Namespace)
+			log.Error(err, "Error getting secret", "secret", pullsecret)
 			continue
 		}
 		if secretData, err := utils.ExtractAuthFromSecret(secret); err != nil {
-			klog.Warningf("Error extracting auth from secret: %s namespace: %s", pullsecret, pod.Namespace)
+			log.Error(err, "Error extracting auth from secret", "secret", pullsecret)
 			continue
 		} else {
 			secretAuths = append(secretAuths, secretData)

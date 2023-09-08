@@ -3,14 +3,17 @@ package system_config
 import (
 	"context"
 	"fmt"
-	"k8s.io/klog/v2"
 	"os"
 	"sync"
+
+	"github.com/go-logr/logr"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
 	singletonSystemConfigInstance IConfigSyncer
 	once                          sync.Once
+	log                           logr.Logger
 )
 
 type SystemConfigSyncer struct {
@@ -111,23 +114,23 @@ func (s *SystemConfigSyncer) sync() error {
 	defer s.mu.Unlock()
 	// marshall registries.conf and write to file
 	if err := s.registriesConfContent.writeToFile(); err != nil {
-		klog.Errorf("error writing registries.conf: %v", err)
+		log.Error(err, "Error writing registries.conf")
 		return err
 	}
 	// marshall policy.json and write to file
 	if err := s.policyConfContent.writeToFile(); err != nil {
-		klog.Errorf("error writing policy.json: %v", err)
+		log.Error(err, "Error writing policy.json")
 		return err
 	}
 	// delete the certs.d content
 	if err := os.RemoveAll(DockerCertsDir); err != nil {
-		klog.Errorf("error deleting certs.d directory: %v", err)
+		log.Error(err, "Error deleting certs.d directory")
 		return err
 	}
 	// write registry certs to file
 	for _, tuple := range s.registryCertTuples {
 		if err := tuple.writeToFile(); err != nil {
-			klog.Errorf("error writing registry cert: %v", err)
+			log.Error(err, "Error writing registry cert")
 			return err
 		}
 	}
@@ -164,13 +167,16 @@ type ConfigSyncerRunnable struct{}
 
 func (r *ConfigSyncerRunnable) Start(ctx context.Context) error {
 	s := SystemConfigSyncerSingleton()
+	log = ctrllog.FromContext(ctx, "handler", "ConfigSyncerRunnable")
+	log.Info("Starting System Config Syncer Consumer")
 	for {
 		select {
 		case <-s.getch():
 			if err := s.sync(); err != nil {
-				klog.Errorf("error syncing system config: %v", err)
+				log.Error(err, "Error syncing system config")
 			}
 		case <-ctx.Done():
+			log.Info("Stopping System Config Syncer Consumer")
 			return nil
 		}
 	}

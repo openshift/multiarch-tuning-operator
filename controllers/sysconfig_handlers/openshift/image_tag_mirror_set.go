@@ -2,10 +2,13 @@ package openshift
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/go-logr/logr"
 	v1 "github.com/openshift/api/config/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 	"multiarch-operator/pkg/system_config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -32,6 +35,7 @@ import (
 
 type ITMSSyncer struct {
 	mgr manager.Manager
+	log logr.Logger
 }
 
 func NewITMSSyncer(mgr manager.Manager) *ITMSSyncer {
@@ -41,12 +45,13 @@ func NewITMSSyncer(mgr manager.Manager) *ITMSSyncer {
 }
 
 func (s *ITMSSyncer) Start(ctx context.Context) (err error) {
-	klog.Warningf("starting the Openshift ImageTagMirrorSet [config.openshift.io/v1] syncer")
+	s.log = log.FromContext(ctx, "handler", "ITMSSyncer", "kind", "ImageTagMirrorSet [config.openshift.io/v1]")
+	s.log.Info("Starting System Config Syncer")
 	mgr := s.mgr
 	ic := system_config.SystemConfigSyncerSingleton()
 	icspInformer, err := mgr.GetCache().GetInformerForKind(ctx, v1.GroupVersion.WithKind("ImageTagMirrorSet"))
 	if err != nil {
-		klog.Errorf("error getting informer for ImageTagMirrorSet: %w", err)
+		s.log.Error(err, "Error getting informer for ImageTagMirrorSet")
 		return err
 	}
 	_, err = icspInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -55,7 +60,7 @@ func (s *ITMSSyncer) Start(ctx context.Context) (err error) {
 		DeleteFunc: s.onDelete(ic),
 	})
 	if err != nil {
-		klog.Errorf("error registering handler for ImageTagMirrorSet [config.openshift.io/v1]: %w", err)
+		s.log.Error(err, "Error registering handler for ImageTagMirrorSet")
 		return err
 	}
 	return nil
@@ -65,14 +70,15 @@ func (s *ITMSSyncer) onAdd(ic system_config.IConfigSyncer) func(obj interface{})
 	return func(obj interface{}) {
 		icsp, ok := obj.(*v1.ImageTagMirrorSet)
 		if !ok {
-			klog.Errorf("unexpected type %T, expected ImageTagMirrorSet ", obj)
+			s.log.Error(errors.New("unexpected type, expected ImageTagMirrorSet"), "unexpected type",
+				"type", fmt.Sprintf("%T", obj))
 			return
 		}
 		for _, source := range icsp.Spec.ImageTagMirrors {
 			err := ic.UpdateRegistryMirroringConfig(source.Source, mirrorsToStrings(source.Mirrors), system_config.PullTypeTagOnly)
 			if err != nil {
-				klog.Warningf("error updating registry mirroring config %s's source %s : %w",
-					icsp.Name, source.Source, err)
+				s.log.Error(err, "Error updating registry mirroring config",
+					"name", icsp.Name, "source", source.Source)
 				continue
 			}
 		}
@@ -81,16 +87,17 @@ func (s *ITMSSyncer) onAdd(ic system_config.IConfigSyncer) func(obj interface{})
 
 func (s *ITMSSyncer) onDelete(ic system_config.IConfigSyncer) func(obj interface{}) {
 	return func(obj interface{}) {
-		icsp, ok := obj.(*v1.ImageTagMirrorSet)
+		itms, ok := obj.(*v1.ImageTagMirrorSet)
 		if !ok {
-			klog.Errorf("unexpected type %T, expected ImageTagMirrorSet", obj)
+			s.log.Error(errors.New("unexpected type, expected ImageTagMirrorSet"), "unexpected type",
+				"type", fmt.Sprintf("%T", obj))
 			return
 		}
-		for _, source := range icsp.Spec.ImageTagMirrors {
+		for _, source := range itms.Spec.ImageTagMirrors {
 			err := ic.DeleteRegistryMirroringConfig(source.Source)
 			if err != nil {
-				klog.Warningf("error removing registry mirroring config %s's source %s : %w",
-					icsp.Name, source.Source, err)
+				s.log.Error(err, "Error removing registry mirroring config",
+					"name", itms.Name, "source", source.Source)
 				continue
 			}
 		}

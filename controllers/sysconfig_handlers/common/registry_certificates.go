@@ -2,12 +2,15 @@ package common
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 	"multiarch-operator/pkg/system_config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // RegistryCertificatesSyncer watches a configmap (openshift-image-registry/image-registry-certificates) and updates
@@ -24,6 +27,8 @@ type RegistryCertificatesSyncer struct {
 	namespace string
 	// name is the name of the configmap that contains the registry certificates
 	name string
+	// log is the logger
+	log logr.Logger
 }
 
 func NewRegistryCertificatesSyncer(clientSet *kubernetes.Clientset, namespace, name string) *RegistryCertificatesSyncer {
@@ -35,7 +40,9 @@ func NewRegistryCertificatesSyncer(clientSet *kubernetes.Clientset, namespace, n
 }
 
 func (s *RegistryCertificatesSyncer) Start(ctx context.Context) (err error) {
-	klog.Warningf("starting the Openshift registry certificates syncer")
+	s.log = log.FromContext(ctx, "handler", "RegistryCertificatesSyncer", "kind", "ConfigMap [core/v1]",
+		"namespace", s.namespace, "name", s.name)
+	s.log.Info("Starting System Config Syncer")
 	ic := system_config.SystemConfigSyncerSingleton()
 	clientSet := s.clientSet
 	// Watch the ConfigMap that contains the registry certificates and Sync SystemConfig
@@ -49,30 +56,30 @@ func (s *RegistryCertificatesSyncer) Start(ctx context.Context) (err error) {
 	)
 
 	if err != nil {
-		klog.Errorf("error registering handler for the image-registry-certificates configmap: %w", err)
+		s.log.Error(err, "Error registering handler for the image-registry-certificates configmap")
 		return err
 	}
 
 	registryCertificatesInformer.Run(ctx.Done())
 
+	s.log.Info("Stopping System Config Syncer")
 	return nil
 }
 
 func (s *RegistryCertificatesSyncer) onAddOrUpdate(ic system_config.IConfigSyncer, obj interface{}) {
 	cm, ok := obj.(*corev1.ConfigMap)
 	if !ok {
-		// TODO[informers]: should we panic here?
-		klog.Errorf("unexpected type %T, expected ConfigMap", obj)
+		s.log.Error(errors.New("unexpected type, expected ConfigMap"), "unexpected type", "type", fmt.Sprintf("%T", obj))
 		return
 	}
 	if cm.Name != s.name {
 		// Ignore other configmaps
 		return
 	}
-	klog.Infof("the %s/%s configmap has been updated", s.namespace, s.name)
+	s.log.Info("The configmap has been updated")
 	err := ic.StoreRegistryCerts(system_config.ParseRegistryCerts(cm.Data))
 	if err != nil {
-		klog.Warningf("error updating registry certs: %w", err)
+		s.log.Error(err, "Error updating registry certs")
 		return
 	}
 }

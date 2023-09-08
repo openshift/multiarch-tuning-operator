@@ -25,10 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	multiarchv1alpha1 "multiarch-operator/apis/multiarch/v1alpha1"
@@ -64,37 +63,37 @@ func generatePatchBytes(ops string) []byte {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
 func (r *PodPlacementConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := ctrllog.FromContext(ctx, "podplacementconfig", req.NamespacedName.Name, "namespace")
 
 	// Lookup the PodPlacementConfig instance for this reconcile request
 	podplacementconfig := &multiarchv1alpha1.PodPlacementConfig{}
 	if err := r.Get(ctx, types.NamespacedName{Name: "podplacementconfig-sample", Namespace: ""}, podplacementconfig); err != nil {
-		klog.Errorf("unable to fetch PodPlacementConfig %s: %v", req.Name, err)
+		log.Error(err, "Unable to fetch PodPlacementConfig")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	podplacementwebhook, err := r.Clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, "multiarch-operator-mutating-webhook-configuration", metav1.GetOptions{})
 	if err != nil {
-		klog.Errorf("unable to fetch mutating webhook: %v", err)
+		log.Error(err, "Unable to fetch mutating webhook")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !reflect.DeepEqual(podplacementwebhook.Webhooks[0].NamespaceSelector, podplacementconfig.Spec.NamespaceSelector) {
 		nsselectorbytes, err := json.Marshal(podplacementconfig.Spec.NamespaceSelector)
 		if err != nil {
-			klog.Errorf("unable to marshal namespaceselector: %v", err)
+			log.Error(err, "Unable to marshal namespaceselector")
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		op := fmt.Sprintf(replaceWebhooksValueTemplate, string(nsselectorbytes))
 		_, err = r.Clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Patch(ctx, "multiarch-operator-mutating-webhook-configuration", types.JSONPatchType, generatePatchBytes(op), metav1.PatchOptions{})
 		if err != nil {
 			if err != nil {
-				klog.Errorf("unable to update mutatingwebhookconfiguration: %v", err)
+				log.Error(err, "Unable to update mutatingwebhookconfiguration")
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
 		}
 	}
 	err = r.Client.Update(ctx, podplacementconfig)
 	if err != nil {
-		klog.Errorf("unable to update the podplacementconfig %s: %v", podplacementconfig.Name, err)
+		log.Error(err, "Unable to update the podplacementconfig")
 		return ctrl.Result{}, err
 	}
 

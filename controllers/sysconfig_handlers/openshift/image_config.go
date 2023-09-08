@@ -2,10 +2,13 @@ package openshift
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/go-logr/logr"
 	ocpv1 "github.com/openshift/api/config/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 	"multiarch-operator/pkg/system_config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -55,6 +58,7 @@ import (
 
 type ImageRegistryConfigSyncer struct {
 	mgr manager.Manager
+	log logr.Logger
 }
 
 func NewImageRegistryConfigSyncer(mgr manager.Manager) *ImageRegistryConfigSyncer {
@@ -64,12 +68,13 @@ func NewImageRegistryConfigSyncer(mgr manager.Manager) *ImageRegistryConfigSynce
 }
 
 func (s *ImageRegistryConfigSyncer) Start(ctx context.Context) (err error) {
-	klog.Warningf("starting the Openshift Image Registry Config syncer")
+	s.log = log.FromContext(ctx, "handler", "ImageRegistryConfigSyncer", "kind", "Image [config.openshift.io/v1]")
+	s.log.Info("Starting System Config Syncer")
 	mgr := s.mgr
 	ic := system_config.SystemConfigSyncerSingleton()
 	imageInformer, err := mgr.GetCache().GetInformerForKind(ctx, ocpv1.GroupVersion.WithKind("Image"))
 	if err != nil {
-		klog.Errorf("error getting informer for Image [config.openshift.io/v1]: %w", err)
+		s.log.Error(err, "Error getting the informer")
 		return err
 	}
 	_, err = imageInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -77,7 +82,7 @@ func (s *ImageRegistryConfigSyncer) Start(ctx context.Context) (err error) {
 		UpdateFunc: s.onUpdate(ic),
 	})
 	if err != nil {
-		klog.Errorf("error registering handler for Image [config.openshift.io/v1]: %w", err)
+		s.log.Error(err, "Error registering handler")
 		return err
 	}
 
@@ -87,18 +92,18 @@ func (s *ImageRegistryConfigSyncer) Start(ctx context.Context) (err error) {
 func (s *ImageRegistryConfigSyncer) onAddOrUpdate(ic system_config.IConfigSyncer, obj interface{}) {
 	image, ok := obj.(*ocpv1.Image)
 	if !ok {
-		klog.Errorf("unexpected type %T, expected Image", obj)
+		s.log.Error(errors.New("unexpected type, expected Image"), "unexpected type", "type", fmt.Sprintf("%T", obj))
 		return
 	}
 	if image.Name != "cluster" {
-		klog.Warningf("ignoring image.config.openshift.io/%s object", image.Name)
+		s.log.V(4).Info("Ignoring unexpected object", "name", image.Name)
 		return
 	}
-	klog.Warningln("the image.config.openshift.io/cluster object has been updated.")
+	s.log.Info("The object has been updated")
 	err := ic.StoreImageRegistryConf(image.Spec.RegistrySources.AllowedRegistries,
 		image.Spec.RegistrySources.BlockedRegistries, image.Spec.RegistrySources.InsecureRegistries)
 	if err != nil {
-		klog.Warningf("error updating registry conf: %w", err)
+		s.log.Error(err, "Error updating registry conf")
 		return
 	}
 }

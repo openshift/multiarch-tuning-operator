@@ -25,8 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	"multiarch-operator/controllers/openshift"
 	"multiarch-operator/pkg/image"
+	"multiarch-operator/pkg/utils"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -245,7 +245,7 @@ func pullSecretAuthList(ctx context.Context, clientset *kubernetes.Clientset, po
 			klog.Warningf("Error getting secret: %s namespace: %s", pullsecret, pod.Namespace)
 			continue
 		}
-		if secretData, err := openshift.ExtractAuthFromSecret(secret); err != nil {
+		if secretData, err := utils.ExtractAuthFromSecret(secret); err != nil {
 			klog.Warningf("Error extracting auth from secret: %s namespace: %s", pullsecret, pod.Namespace)
 			continue
 		} else {

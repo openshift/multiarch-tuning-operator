@@ -21,7 +21,8 @@ import (
 	ocpv1 "github.com/openshift/api/config/v1"
 	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"k8s.io/klog/v2"
-	"multiarch-operator/controllers/openshift"
+	commonsysconfig "multiarch-operator/controllers/sysconfig_handlers/common"
+	openshiftsysconfig "multiarch-operator/controllers/sysconfig_handlers/openshift"
 	"multiarch-operator/pkg/system_config"
 	"os"
 	"time"
@@ -148,27 +149,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	// TODO[OCP specific]
-	err = mgr.Add(openshift.NewICSPSyncer(mgr))
-	if err != nil {
-		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
-		os.Exit(1)
-	}
-
-	err = mgr.Add(openshift.NewRegistryCertificatesSyncer(clientset, registryCertificatesConfigMapNamespace,
+	err = mgr.Add(commonsysconfig.NewRegistryCertificatesSyncer(clientset, registryCertificatesConfigMapNamespace,
 		registryCertificatesConfigMapName))
 	if err != nil {
 		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
 		os.Exit(1)
 	}
 
-	err = mgr.Add(openshift.NewImageRegistryConfigSyncer(mgr))
+	err = mgr.Add(commonsysconfig.NewGlobalPullSecretSyncer(clientset, globalPullSecretNamespace, globalPullSecretName))
 	if err != nil {
 		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
 		os.Exit(1)
 	}
 
-	err = mgr.Add(openshift.NewGlobalPullSecretSyncer(clientset, globalPullSecretNamespace, globalPullSecretName))
+	// TODO[OCP specific]
+	err = mgr.Add(openshiftsysconfig.NewICSPSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(openshiftsysconfig.NewImageRegistryConfigSyncer(mgr))
 	if err != nil {
 		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
 		os.Exit(1)

@@ -1,4 +1,4 @@
-package openshift
+package common
 
 import (
 	"context"

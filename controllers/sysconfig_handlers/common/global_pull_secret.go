@@ -1,4 +1,4 @@
-package openshift
+package common
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"multiarch-operator/pkg/image"
+	"multiarch-operator/pkg/utils"
 )
 
 type GlobalPullSecretSyncer struct {
@@ -49,7 +50,6 @@ func (s *GlobalPullSecretSyncer) Start(ctx context.Context) (err error) {
 func (s *GlobalPullSecretSyncer) onAddOrUpdate(obj interface{}) {
 	secret, ok := obj.(*corev1.Secret)
 	if !ok {
-		// TODO[informers]: should we panic here?
 		klog.Errorf("unexpected type %T, expected ConfigMap", obj)
 		return
 	}
@@ -58,7 +58,7 @@ func (s *GlobalPullSecretSyncer) onAddOrUpdate(obj interface{}) {
 		return
 	}
 	klog.Infof("The global pull secret %s/%s was updated", s.namespace, s.name)
-	if pullSecret, err := ExtractAuthFromSecret(secret); err == nil {
+	if pullSecret, err := utils.ExtractAuthFromSecret(secret); err == nil {
 		image.FacadeSingleton().StoreGlobalPullSecret(pullSecret)
 	} else {
 		klog.Warningf("Error extracting the auth from the secret %s/%s: %v", s.name, s.namespace, err)
@@ -69,19 +69,4 @@ func (s *GlobalPullSecretSyncer) onUpdate() func(oldobj, newobj interface{}) {
 	return func(oldobj, newobj interface{}) {
 		s.onAddOrUpdate(newobj)
 	}
-}
-
-func ExtractAuthFromSecret(secret *corev1.Secret) ([]byte, error) {
-	switch secret.Type {
-	case "kubernetes.io/dockercfg":
-		return secret.Data[".dockercfg"], nil
-	case "kubernetes.io/dockerconfigjson":
-		var objmap map[string]json.RawMessage
-		if err := json.Unmarshal(secret.Data[".dockerconfigjson"], &objmap); err != nil {
-			klog.Warningf("Error unmarshaling secret data for: %s/%s", secret.Namespace, secret.Name)
-			return nil, err
-		}
-		return objmap["auths"], nil
-	}
-	return nil, errors.New("unknown secret type")
 }

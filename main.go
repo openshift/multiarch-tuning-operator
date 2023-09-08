@@ -136,7 +136,7 @@ func main() {
 	if err = (&podplacement.PodPlacementConfigReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
-		Clientset: clientset,
+		ClientSet: clientset,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PodPlacementConfig")
 		os.Exit(1)

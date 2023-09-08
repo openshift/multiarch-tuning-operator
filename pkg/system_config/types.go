@@ -3,6 +3,7 @@ package system_config
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"k8s.io/apimachinery/pkg/util/json"
 	"os"
 	"path/filepath"
@@ -14,6 +15,13 @@ const (
 	PolicyConfPath     = "/tmp/containers/policy.json"
 	DockerCertsDir     = "/tmp/docker/certs.d"
 	RegistryCertsDir   = "/tmp/containers/registries.d"
+)
+
+type PullType string
+
+const (
+	PullTypeDigestOnly PullType = sysregistriesv2.MirrorByDigestOnly
+	PullTypeTagOnly    PullType = sysregistriesv2.MirrorByTagOnly
 )
 
 type registryCertTuple struct {
@@ -109,21 +117,23 @@ type registryConf struct {
 }
 
 type Mirror struct {
-	Location string `toml:"location"`
+	Location       string   `toml:"location"`
+	PullFromMirror PullType `toml:"pull-from-mirror"`
 	// insecure *bool  `toml:"insecure"`
 }
 
-func mirrorFor(location string) Mirror {
+func mirrorFor(location string, pullType PullType) Mirror {
 	return Mirror{
-		Location: location,
+		Location:       location,
+		PullFromMirror: pullType,
 		// insecure: insecure,
 	}
 }
 
-func mirrorsFor(locations []string) []Mirror {
+func mirrorsFor(locations []string, pullType PullType) []Mirror {
 	var mirrors []Mirror
 	for _, location := range locations {
-		mirrors = append(mirrors, mirrorFor(location))
+		mirrors = append(mirrors, mirrorFor(location, pullType))
 	}
 	return mirrors
 }

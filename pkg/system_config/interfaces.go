@@ -8,7 +8,7 @@ type IConfigSyncer interface {
 
 	StoreRegistryCerts(registryCertTuples []registryCertTuple) error
 
-	UpdateRegistryMirroringConfig(registry string, mirrors []string) error
+	UpdateRegistryMirroringConfig(registry string, mirrors []string, pullType PullType) error
 	DeleteRegistryMirroringConfig(registry string) error
 	CleanupRegistryMirroringConfig() error
 

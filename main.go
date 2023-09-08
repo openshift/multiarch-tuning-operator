@@ -169,6 +169,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	err = mgr.Add(openshiftsysconfig.NewIDMSSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the IDMSSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(openshiftsysconfig.NewITMSSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the IDMSSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
 	err = mgr.Add(openshiftsysconfig.NewImageRegistryConfigSyncer(mgr))
 	if err != nil {
 		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")

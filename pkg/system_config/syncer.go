@@ -77,11 +77,11 @@ func (s *SystemConfigSyncer) StoreRegistryCerts(registryCertTuples []registryCer
 	return nil
 }
 
-func (s *SystemConfigSyncer) UpdateRegistryMirroringConfig(registry string, mirrors []string) error {
+func (s *SystemConfigSyncer) UpdateRegistryMirroringConfig(registry string, mirrors []string, pullType PullType) error {
 	s.mu.Lock()
 	defer s.unlockAndSync()
 	rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
-	rc.Mirrors = mirrorsFor(mirrors)
+	rc.Mirrors = mirrorsFor(mirrors, pullType)
 	return nil
 }
 
@@ -144,6 +144,8 @@ func (s *SystemConfigSyncer) getch() chan bool {
 //#kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch,resourceNames=image-registry-certificates,namespace="openshift-image-registry"
 
 //+kubebuilder:rbac:groups=config.openshift.io,resources=images,verbs=get;list;watch
+//+kubebuilder:rbac:groups=config.openshift.io,resources=imagedigestmirrorsets,verbs=get;list;watch
+//+kubebuilder:rbac:groups=config.openshift.io,resources=imagetagmirrorsets,verbs=get;list;watch
 
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=imagecontentsourcepolicies,verbs=get;list;watch
 

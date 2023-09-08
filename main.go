@@ -128,7 +128,7 @@ func main() {
 	if err = (&podplacement.PodReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
-		Clientset: clientset,
+		ClientSet: clientset,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
 		os.Exit(1)

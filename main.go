@@ -42,8 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	multiarchv1alpha1 "multiarch-operator/apis/multiarch/v1alpha1"
-	"multiarch-operator/controllers"
-	multiarchcontrollers "multiarch-operator/controllers/multiarch"
+	podplacement "multiarch-operator/controllers/pod_placement"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -126,7 +125,7 @@ func main() {
 	config := ctrl.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
 
-	if err = (&controllers.PodReconciler{
+	if err = (&podplacement.PodReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		Clientset: clientset,
@@ -134,7 +133,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
 		os.Exit(1)
 	}
-	if err = (&multiarchcontrollers.PodPlacementConfigReconciler{
+	if err = (&podplacement.PodPlacementConfigReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		Clientset: clientset,
@@ -198,7 +197,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: &controllers.PodSchedulingGateMutatingWebHook{
+	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: &podplacement.PodSchedulingGateMutatingWebHook{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}})

@@ -10,21 +10,27 @@ import (
 	"multiarch-operator/pkg/system_config"
 )
 
-// RegistryCertificatesSyncer watches the image-registry-certificates configmap and updates the registry certificates accordingly by using
-// the SystemConfigSyncer.
+// RegistryCertificatesSyncer watches a configmap (openshift-image-registry/image-registry-certificates) and updates
+// the registry certificates accordingly by using the SystemConfigSyncer.
 // The configuration written by the SystemConfigSyncer due to the RegistryCertificatesSyncer is stored in-memory in the
-// SystemConfigSyncer.registryCertTuples (type []registryCertTuple) and written to disk in the $conf_dir/docker/certs.d directory.
+// SystemConfigSyncer.registryCertTuples (type []system_config.registryCertTuple) and written to disk in the $conf_dir/docker/certs.d directory.
 // In particular, an example of the configuration written by the SystemConfigSyncer due to the RegistryCertificatesSyncer in $conf_dir/docker/certs.d is:
-// /$conf_dir/docker/certs.d/registry.redhat.io/ca.crt
-// /$conf_dir/docker/certs.d/registry.redhat.io:5000/ca.crt
-
+// $conf_dir/docker/certs.d/registry.redhat.io/ca.crt
+// $conf_dir/docker/certs.d/registry.redhat.io:5000/ca.crt
 type RegistryCertificatesSyncer struct {
+	// clientSet is the kubernetes clientset
 	clientSet *kubernetes.Clientset
+	// namespace is the namespace where the configmap that contains the registry certificates is stored
+	namespace string
+	// name is the name of the configmap that contains the registry certificates
+	name string
 }
 
-func NewRegistryCertificatesSyncer(clientSet *kubernetes.Clientset) *RegistryCertificatesSyncer {
+func NewRegistryCertificatesSyncer(clientSet *kubernetes.Clientset, namespace, name string) *RegistryCertificatesSyncer {
 	return &RegistryCertificatesSyncer{
 		clientSet: clientSet,
+		namespace: namespace,
+		name:      name,
 	}
 }
 
@@ -33,7 +39,7 @@ func (s *RegistryCertificatesSyncer) Start(ctx context.Context) (err error) {
 	ic := system_config.SystemConfigSyncerSingleton()
 	clientSet := s.clientSet
 	// Watch the ConfigMap that contains the registry certificates and Sync SystemConfig
-	registryCertificatesInformer := v1.NewConfigMapInformer(clientSet, "openshift-image-registry", 0, cache.Indexers{})
+	registryCertificatesInformer := v1.NewConfigMapInformer(clientSet, s.namespace, 0, cache.Indexers{})
 
 	_, err = registryCertificatesInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
@@ -59,11 +65,11 @@ func (s *RegistryCertificatesSyncer) onAddOrUpdate(ic system_config.IConfigSynce
 		klog.Errorf("unexpected type %T, expected ConfigMap", obj)
 		return
 	}
-	if cm.Name != "image-registry-certificates" {
+	if cm.Name != s.name {
 		// Ignore other configmaps
 		return
 	}
-	klog.Warningln("the image-registry-certificates configmap has been updated.")
+	klog.Infof("the %s/%s configmap has been updated", s.namespace, s.name)
 	err := ic.StoreRegistryCerts(system_config.ParseRegistryCerts(cm.Data))
 	if err != nil {
 		klog.Warningf("error updating registry certs: %w", err)

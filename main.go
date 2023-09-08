@@ -69,12 +69,23 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var certDir string
+	var globalPullSecretNamespace string
+	var globalPullSecretName string
+	var registryCertificatesConfigMapNamespace string
+	var registryCertificatesConfigMapName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&certDir, "cert-dir", "/var/run/manager/tls", "The directory where the TLS certs are stored")
+
+	// TODO: Change the defaults to match a local secret; the OCP specific settings will be provided by the operator
+	flag.StringVar(&globalPullSecretNamespace, "global-pull-secret-namespace", "openshift-config", "The namespace where the global pull secret is stored")
+	flag.StringVar(&globalPullSecretName, "global-pull-secret-name", "pull-secret", "The name of the global pull secret")
+	flag.StringVar(&registryCertificatesConfigMapNamespace, "registry-certificates-configmap-namespace", "openshift-image-registry", "The namespace where the configmap that contains the registry certificates is stored")
+	flag.StringVar(&registryCertificatesConfigMapName, "registry-certificates-configmap-name", "image-registry-certificates", "The name of the configmap that contains the registry certificates")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -144,7 +155,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = mgr.Add(openshift.NewRegistryCertificatesSyncer(clientset))
+	err = mgr.Add(openshift.NewRegistryCertificatesSyncer(clientset, registryCertificatesConfigMapNamespace,
+		registryCertificatesConfigMapName))
 	if err != nil {
 		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
 		os.Exit(1)
@@ -156,7 +168,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = mgr.Add(openshift.NewGlobalPullSecretSyncer(clientset))
+	err = mgr.Add(openshift.NewGlobalPullSecretSyncer(clientset, globalPullSecretNamespace, globalPullSecretName))
 	if err != nil {
 		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
 		os.Exit(1)

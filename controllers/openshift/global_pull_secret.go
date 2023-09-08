@@ -2,8 +2,6 @@ package openshift
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	corev1 "k8s.io/api/core/v1"
 	clientv1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -14,17 +12,15 @@ import (
 
 type GlobalPullSecretSyncer struct {
 	clientSet *kubernetes.Clientset
-	observers []IGlobalPullSecretObserver
+	namespace string
+	name      string
 }
 
-type IGlobalPullSecretObserver interface {
-	// Update notifies the observer that the global pull secret has been updated
-	Update(pullSecret []byte)
-}
-
-func NewGlobalPullSecretSyncer(clientSet *kubernetes.Clientset) *GlobalPullSecretSyncer {
+func NewGlobalPullSecretSyncer(clientSet *kubernetes.Clientset, namespace, name string) *GlobalPullSecretSyncer {
 	return &GlobalPullSecretSyncer{
 		clientSet: clientSet,
+		namespace: namespace,
+		name:      name,
 	}
 }
 
@@ -32,7 +28,7 @@ func (s *GlobalPullSecretSyncer) Start(ctx context.Context) (err error) {
 	klog.Warningf("starting the Openshift global pull-secret syncer")
 	clientSet := s.clientSet
 	// Watch the Secret that contains the global pull secret and Sync the inspector
-	globalPullSecretInformer := clientv1.NewSecretInformer(clientSet, "openshift-config", 0, cache.Indexers{})
+	globalPullSecretInformer := clientv1.NewSecretInformer(clientSet, s.namespace, 0, cache.Indexers{})
 
 	_, err = globalPullSecretInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
@@ -57,15 +53,15 @@ func (s *GlobalPullSecretSyncer) onAddOrUpdate(obj interface{}) {
 		klog.Errorf("unexpected type %T, expected ConfigMap", obj)
 		return
 	}
-	if secret.Name != "pull-secret" {
+	if secret.Name != s.name {
 		// Ignore other configmaps
 		return
 	}
-	klog.Warningln("global pull secret update")
+	klog.Infof("The global pull secret %s/%s was updated", s.namespace, s.name)
 	if pullSecret, err := ExtractAuthFromSecret(secret); err == nil {
 		image.FacadeSingleton().StoreGlobalPullSecret(pullSecret)
 	} else {
-		klog.Warningf("Error extracting the auth from the secret: %v", err)
+		klog.Warningf("Error extracting the auth from the secret %s/%s: %v", s.name, s.namespace, err)
 	}
 }
 

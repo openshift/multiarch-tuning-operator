@@ -7,7 +7,7 @@ import (
 )
 
 type cacheProxy struct {
-	registryInspector        iRegistryInspector
+	registryInspector        IRegistryInspector
 	imageRefsArchitectureMap map[string]sets.Set[string]
 	mutex                    sync.Mutex
 }

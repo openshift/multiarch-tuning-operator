@@ -11,10 +11,10 @@ type ICache interface {
 	GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (sets.Set[string], error)
 }
 
-type iRegistryInspector interface {
+type IRegistryInspector interface {
 	ICache
 	// StoreGlobalPullSecret takes a pull secret and stores it in the ImageFacade. It will be used by the controller
 	// in charge of watching the global pull secret and to store it in the ImageFacade's relevant private field.
 	// Then, the ImageFacade will be responsible for consuming it during the inspection.
-	storeGlobalPullSecret(pullSecret []byte)
+	StoreGlobalPullSecret(pullSecret []byte)
 }

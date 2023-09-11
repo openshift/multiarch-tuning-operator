@@ -3,6 +3,7 @@ package system_config
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"k8s.io/apimachinery/pkg/util/json"
 	"os"
 	"path/filepath"
@@ -13,7 +14,14 @@ const (
 	RegistriesConfPath = "/tmp/containers/registries.conf"
 	PolicyConfPath     = "/tmp/containers/policy.json"
 	DockerCertsDir     = "/tmp/docker/certs.d"
-	RegistryCertsDir   = "/etc/containers/registries.d"
+	RegistryCertsDir   = "/tmp/containers/registries.d"
+)
+
+type PullType string
+
+const (
+	PullTypeDigestOnly PullType = sysregistriesv2.MirrorByDigestOnly
+	PullTypeTagOnly    PullType = sysregistriesv2.MirrorByTagOnly
 )
 
 type registryCertTuple struct {
@@ -53,11 +61,11 @@ func (t registryCertTuple) getFolderName() string {
 type registriesConf struct {
 	UnqualifiedSearchRegistries []string                 `toml:"unqualified-search-registries"`
 	ShortNameMode               string                   `toml:"short-name-mode"`
-	Registries                  []*registryConf          `toml:"registries"`
+	Registries                  []*registryConf          `toml:"registry"`
 	registriesMap               map[string]*registryConf `toml:"-"`
 }
 
-func (rsc registriesConf) getRegistryConfOrCreate(registry string) *registryConf {
+func (rsc *registriesConf) getRegistryConfOrCreate(registry string) *registryConf {
 	rc, _ := rsc.registriesMap[registry]
 	if rc == nil {
 		rc = &registryConf{
@@ -69,23 +77,65 @@ func (rsc registriesConf) getRegistryConfOrCreate(registry string) *registryConf
 	return rc
 }
 
-func (rsc registriesConf) writeToFile() error {
+func (rsc *registriesConf) writeToFile() error {
 	return writeTomlFile(RegistriesConfPath, rsc)
 }
 
-func (rsc registriesConf) getRegistryConf(registry string) (*registryConf, bool) {
+func (rsc *registriesConf) getRegistryConf(registry string) (*registryConf, bool) {
 	rc, ok := rsc.registriesMap[registry]
 	return rc, ok
+}
+
+func (rsc *registriesConf) cleanupRegistryConfIfEmpty(registry string) {
+	if rc, ok := rsc.getRegistryConf(registry); ok {
+		if rc.Insecure == nil && rc.Allowed == nil && rc.Blocked == nil && len(rc.Mirrors) == 0 {
+			delete(rsc.registriesMap, registry)
+			for i, r := range rsc.Registries {
+				if r == rc {
+					rsc.Registries = append(rsc.Registries[:i], rsc.Registries[i+1:]...)
+					break
+				}
+			}
+		}
+	}
+}
+
+func (rsc *registriesConf) cleanupAllRegistryConfIfEmpty() {
+	for _, registry := range rsc.Registries {
+		rsc.cleanupRegistryConfIfEmpty(registry.Location)
+	}
 }
 
 type registryConf struct {
 	Location string   `toml:"location"`
 	Prefix   string   `toml:"prefix"`
-	Mirrors  []string `toml:"mirror"`
+	Mirrors  []Mirror `toml:"mirror"`
 	// Setting the blocked, allowed and insecure fields to nil will cause them to be omitted from the output
 	Blocked  *bool `toml:"blocked"`
 	Allowed  *bool `toml:"allowed"`
 	Insecure *bool `toml:"insecure"`
+}
+
+type Mirror struct {
+	Location       string   `toml:"location"`
+	PullFromMirror PullType `toml:"pull-from-mirror"`
+	// insecure *bool  `toml:"insecure"`
+}
+
+func mirrorFor(location string, pullType PullType) Mirror {
+	return Mirror{
+		Location:       location,
+		PullFromMirror: pullType,
+		// insecure: insecure,
+	}
+}
+
+func mirrorsFor(locations []string, pullType PullType) []Mirror {
+	var mirrors []Mirror
+	for _, location := range locations {
+		mirrors = append(mirrors, mirrorFor(location, pullType))
+	}
+	return mirrors
 }
 
 // defaultRegistriesConf returns a default registriesConf object
@@ -93,6 +143,8 @@ func defaultRegistriesConf() registriesConf {
 	return registriesConf{
 		UnqualifiedSearchRegistries: []string{"registry.access.redhat.com", "docker.io"},
 		ShortNameMode:               "",
+		Registries:                  []*registryConf{},
+		registriesMap:               map[string]*registryConf{},
 	}
 }
 

@@ -1,10 +1,9 @@
-package image
+package utils
 
 import (
 	"encoding/json"
 	"errors"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
+	"k8s.io/api/core/v1"
 )
 
 func ExtractAuthFromSecret(secret *v1.Secret) ([]byte, error) {
@@ -14,7 +13,6 @@ func ExtractAuthFromSecret(secret *v1.Secret) ([]byte, error) {
 	case "kubernetes.io/dockerconfigjson":
 		var objmap map[string]json.RawMessage
 		if err := json.Unmarshal(secret.Data[".dockerconfigjson"], &objmap); err != nil {
-			klog.Warningf("Error unmarshaling secret data for: %s/%s", secret.Namespace, secret.Name)
 			return nil, err
 		}
 		return objmap["auths"], nil

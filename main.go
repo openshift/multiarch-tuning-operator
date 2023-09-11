@@ -18,9 +18,14 @@ package main
 
 import (
 	"flag"
+	ocpv1 "github.com/openshift/api/config/v1"
+	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"k8s.io/klog/v2"
+	commonsysconfig "multiarch-operator/controllers/sysconfig_handlers/common"
+	openshiftsysconfig "multiarch-operator/controllers/sysconfig_handlers/openshift"
 	"multiarch-operator/pkg/system_config"
 	"os"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -37,8 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	multiarchv1alpha1 "multiarch-operator/apis/multiarch/v1alpha1"
-	"multiarch-operator/controllers"
-	multiarchcontrollers "multiarch-operator/controllers/multiarch"
+	podplacement "multiarch-operator/controllers/pod_placement"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -47,10 +51,16 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+const readonlySystemConfigResyncPeriod = 30 * time.Minute
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(multiarchv1alpha1.AddToScheme(scheme))
+
+	// TODO[OCP specific]
+	utilruntime.Must(ocpv1.Install(scheme))
+	utilruntime.Must(ocpv1alpha1.Install(scheme))
+
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -58,11 +68,24 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var certDir string
+	var globalPullSecretNamespace string
+	var globalPullSecretName string
+	var registryCertificatesConfigMapNamespace string
+	var registryCertificatesConfigMapName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&certDir, "cert-dir", "/var/run/manager/tls", "The directory where the TLS certs are stored")
+
+	// TODO: Change the defaults to match a local secret; the OCP specific settings will be provided by the operator
+	flag.StringVar(&globalPullSecretNamespace, "global-pull-secret-namespace", "openshift-config", "The namespace where the global pull secret is stored")
+	flag.StringVar(&globalPullSecretName, "global-pull-secret-name", "pull-secret", "The name of the global pull secret")
+	flag.StringVar(&registryCertificatesConfigMapNamespace, "registry-certificates-configmap-namespace", "openshift-image-registry", "The namespace where the configmap that contains the registry certificates is stored")
+	flag.StringVar(&registryCertificatesConfigMapName, "registry-certificates-configmap-name", "image-registry-certificates", "The name of the configmap that contains the registry certificates")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -81,7 +104,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "208d7abd.multiarch.openshift.io",
-		CertDir:                "/var/run/manager/tls",
+		CertDir:                certDir,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -102,22 +125,67 @@ func main() {
 	config := ctrl.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
 
-	if err = (&controllers.PodReconciler{
+	if err = (&podplacement.PodReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
-		Clientset: clientset,
+		ClientSet: clientset,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
 		os.Exit(1)
 	}
-	if err = (&multiarchcontrollers.PodPlacementConfigReconciler{
+	if err = (&podplacement.PodPlacementConfigReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
-		Clientset: clientset,
+		ClientSet: clientset,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PodPlacementConfig")
 		os.Exit(1)
 	}
+
+	err = mgr.Add(&system_config.ConfigSyncerRunnable{})
+	if err != nil {
+		setupLog.Error(err, "unable to add the ConfigSyncerRunnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(commonsysconfig.NewRegistryCertificatesSyncer(clientset, registryCertificatesConfigMapNamespace,
+		registryCertificatesConfigMapName))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(commonsysconfig.NewGlobalPullSecretSyncer(clientset, globalPullSecretNamespace, globalPullSecretName))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	// TODO[OCP specific]
+	err = mgr.Add(openshiftsysconfig.NewICSPSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(openshiftsysconfig.NewIDMSSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the IDMSSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(openshiftsysconfig.NewITMSSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the IDMSSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
+	err = mgr.Add(openshiftsysconfig.NewImageRegistryConfigSyncer(mgr))
+	if err != nil {
+		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -129,12 +197,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: &controllers.PodSchedulingGateMutatingWebHook{
+	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: &podplacement.PodSchedulingGateMutatingWebHook{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}})
-
-	system_config.SystemConfigSyncerSingleton()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

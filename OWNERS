@@ -1,0 +1,7 @@
+reviewers:
+  - aleskandro
+  - Prashanth684
+approvers:
+  - aleskandro
+  - Prashanth684
+components: multiarch-manager-operator

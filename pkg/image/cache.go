@@ -23,12 +23,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
+//nolint:unused
 type cacheProxy struct {
 	registryInspector        IRegistryInspector
 	imageRefsArchitectureMap map[string]sets.Set[string]
 	mutex                    sync.Mutex
 }
 
+//nolint:unused
 func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (sets.Set[string], error) {
 	if c.imageRefsArchitectureMap[imageReference] != nil {
 		return c.imageRefsArchitectureMap[imageReference], nil

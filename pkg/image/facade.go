@@ -43,7 +43,8 @@ func (i *Facade) StoreGlobalPullSecret(pullSecret []byte) {
 }
 
 func newImageFacade() *Facade {
-	inspectionCache := newCache()
+	// TODO: restore to use the cacheProxy once an eviction policy is implemented
+	inspectionCache := newRegistryInspector()
 	return &Facade{
 		inspectionCache:       inspectionCache,
 		storeGlobalPullSecret: inspectionCache.storeGlobalPullSecret,

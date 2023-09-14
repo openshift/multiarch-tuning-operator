@@ -45,7 +45,8 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 	return architectures, nil
 }
 
-func newCache() ICache {
+//nolint:unused
+func newCacheProxy() ICache {
 	return &cacheProxy{
 		imageRefsArchitectureMap: map[string]sets.Set[string]{},
 		registryInspector:        newRegistryInspector(),

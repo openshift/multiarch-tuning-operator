@@ -164,7 +164,7 @@ func writeMemFile(name string, b []byte) (int, error) {
 	return fd, nil
 }
 
-func (i *registryInspector) StoreGlobalPullSecret(pullSecret []byte) {
+func (i *registryInspector) storeGlobalPullSecret(pullSecret []byte) {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	i.globalPullSecret = pullSecret

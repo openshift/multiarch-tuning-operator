@@ -30,6 +30,11 @@ const (
 	archLabel = "kubernetes.io/arch"
 )
 
+var (
+	// imageInspectionCache is the facade singleton used to inspect images. It is defined here to facilitate testing.
+	imageInspectionCache image.ICache = image.FacadeSingleton()
+)
+
 type Pod struct {
 	corev1.Pod
 	ctx context.Context
@@ -185,7 +190,7 @@ func (pod *Pod) intersectImagesArchitecture(pullSecretDataList [][]byte) (suppor
 	var supportedArchitecturesSet sets.Set[string]
 	for imageName := range imageNamesSet {
 		log.V(5).Info("Checking image", "imageName", imageName)
-		currentImageSupportedArchitectures, err := image.FacadeSingleton().GetCompatibleArchitecturesSet(pod.ctx, imageName, pullSecretDataList)
+		currentImageSupportedArchitectures, err := imageInspectionCache.GetCompatibleArchitecturesSet(pod.ctx, imageName, pullSecretDataList)
 		if err != nil {
 			log.V(3).Error(err, "Error inspecting the image", "imageName", imageName)
 			return nil, err

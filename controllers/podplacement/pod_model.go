@@ -45,9 +45,9 @@ func (pod *Pod) GetPodImagePullSecrets() []string {
 		// If the imagePullSecrets array is nil, return emptylist
 		return []string{}
 	}
-	var secretRefs []string
-	for _, secret := range pod.Spec.ImagePullSecrets {
-		secretRefs = append(secretRefs, secret.Name)
+	var secretRefs = make([]string, len(pod.Spec.ImagePullSecrets))
+	for i, secret := range pod.Spec.ImagePullSecrets {
+		secretRefs[i] = secret.Name
 	}
 	return secretRefs
 }

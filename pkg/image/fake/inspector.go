@@ -8,7 +8,8 @@ import (
 )
 
 type registryInspector struct {
-	globalPullSecret []byte
+	// TBD: implement test with global pull secret merging
+	// globalPullSecret []byte
 }
 
 const (

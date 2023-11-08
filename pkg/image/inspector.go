@@ -82,8 +82,8 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 		log.Error(err, "Error getting the image manifest: %v")
 		return nil, err
 	}
-	supportedArchitectures = sets.New[string]()
 	if manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest)) {
+		supportedArchitectures = sets.New[string]()
 		log.V(5).Info("Image is a manifest list... getting the list of supported architectures")
 		// The image is a manifest list
 		index, err := manifest.OCI1IndexFromManifest(rawManifest)
@@ -94,22 +94,21 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 			supportedArchitectures = sets.Insert(supportedArchitectures, m.Platform.Architecture)
 		}
 		return supportedArchitectures, nil
-	} else {
-		log.V(5).Info("The image is not a manifest list... getting the supported architecture")
-		parsedImage, err := image.FromUnparsedImage(ctx, sys, image.UnparsedInstance(src, nil))
-		if err != nil {
-			log.Error(err, "Error parsing the manifest of the image")
-			return nil, err
-		}
-		config, err := parsedImage.OCIConfig(ctx)
-		if err != nil {
-			// Ignore errors due to invalid images at this stage
-			log.Error(err, "Error parsing the OCI config of the image")
-			return nil, err
-		}
-		supportedArchitectures = sets.Insert(supportedArchitectures, config.Architecture)
 	}
-	return supportedArchitectures, nil
+	// no else here because the return statement above will be executed if the image is a manifest list
+	log.V(5).Info("The image is not a manifest list... getting the supported architecture")
+	parsedImage, err := image.FromUnparsedImage(ctx, sys, image.UnparsedInstance(src, nil))
+	if err != nil {
+		log.Error(err, "Error parsing the manifest of the image")
+		return nil, err
+	}
+	config, err := parsedImage.OCIConfig(ctx)
+	if err != nil {
+		// Ignore errors due to invalid images at this stage
+		log.Error(err, "Error parsing the OCI config of the image")
+		return nil, err
+	}
+	return sets.New[string](config.Architecture), nil
 }
 
 func (i *registryInspector) createAuthFile(log logr.Logger, secrets ...[]byte) (*os.File, error) {

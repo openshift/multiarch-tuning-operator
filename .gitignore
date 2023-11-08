@@ -5,6 +5,7 @@
 # This will allow to reuse the builder instance between runs and speed up the build process.
 .persistent-buildx
 .env
+_output/
 # Binaries for programs and plugins
 *.exe
 *.exe~

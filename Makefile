@@ -2,6 +2,8 @@ ifeq ($(shell test -f .env && echo -n yes),yes)
  include .env
 endif
 
+ARTIFACT_DIR ?= ./_output
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
@@ -170,8 +172,8 @@ vendor: ## Run go mod vendor
 	$(DOCKER_CMD) hack/go-mod.sh
 
 .PHONY: test
-test: manifests generate envtest fmt vet goimports gosec lint ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
+test: manifests generate envtest fmt vet goimports gosec lint unit ## Run tests.
+	echo "Done"
 
 ##@ Build
 
@@ -327,3 +329,15 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+GO_JUNIT_REPORT_VERSION ?= v2.1.0
+
+unit:
+	mkdir -p ${ARTIFACT_DIR}
+	GOBIN=$(LOCALBIN) GOFLAGS='' go install github.com/jstemmer/go-junit-report/v2@$(GO_JUNIT_REPORT_VERSION)
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
+		go test ./... -coverprofile ${ARTIFACT_DIR}/test-unit-coverage.out -covermode atomic -v | \
+		$(LOCALBIN)/go-junit-report -iocopy -out ${ARTIFACT_DIR}/junit-mmo-unit.xml
+	go tool cover -html=${ARTIFACT_DIR}/test-unit-coverage.out -o ${ARTIFACT_DIR}/test-unit-coverage.html
+	echo -n "Coverage "
+	go tool cover -func=${ARTIFACT_DIR}/test-unit-coverage.out | tail -n 1

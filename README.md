@@ -13,8 +13,8 @@ The development work is still ongoing and there is no official, general availabl
   [KEP-3838](https://github.com/kubernetes/enhancements/blob/afad6f270c7ac2ae853f4d1b72c379a6c3c7c042/keps/sig-scheduling/3838-pod-mutable-scheduling-directives/README.md), as
   described in the [Openshift EP](https://github.com/openshift/enhancements/blob/6cebc13f0672c601ebfae669ea4fc8ca632721b5/enhancements/multi-arch/multiarch-manager-operator.md) introducing it.
   When a pod is created, the mutating webhook will add the `multiarch.openshift.io/scheduling-gate` scheduling gate, that will
-  prevent the pod from being scheduled until the controller computes a predicated for the `kubernetes.io/arch` label,
-  adds it as node affinity requirement to the pod spec, and remove the scheduling gate.
+  prevent the pod from being scheduled until the controller computes a predicate for the `kubernetes.io/arch` label,
+  adds it as node affinity requirement to the pod spec and removes the scheduling gate.
 
 ## Getting Started
 

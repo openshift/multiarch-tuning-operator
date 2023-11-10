@@ -2,7 +2,8 @@ package podplacement
 
 import (
 	"context"
-	"log"
+	"crypto/sha1"
+	"encoding/hex"
 	mmoimage "multiarch-operator/pkg/image"
 	"multiarch-operator/pkg/image/fake"
 	"sort"
@@ -55,8 +56,12 @@ func (p *PodFactory) withSchedulingGates(schedulingGates ...string) *PodFactory 
 func (p *PodFactory) withContainersImages(images ...string) *PodFactory {
 	p.pod.Spec.Containers = make([]v1.Container, len(images))
 	for i, image := range images {
+		// compute hash of the image name
+		sha := sha1.New()
+		sha.Write([]byte(image))
 		p.pod.Spec.Containers[i] = v1.Container{
 			Image: image,
+			Name:  hex.EncodeToString(sha.Sum(nil)), // hash of the image name (40 characters, 63 is max)
 		}
 	}
 	return p
@@ -119,11 +124,21 @@ func (p *PodFactory) withNodeSelectors(kv ...string) *PodFactory {
 		p.pod.Spec.NodeSelector = make(map[string]string)
 	}
 	if len(kv)%2 != 0 {
-		log.Fatal("the number of arguments must be even")
+		panic("the number of arguments must be even")
 	}
 	for i := 0; i < len(kv); i += 2 {
 		p.pod.Spec.NodeSelector[kv[i]] = kv[i+1]
 	}
+	return p
+}
+
+func (p *PodFactory) withGenerateName(name string) *PodFactory {
+	p.pod.GenerateName = name
+	return p
+}
+
+func (p *PodFactory) withNamespace(namespace string) *PodFactory {
+	p.pod.Namespace = namespace
 	return p
 }
 

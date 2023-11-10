@@ -61,10 +61,10 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	}
 	sys := &types.SystemContext{
 		AuthFilePath:                authFile.Name(),
-		SystemRegistriesConfPath:    systemconfig.RegistriesConfPath,
-		SystemRegistriesConfDirPath: systemconfig.RegistryCertsDir,
-		SignaturePolicyPath:         systemconfig.PolicyConfPath,
-		DockerPerHostCertDirPath:    systemconfig.DockerCertsDir,
+		SystemRegistriesConfPath:    systemconfig.RegistriesConfPath(),
+		SystemRegistriesConfDirPath: systemconfig.RegistryCertsDir(),
+		SignaturePolicyPath:         systemconfig.PolicyConfPath(),
+		DockerPerHostCertDirPath:    systemconfig.DockerCertsDir(),
 	}
 	src, err := ref.NewImageSource(ctx, sys)
 	if err != nil {

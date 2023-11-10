@@ -139,7 +139,7 @@ func (s *SystemConfigSyncer) sync() error {
 		return err
 	}
 	// delete the certs.d content
-	if err := os.RemoveAll(DockerCertsDir); err != nil {
+	if err := os.RemoveAll(DockerCertsDir()); err != nil {
 		log.Error(err, "Error deleting certs.d directory")
 		return err
 	}
@@ -199,7 +199,7 @@ func (r *ConfigSyncerRunnable) Start(ctx context.Context) error {
 }
 
 // ParseRegistryCerts parses the registry certs from a map of registry url to cert
-// This map, in ocp, is stored in the data field of the configmap "image-registry-certifiates" in the
+// This map, in ocp, is stored in the data field of the configmap "image-registry-certificates" in the
 // openshift-image-registry namespace.
 func ParseRegistryCerts(dataMap map[string]string) []registryCertTuple {
 	var registryCertTuples []registryCertTuple

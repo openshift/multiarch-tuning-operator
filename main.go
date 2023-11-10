@@ -160,13 +160,13 @@ func main() {
 	err = mgr.Add(commonsysconfig.NewRegistryCertificatesSyncer(clientset, registryCertificatesConfigMapNamespace,
 		registryCertificatesConfigMapName))
 	if err != nil {
-		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		setupLog.Error(err, "unable to add the registry certificates Runnable to the manager")
 		os.Exit(1)
 	}
 
 	err = mgr.Add(commonsysconfig.NewGlobalPullSecretSyncer(clientset, globalPullSecretNamespace, globalPullSecretName))
 	if err != nil {
-		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		setupLog.Error(err, "unable to add the Global Pull Secret Runnable to the manager")
 		os.Exit(1)
 	}
 
@@ -191,7 +191,7 @@ func main() {
 
 	err = mgr.Add(openshiftsysconfig.NewImageRegistryConfigSyncer(mgr))
 	if err != nil {
-		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
+		setupLog.Error(err, "unable to add the image registry config Runnable to the manager")
 		os.Exit(1)
 	}
 

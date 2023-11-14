@@ -11,4 +11,7 @@ ignore:
           This is a test file. SHA1 is used to generated a short hash for the name of the container, 
           which is not a security issue.
         expires: 2026-11-15T00:00:00.000Z
-
+  go/HardcodedPassword:
+    - pkg > image > fake > registry > seed.go:
+        reason: This is a test file
+        expires: 2026-11-15T00:00:00.000Z

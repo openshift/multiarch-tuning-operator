@@ -89,5 +89,14 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 		pod.Spec.Affinity = &corev1.Affinity{}
 	}
 
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	// We also add a label to the pod to indicate that the scheduling gate was added
+	// and this pod expects processing by the operator. That's useful for testing and debugging, but also gives the user
+	// an indication that the pod is waiting for processing and can support kubectl queries to find out which pods are
+	// waiting for processing, for example when the operator is being uninstalled.
+	pod.Labels[schedulingGateLabel] = schedulingGateLabelValueGated
+	pod.Labels[nodeAffinityLabel] = nodeAffinityLabelValueUnset
 	return a.patchedPodResponse(pod, req)
 }

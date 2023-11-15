@@ -4,14 +4,21 @@
 exclude:
   global:
     - vendor/**
-ignore:
-  go/InsecureHash/test:
-    - controllers > podplacement > pod_model_test.go:
-        reason: >-
-          This is a test file. SHA1 is used to generated a short hash for the name of the container, 
-          which is not a security issue.
-        expires: 2026-11-15T00:00:00.000Z
-  go/HardcodedPassword:
-    - pkg > image > fake > registry > seed.go:
-        reason: This is a test file
-        expires: 2026-11-15T00:00:00.000Z
+    - controllers/podplacement/pod_model_test.go
+    - pkg/image/fake/registry/seed.go
+# We'd prefer to use the following syntax, but it's not working and the snyk docs are unclear about ignoring CWE rules
+#ignore:
+#  7183df63-92dc-411f-a1ff-9aa8bf57ec65: # [Low] Use of Password Hash With Insufficient Computational Effort
+#    - controllers/podplacement/pod_model_test.go:
+#        reason: >-
+#          This is a test file. SHA1 is used to generated a short hash for the name of the container,
+#          which is not a security issue.
+#        expires: 2026-11-15T00:00:00.000Z
+#  4afb2e6b-472c-48fc-b21b-d6ec3f64fe50: # [Medium] Use of Hardcoded Credentials
+#    - pkg/image/fake/registry/seed.go:
+#        reason: This is a test file and the credentials are not real.
+#        expires: 2026-11-15T00:00:00.000Z
+#  45db4ca3-5051-4f6e-a502-8584f5f94db3: # [Medium] Use of Hardcoded Credentials
+#    - pkg/image/fake/registry/seed.go:
+#        reason: This is a test file and the credentials are not real.
+#        expires: 2026-11-15T00:00:00.000Z

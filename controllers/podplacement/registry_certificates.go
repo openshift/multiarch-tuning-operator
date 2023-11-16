@@ -14,20 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package common
+package podplacement
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"multiarch-operator/pkg/systemconfig"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/go-logr/logr"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
 )
 
 // RegistryCertificatesSyncer watches a configmap (openshift-image-registry/image-registry-certificates) and updates

@@ -2,10 +2,6 @@ package podplacement
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
-	mmoimage "multiarch-operator/pkg/image"
-	"multiarch-operator/pkg/image/fake"
 	"sort"
 	"testing"
 
@@ -13,137 +9,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	. "github.com/onsi/gomega"
+
+	mmoimage "github.com/openshift/multiarch-manager-operator/pkg/image"
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake"
+
+	. "github.com/openshift/multiarch-manager-operator/pkg/testing/utils"
 )
 
 var ctx context.Context
 
 func init() {
 	ctx = context.TODO()
-}
-
-// PodFactory is a builder for v1.Pod objects to be used only in unit tests.
-type PodFactory struct {
-	pod v1.Pod
-}
-
-// newPod returns a new PodFactory to build v1.Pod objects. It is meant to be used only in unit tests.
-func newPod() *PodFactory {
-	return &PodFactory{
-		pod: v1.Pod{},
-	}
-}
-
-func (p *PodFactory) withImagePullSecrets(imagePullSecrets ...string) *PodFactory {
-	p.pod.Spec.ImagePullSecrets = make([]v1.LocalObjectReference, len(imagePullSecrets))
-	for i, secret := range imagePullSecrets {
-		p.pod.Spec.ImagePullSecrets[i] = v1.LocalObjectReference{
-			Name: secret,
-		}
-	}
-	return p
-}
-
-func (p *PodFactory) withSchedulingGates(schedulingGates ...string) *PodFactory {
-	p.pod.Spec.SchedulingGates = make([]v1.PodSchedulingGate, len(schedulingGates))
-	for i, gate := range schedulingGates {
-		p.pod.Spec.SchedulingGates[i] = v1.PodSchedulingGate{
-			Name: gate,
-		}
-	}
-	return p
-}
-
-func (p *PodFactory) withContainersImages(images ...string) *PodFactory {
-	p.pod.Spec.Containers = make([]v1.Container, len(images))
-	for i, image := range images {
-		// compute hash of the image name
-		sha := sha1.New()
-		sha.Write([]byte(image))
-		p.pod.Spec.Containers[i] = v1.Container{
-			Image: image,
-			Name:  hex.EncodeToString(sha.Sum(nil)), // hash of the image name (40 characters, 63 is max)
-		}
-	}
-	return p
-}
-
-func (p *PodFactory) withInitContainersImages(images ...string) *PodFactory {
-	p.pod.Spec.InitContainers = make([]v1.Container, len(images))
-	for i, image := range images {
-		p.pod.Spec.InitContainers[i] = v1.Container{
-			Image: image,
-		}
-	}
-	return p
-}
-
-// withNodeAffinity adds a node affinity to the pod. If initialAffinity is not nil, it is used as the initial value
-// of the pod's affinity. Otherwise, the pod's affinity is initialized to an empty affinity if it is nil.
-func (p *PodFactory) withAffinity(initialAffinity *v1.Affinity) *PodFactory {
-	if p.pod.Spec.Affinity == nil {
-		p.pod.Spec.Affinity = &v1.Affinity{}
-	}
-	if initialAffinity != nil {
-		p.pod.Spec.Affinity = initialAffinity
-	}
-	return p
-}
-
-func (p *PodFactory) withNodeAffinity() *PodFactory {
-	p.withAffinity(nil)
-	if p.pod.Spec.Affinity.NodeAffinity == nil {
-		p.pod.Spec.Affinity.NodeAffinity = &v1.NodeAffinity{}
-	}
-	return p
-}
-
-func (p *PodFactory) withRequiredDuringSchedulingIgnoredDuringExecution() *PodFactory {
-	p.withNodeAffinity()
-	if p.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
-		p.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &v1.NodeSelector{}
-	}
-	return p
-}
-
-func (p *PodFactory) withNodeSelectorTermsMatchExpressions(
-	nodeSelectorTermsMatchExpressions ...[]v1.NodeSelectorRequirement) *PodFactory {
-	p.withRequiredDuringSchedulingIgnoredDuringExecution()
-	p.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = make(
-		[]v1.NodeSelectorTerm, len(nodeSelectorTermsMatchExpressions))
-	for i, matchExpressions := range nodeSelectorTermsMatchExpressions {
-		p.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[i] =
-			v1.NodeSelectorTerm{
-				MatchExpressions: matchExpressions,
-			}
-	}
-	return p
-}
-
-func (p *PodFactory) withNodeSelectors(kv ...string) *PodFactory {
-	if p.pod.Spec.NodeSelector == nil {
-		p.pod.Spec.NodeSelector = make(map[string]string)
-	}
-	if len(kv)%2 != 0 {
-		panic("the number of arguments must be even")
-	}
-	for i := 0; i < len(kv); i += 2 {
-		p.pod.Spec.NodeSelector[kv[i]] = kv[i+1]
-	}
-	return p
-}
-
-func (p *PodFactory) withGenerateName(name string) *PodFactory {
-	p.pod.GenerateName = name
-	return p
-}
-
-func (p *PodFactory) withNamespace(namespace string) *PodFactory {
-	p.pod.Namespace = namespace
-	return p
-}
-
-func (p *PodFactory) build() v1.Pod {
-	return p.pod
 }
 
 func TestPod_GetPodImagePullSecrets(t *testing.T) {
@@ -154,17 +30,17 @@ func TestPod_GetPodImagePullSecrets(t *testing.T) {
 	}{
 		{
 			name: "pod with no imagePullSecrets",
-			pod:  newPod().build(),
+			pod:  NewPod().Build(),
 			want: []string{},
 		},
 		{
 			name: "pod with imagePullSecrets",
-			pod:  newPod().withImagePullSecrets("my-secret").build(),
+			pod:  NewPod().WithImagePullSecrets("my-secret").Build(),
 			want: []string{"my-secret"},
 		},
 		{
 			name: "pod with empty imagePullSecrets",
-			pod:  newPod().withImagePullSecrets().build(),
+			pod:  NewPod().WithImagePullSecrets().Build(),
 			want: []string{},
 		},
 	}
@@ -188,28 +64,28 @@ func TestPod_HasSchedulingGate(t *testing.T) {
 	}{
 		{
 			name: "pod with no scheduling gates",
-			pod:  newPod().build(),
+			pod:  NewPod().Build(),
 			want: false,
 		},
 		{
 			name: "pod with empty scheduling gates",
-			pod:  newPod().withSchedulingGates().build(),
+			pod:  NewPod().WithSchedulingGates().Build(),
 			want: false,
 		},
 		{
 			name: "pod with the multiarch-manager-operator scheduling gate",
-			pod:  newPod().withSchedulingGates(schedulingGateName).build(),
+			pod:  NewPod().WithSchedulingGates(schedulingGateName).Build(),
 			want: true,
 		},
 		{
 			name: "pod with scheduling gates and NO multiarch-manager-operator scheduling gate",
-			pod:  newPod().withSchedulingGates("some-other-scheduling-gate").build(),
+			pod:  NewPod().WithSchedulingGates("some-other-scheduling-gate").Build(),
 			want: false,
 		},
 		{
 			name: "pod with scheduling gates and the multiarch-manager-operator scheduling gate",
-			pod: newPod().withSchedulingGates(
-				"some-other-scheduling-gate-bar", schedulingGateName, "some-other-scheduling-gate-foo").build(),
+			pod: NewPod().WithSchedulingGates(
+				"some-other-scheduling-gate-bar", schedulingGateName, "some-other-scheduling-gate-foo").Build(),
 			want: true,
 		},
 	}
@@ -233,22 +109,22 @@ func TestPod_RemoveSchedulingGate(t *testing.T) {
 	}{
 		{
 			name: "pod with no scheduling gates",
-			pod:  newPod().build(),
+			pod:  NewPod().Build(),
 			want: nil,
 		},
 		{
 			name: "pod with empty scheduling gates",
-			pod:  newPod().withSchedulingGates().build(),
+			pod:  NewPod().WithSchedulingGates().Build(),
 			want: []v1.PodSchedulingGate{},
 		},
 		{
 			name: "pod with the multiarch-manager-operator scheduling gate",
-			pod:  newPod().withSchedulingGates(schedulingGateName).build(),
+			pod:  NewPod().WithSchedulingGates(schedulingGateName).Build(),
 			want: []v1.PodSchedulingGate{},
 		},
 		{
 			name: "pod with scheduling gates and NO multiarch-manager-operator scheduling gate",
-			pod:  newPod().withSchedulingGates("some-other-scheduling-gate").build(),
+			pod:  NewPod().WithSchedulingGates("some-other-scheduling-gate").Build(),
 			want: []v1.PodSchedulingGate{
 				{
 					Name: "some-other-scheduling-gate",
@@ -257,9 +133,9 @@ func TestPod_RemoveSchedulingGate(t *testing.T) {
 		},
 		{
 			name: "pod with scheduling gates and the multiarch-manager-operator scheduling gate",
-			pod: newPod().withSchedulingGates(
+			pod: NewPod().WithSchedulingGates(
 				"some-other-scheduling-gate-bar", schedulingGateName,
-				"some-other-scheduling-gate-foo").build(),
+				"some-other-scheduling-gate-foo").Build(),
 			want: []v1.PodSchedulingGate{
 				{
 					Name: "some-other-scheduling-gate-bar",
@@ -304,13 +180,13 @@ func TestPod_imagesNamesSet(t *testing.T) {
 		},
 		{
 			name: "pod with multiple containers, some with the same image",
-			pod:  newPod().withContainersImages("bar/foo:latest", "bar/baz:latest", "bar/foo:latest").build(),
+			pod:  NewPod().WithContainersImages("bar/foo:latest", "bar/baz:latest", "bar/foo:latest").Build(),
 			want: sets.New[string]("//bar/foo:latest", "//bar/baz:latest"),
 		},
 		{
 			name: "pod with multiple containers and init containers",
-			pod: newPod().withInitContainersImages("foo/bar:latest").withContainersImages(
-				"bar/foo:latest", "bar/baz:latest", "bar/foo:latest").build(),
+			pod: NewPod().WithInitContainersImages("foo/bar:latest").WithContainersImages(
+				"bar/foo:latest", "bar/baz:latest", "bar/foo:latest").Build(),
 			want: sets.New[string]("//bar/foo:latest", "//bar/baz:latest", "//foo/bar:latest"),
 		},
 	}
@@ -338,32 +214,32 @@ func TestPod_intersectImagesArchitecture(t *testing.T) {
 	}{
 		{
 			name:                       "pod with a single container and multi-arch image",
-			pod:                        newPod().withContainersImages(fake.MultiArchImage).build(),
+			pod:                        NewPod().WithContainersImages(fake.MultiArchImage).Build(),
 			wantSupportedArchitectures: sets.New[string](fake.ArchitectureAmd64, fake.ArchitectureArm64),
 		},
 		{
 			name:                       "pod with a single container and single-arch image",
-			pod:                        newPod().withContainersImages(fake.SingleArchArm64Image).build(),
+			pod:                        NewPod().WithContainersImages(fake.SingleArchArm64Image).Build(),
 			wantSupportedArchitectures: sets.New[string](fake.ArchitectureArm64),
 		},
 		{
 			name:                       "pod with multiple containers and same image",
-			pod:                        newPod().withContainersImages(fake.MultiArchImage, fake.MultiArchImage).build(),
+			pod:                        NewPod().WithContainersImages(fake.MultiArchImage, fake.MultiArchImage).Build(),
 			wantSupportedArchitectures: sets.New[string](fake.ArchitectureAmd64, fake.ArchitectureArm64),
 		},
 		{
 			name:                       "pod with multiple containers, single-arch image and multi-arch image",
-			pod:                        newPod().withContainersImages(fake.MultiArchImage, fake.SingleArchArm64Image).build(),
+			pod:                        NewPod().WithContainersImages(fake.MultiArchImage, fake.SingleArchArm64Image).Build(),
 			wantSupportedArchitectures: sets.New[string](fake.ArchitectureArm64),
 		},
 		{
 			name:                       "pod with multiple containers, two multi-arch images",
-			pod:                        newPod().withContainersImages(fake.MultiArchImage, fake.MultiArchImage2).build(),
+			pod:                        NewPod().WithContainersImages(fake.MultiArchImage, fake.MultiArchImage2).Build(),
 			wantSupportedArchitectures: sets.New[string](fake.ArchitectureAmd64, fake.ArchitectureArm64),
 		},
 		{
 			name:                       "pod with multiple containers, one non-existing image",
-			pod:                        newPod().withContainersImages(fake.MultiArchImage, "non-existing-image").build(),
+			pod:                        NewPod().WithContainersImages(fake.MultiArchImage, "non-existing-image").Build(),
 			wantErr:                    true,
 			wantSupportedArchitectures: nil,
 		},
@@ -467,8 +343,8 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 	}{
 		{
 			name: "pod with empty node selector terms",
-			pod:  newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions().build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions().Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
@@ -476,13 +352,13 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
 				},
-			).build(),
+			).Build(),
 		},
 		{
 			name: "pod with node selector terms and nil match expressions",
-			pod: newPod().withContainersImages(fake.SingleArchAmd64Image).withNodeSelectorTermsMatchExpressions(
-				nil).build(),
-			want: newPod().withContainersImages(fake.SingleArchAmd64Image).withNodeSelectorTermsMatchExpressions(
+			pod: NewPod().WithContainersImages(fake.SingleArchAmd64Image).WithNodeSelectorTermsMatchExpressions(
+				nil).Build(),
+			want: NewPod().WithContainersImages(fake.SingleArchAmd64Image).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
@@ -490,13 +366,13 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 						Values:   []string{fake.ArchitectureAmd64},
 					},
 				},
-			).build(),
+			).Build(),
 		},
 		{
 			name: "pod with node selector terms and empty match expressions",
-			pod: newPod().withContainersImages(fake.SingleArchArm64Image).withNodeSelectorTermsMatchExpressions(
-				[]v1.NodeSelectorRequirement{}).build(),
-			want: newPod().withContainersImages(fake.SingleArchArm64Image).withNodeSelectorTermsMatchExpressions(
+			pod: NewPod().WithContainersImages(fake.SingleArchArm64Image).WithNodeSelectorTermsMatchExpressions(
+				[]v1.NodeSelectorRequirement{}).Build(),
+			want: NewPod().WithContainersImages(fake.SingleArchArm64Image).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
@@ -504,11 +380,11 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 						Values:   []string{fake.ArchitectureArm64},
 					},
 				},
-			).build(),
+			).Build(),
 		},
 		{
 			name: "pod with node selector terms and match expressions",
-			pod: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+			pod: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      "foo",
@@ -521,8 +397,8 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{"foo"},
 					},
-				}).build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+				}).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      "foo",
@@ -546,11 +422,11 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
 				},
-			).build(),
+			).Build(),
 		},
 		{
 			name: "pod with node selector terms and match expressions and an architecture requirement",
-			pod: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+			pod: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      "foo",
@@ -568,8 +444,8 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{"foo"},
 					},
-				}).build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+				}).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      "foo",
@@ -591,7 +467,7 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
-				}).build(),
+				}).Build(),
 		},
 	}
 	for _, tt := range tests {
@@ -620,8 +496,8 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 	}{
 		{
 			name: "pod with no node selector terms",
-			pod:  newPod().withContainersImages(fake.MultiArchImage).withAffinity(nil).build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage).WithAffinity(nil).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
@@ -629,74 +505,74 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
 				},
-			).build(),
+			).Build(),
 		},
 		{
 			name: "pod with node selector and no architecture requirement",
-			pod:  newPod().withContainersImages(fake.MultiArchImage).withNodeSelectors("foo", "bar").build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectors(
-				"foo", "bar").withNodeSelectorTermsMatchExpressions(
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectors("foo", "bar").Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectors(
+				"foo", "bar").WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
-				}).build(),
+				}).Build(),
 		},
 		{
 			name: "pod with node selector and architecture requirement",
-			pod: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectors("foo", "bar",
-				archLabel, fake.ArchitectureArm64).build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectors("foo", "bar",
-				archLabel, fake.ArchitectureArm64).build(),
+			pod: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectors("foo", "bar",
+				archLabel, fake.ArchitectureArm64).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectors("foo", "bar",
+				archLabel, fake.ArchitectureArm64).Build(),
 		},
 		{
 			name: "pod with no affinity",
-			pod:  newPod().withContainersImages(fake.MultiArchImage).build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
-				}).build(),
+				}).Build(),
 		},
 		{
 			name: "pod with no node affinity",
-			pod:  newPod().withContainersImages(fake.MultiArchImage).withAffinity(nil).build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage).WithAffinity(nil).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
-				}).build(),
+				}).Build(),
 		},
 		{
 			name: "pod with no required during scheduling ignored during execution",
-			pod:  newPod().withContainersImages(fake.MultiArchImage).withNodeAffinity().build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage).WithNodeAffinity().Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
-				}).build(),
+				}).Build(),
 		},
 		{
 			name: "pod with predefined node selector terms in the required during scheduling ignored during execution",
-			pod: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions([]v1.NodeSelectorRequirement{
+			pod: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions([]v1.NodeSelectorRequirement{
 				{
 					Key:      "foo",
 					Operator: v1.NodeSelectorOpIn,
 					Values:   []string{"bar"},
 				},
-			}).build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withNodeSelectorTermsMatchExpressions(
+			}).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      "foo",
@@ -708,11 +584,11 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
-				}).build(),
+				}).Build(),
 		},
 		{
 			name: "other affinity types should not be modified",
-			pod: newPod().withContainersImages(fake.MultiArchImage).withAffinity(&v1.Affinity{
+			pod: NewPod().WithContainersImages(fake.MultiArchImage).WithAffinity(&v1.Affinity{
 				PodAffinity: &v1.PodAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
 						{
@@ -736,8 +612,8 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 						},
 					},
 				},
-			}).build(),
-			want: newPod().withContainersImages(fake.MultiArchImage).withAffinity(&v1.Affinity{
+			}).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithAffinity(&v1.Affinity{
 				PodAffinity: &v1.PodAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
 						{
@@ -761,19 +637,19 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 						},
 					},
 				},
-			}).withNodeSelectorTermsMatchExpressions(
+			}).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{
 						Key:      archLabel,
 						Operator: v1.NodeSelectorOpIn,
 						Values:   []string{fake.ArchitectureAmd64, fake.ArchitectureArm64},
 					},
-				}).build(),
+				}).Build(),
 		},
 		{
 			name: "should not modify the pod if unable to inspect the images",
-			pod:  newPod().withContainersImages(fake.MultiArchImage, "non-readable-image").build(),
-			want: newPod().withContainersImages(fake.MultiArchImage, "non-readable-image").build(),
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
 		},
 	}
 	for _, tt := range tests {

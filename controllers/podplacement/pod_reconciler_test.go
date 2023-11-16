@@ -2,7 +2,6 @@ package podplacement
 
 import (
 	"fmt"
-	"sort"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -12,20 +11,23 @@ import (
 
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 
-	"multiarch-operator/pkg/image/fake"
-	"multiarch-operator/pkg/image/fake/registry"
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake"
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake/registry"
+	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+
+	. "github.com/openshift/multiarch-manager-operator/pkg/testing/utils"
 )
 
 var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 	When("Handling Single-container Pods", func() {
 		Context("with different image types", func() {
 			DescribeTable("handles correctly", func(imageType string, supportedArchitectures ...string) {
-				pod := newPod().
-					withContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
+				pod := NewPod().
+					WithContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
 						registry.PublicRepo, registry.ComputeNameByMediaType(imageType))).
-					withGenerateName("test-pod-").
-					withNamespace("test-namespace").
-					build()
+					WithGenerateName("test-pod-").
+					WithNamespace("test-namespace").
+					Build()
 				err := k8sClient.Create(ctx, &pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				// Test the removal of the scheduling gate. However, since the pod is mutated and the reconciler
@@ -52,8 +54,8 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					g.Expect(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms).
 						NotTo(BeEmpty(), "node selector terms is empty")
 					g.Expect(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms).
-						Should(WithTransform(sortMatchExpressions, ConsistOf(
-							sortMatchExpressions([]corev1.NodeSelectorTerm{
+						Should(WithTransform(utils.SortMatchExpressions, ConsistOf(
+							utils.SortMatchExpressions([]corev1.NodeSelectorTerm{
 								{
 									MatchExpressions: []corev1.NodeSelectorRequirement{
 										{
@@ -96,12 +98,3 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 		})
 	})
 })
-
-func sortMatchExpressions(nst []corev1.NodeSelectorTerm) []corev1.NodeSelectorTerm {
-	for _, term := range nst {
-		for _, req := range term.MatchExpressions {
-			sort.Strings(req.Values)
-		}
-	}
-	return nst
-}

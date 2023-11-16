@@ -14,19 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package openshift
+package podplacement
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"multiarch-operator/pkg/systemconfig"
 
 	"github.com/go-logr/logr"
-	ocpv1 "github.com/openshift/api/config/v1"
+
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	ocpv1 "github.com/openshift/api/config/v1"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
 )
 
 // ImageRegistryConfigSyncer watches the image.config.openshift.io/cluster object and updates the registry configuration accordingly by using

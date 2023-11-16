@@ -14,29 +14,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package openshift
+package podplacement
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"multiarch-operator/pkg/systemconfig"
 
-	"github.com/go-logr/logr"
-	v1 "github.com/openshift/api/config/v1"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	v1 "github.com/openshift/api/config/v1"
+
+	"github.com/go-logr/logr"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
 )
 
-// IDMSs report the set of registry sources that the cluster needs to reach via mirrors.
+// ITMSs report the set of registry sources that the cluster needs to reach via mirrors.
 // Each registry source can have multiple mirrors.
 // The ICSPSyncer watches ICSPs and updates the registry mirroring config accordingly by using
 // the SystemConfigSyncer.
 // The configuration written by the SystemConfigSyncer due to the ICSPSyncer is stored in-memory in the
 // SystemConfigSyncer.registriesConfContent (type registriesConf) and written to disk in the /$conf_dir/container/registries.conf file.
 
-// In particular, an example of the configuration written by the SystemConfigSyncer due to the IDMSSyncer in /$conf_dir/containers/registries.conf is:
+// In particular, an example of the configuration written by the SystemConfigSyncer due to the ITMSSyncer in /$conf_dir/containers/registries.conf is:
 // [[registries]]
 //
 //	location = "registry.redhat.io"
@@ -50,25 +53,25 @@ import (
 //	mirror = ["myregistry.example.com"]
 //
 
-type IDMSSyncer struct {
+type ITMSSyncer struct {
 	mgr manager.Manager
 	log logr.Logger
 }
 
-func NewIDMSSyncer(mgr manager.Manager) *IDMSSyncer {
-	return &IDMSSyncer{
+func NewITMSSyncer(mgr manager.Manager) *ITMSSyncer {
+	return &ITMSSyncer{
 		mgr: mgr,
 	}
 }
 
-func (s *IDMSSyncer) Start(ctx context.Context) (err error) {
-	s.log = log.FromContext(ctx, "handler", "IDMSSynver", "kind", "ImageDigestMirrorSet [config.openshift.io/v1]")
+func (s *ITMSSyncer) Start(ctx context.Context) (err error) {
+	s.log = log.FromContext(ctx, "handler", "ITMSSyncer", "kind", "ImageTagMirrorSet [config.openshift.io/v1]")
 	s.log.Info("Starting System Config Syncer")
 	mgr := s.mgr
 	ic := systemconfig.SystemConfigSyncerSingleton()
-	icspInformer, err := mgr.GetCache().GetInformerForKind(ctx, v1.GroupVersion.WithKind("ImageDigestMirrorSet"))
+	icspInformer, err := mgr.GetCache().GetInformerForKind(ctx, v1.GroupVersion.WithKind("ImageTagMirrorSet"))
 	if err != nil {
-		s.log.Error(err, "Error getting informer for ImageDigestMirrorSet")
+		s.log.Error(err, "Error getting informer for ImageTagMirrorSet")
 		return err
 	}
 	_, err = icspInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -77,60 +80,53 @@ func (s *IDMSSyncer) Start(ctx context.Context) (err error) {
 		DeleteFunc: s.onDelete(ic),
 	})
 	if err != nil {
-		s.log.Error(err, "Error registering handler for ImageDigestMirrorSet [config.openshift.io/v1]")
+		s.log.Error(err, "Error registering handler for ImageTagMirrorSet")
 		return err
 	}
 	return nil
 }
 
-func (s *IDMSSyncer) onAdd(ic systemconfig.IConfigSyncer) func(obj interface{}) {
+func (s *ITMSSyncer) onAdd(ic systemconfig.IConfigSyncer) func(obj interface{}) {
 	return func(obj interface{}) {
-		idms, ok := obj.(*v1.ImageDigestMirrorSet)
+		icsp, ok := obj.(*v1.ImageTagMirrorSet)
 		if !ok {
-			s.log.Error(errors.New("unexpected type, expected ImageDigestMirrorSet "), "unexpected type",
+			s.log.Error(errors.New("unexpected type, expected ImageTagMirrorSet"), "unexpected type",
 				"type", fmt.Sprintf("%T", obj))
 			return
 		}
-		for _, source := range idms.Spec.ImageDigestMirrors {
-			err := ic.UpdateRegistryMirroringConfig(source.Source, mirrorsToStrings(source.Mirrors), systemconfig.PullTypeDigestOnly)
+		for _, source := range icsp.Spec.ImageTagMirrors {
+			err := ic.UpdateRegistryMirroringConfig(source.Source, mirrorsToStrings(source.Mirrors), systemconfig.PullTypeTagOnly)
 			if err != nil {
 				s.log.Error(err, "Error updating registry mirroring config",
-					idms.Name, source.Source, err)
-			}
-		}
-	}
-}
-
-func (s *IDMSSyncer) onDelete(ic systemconfig.IConfigSyncer) func(obj interface{}) {
-	return func(obj interface{}) {
-		idms, ok := obj.(*v1.ImageDigestMirrorSet)
-		if !ok {
-			s.log.Error(errors.New("unexpected type, expected ImageDigestMirrorSet"), "unexpected type",
-				"type", fmt.Sprintf("%T", obj))
-			return
-		}
-		for _, source := range idms.Spec.ImageDigestMirrors {
-			err := ic.DeleteRegistryMirroringConfig(source.Source)
-			if err != nil {
-				s.log.Error(err, "Error removing registry mirroring config",
-					"name", idms.Name, "source", source.Source)
+					"name", icsp.Name, "source", source.Source)
 				continue
 			}
 		}
 	}
 }
 
-func (s *IDMSSyncer) onUpdate(ic systemconfig.IConfigSyncer) func(oldobj, newobj interface{}) {
+func (s *ITMSSyncer) onDelete(ic systemconfig.IConfigSyncer) func(obj interface{}) {
+	return func(obj interface{}) {
+		itms, ok := obj.(*v1.ImageTagMirrorSet)
+		if !ok {
+			s.log.Error(errors.New("unexpected type, expected ImageTagMirrorSet"), "unexpected type",
+				"type", fmt.Sprintf("%T", obj))
+			return
+		}
+		for _, source := range itms.Spec.ImageTagMirrors {
+			err := ic.DeleteRegistryMirroringConfig(source.Source)
+			if err != nil {
+				s.log.Error(err, "Error removing registry mirroring config",
+					"name", itms.Name, "source", source.Source)
+				continue
+			}
+		}
+	}
+}
+
+func (s *ITMSSyncer) onUpdate(ic systemconfig.IConfigSyncer) func(oldobj, newobj interface{}) {
 	return func(oldobj, newobj interface{}) {
 		s.onDelete(ic)(oldobj)
 		s.onAdd(ic)(newobj)
 	}
-}
-
-func mirrorsToStrings(mirrors []v1.ImageMirror) []string {
-	var mirrorsStr []string
-	for _, mirror := range mirrors {
-		mirrorsStr = append(mirrorsStr, string(mirror))
-	}
-	return mirrorsStr
 }

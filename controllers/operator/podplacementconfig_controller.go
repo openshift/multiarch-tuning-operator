@@ -14,12 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package podplacement
+package operator
 
 import (
 	"context"
 	"errors"
-	multiarchv1alpha1 "multiarch-operator/apis/multiarch/v1alpha1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +26,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+
+	multiarchv1alpha1 "github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
 )
 
 // PodPlacementConfigReconciler reconciles a PodPlacementConfig object

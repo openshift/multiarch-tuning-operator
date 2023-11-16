@@ -2,10 +2,11 @@ package fake
 
 import (
 	"context"
-	"multiarch-operator/pkg/image"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/image"
 )
 
 var (

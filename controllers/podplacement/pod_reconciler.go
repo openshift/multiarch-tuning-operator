@@ -18,7 +18,6 @@ package podplacement
 
 import (
 	"context"
-	"multiarch-operator/pkg/utils"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +26,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/utils"
 )
 
 // PodReconciler reconciles a Pod object

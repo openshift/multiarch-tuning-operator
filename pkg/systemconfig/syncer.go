@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
-	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
@@ -157,6 +156,20 @@ func (s *SystemConfigSyncer) getch() chan bool {
 	return s.ch
 }
 
+func (s *SystemConfigSyncer) Run(ctx context.Context) error {
+	for {
+		select {
+		case <-s.getch():
+			if err := s.sync(); err != nil {
+				log.Error(err, "Error syncing system config")
+			}
+		case <-ctx.Done():
+			log.Info("Stopping System Config Syncer Consumer")
+			return nil
+		}
+	}
+}
+
 // Namespaced RBAC rules and cluster scoped RBAC rules cannot be combined through the controller-gen RBAC generator.
 // See https://github.com/kubernetes-sigs/controller-tools/pull/839 and https://github.com/kubernetes-sigs/controller-tools/pull/839
 // This rbac rule is added manually.
@@ -177,25 +190,6 @@ func newSystemConfigSyncer() IConfigSyncer {
 		ch:                    make(chan bool),
 	}
 	return ic
-}
-
-type ConfigSyncerRunnable struct{}
-
-func (r *ConfigSyncerRunnable) Start(ctx context.Context) error {
-	s := SystemConfigSyncerSingleton()
-	log = ctrllog.FromContext(ctx, "handler", "ConfigSyncerRunnable")
-	log.Info("Starting System Config Syncer Consumer")
-	for {
-		select {
-		case <-s.getch():
-			if err := s.sync(); err != nil {
-				log.Error(err, "Error syncing system config")
-			}
-		case <-ctx.Done():
-			log.Info("Stopping System Config Syncer Consumer")
-			return nil
-		}
-	}
 }
 
 // ParseRegistryCerts parses the registry certs from a map of registry url to cert

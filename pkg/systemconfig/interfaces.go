@@ -16,6 +16,8 @@ limitations under the License.
 
 package systemconfig
 
+import "context"
+
 type IConfigSyncer interface {
 
 	// StoreImageRegistryConf stores the allowedRegistries and blockedRegistries in the structs representing the
@@ -30,4 +32,5 @@ type IConfigSyncer interface {
 
 	sync() error
 	getch() chan bool
+	Run(ctx context.Context) error
 }

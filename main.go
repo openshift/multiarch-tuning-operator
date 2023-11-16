@@ -18,9 +18,7 @@ package main
 
 import (
 	"flag"
-	commonsysconfig "multiarch-operator/controllers/sysconfighandlers/common"
-	openshiftsysconfig "multiarch-operator/controllers/sysconfighandlers/openshift"
-	"multiarch-operator/pkg/systemconfig"
+	"multiarch-operator/controllers/operator"
 	"os"
 
 	ocpv1 "github.com/openshift/api/config/v1"
@@ -142,7 +140,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Pod")
 		os.Exit(1)
 	}
-	if err = (&podplacement.PodPlacementConfigReconciler{
+	if err = (&operator.PodPlacementConfigReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,
@@ -151,45 +149,45 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = mgr.Add(&systemconfig.ConfigSyncerRunnable{})
+	err = mgr.Add(podplacement.NewConfigSyncerRunnable())
 	if err != nil {
 		setupLog.Error(err, "unable to add the ConfigSyncerRunnable to the manager")
 		os.Exit(1)
 	}
 
-	err = mgr.Add(commonsysconfig.NewRegistryCertificatesSyncer(clientset, registryCertificatesConfigMapNamespace,
+	err = mgr.Add(podplacement.NewRegistryCertificatesSyncer(clientset, registryCertificatesConfigMapNamespace,
 		registryCertificatesConfigMapName))
 	if err != nil {
 		setupLog.Error(err, "unable to add the registry certificates Runnable to the manager")
 		os.Exit(1)
 	}
 
-	err = mgr.Add(commonsysconfig.NewGlobalPullSecretSyncer(clientset, globalPullSecretNamespace, globalPullSecretName))
+	err = mgr.Add(podplacement.NewGlobalPullSecretSyncer(clientset, globalPullSecretNamespace, globalPullSecretName))
 	if err != nil {
 		setupLog.Error(err, "unable to add the Global Pull Secret Runnable to the manager")
 		os.Exit(1)
 	}
 
 	// TODO[OCP specific]
-	err = mgr.Add(openshiftsysconfig.NewICSPSyncer(mgr))
+	err = mgr.Add(podplacement.NewICSPSyncer(mgr))
 	if err != nil {
 		setupLog.Error(err, "unable to add the ICSPSyncer Runnable to the manager")
 		os.Exit(1)
 	}
 
-	err = mgr.Add(openshiftsysconfig.NewIDMSSyncer(mgr))
+	err = mgr.Add(podplacement.NewIDMSSyncer(mgr))
 	if err != nil {
 		setupLog.Error(err, "unable to add the IDMSSyncer Runnable to the manager")
 		os.Exit(1)
 	}
 
-	err = mgr.Add(openshiftsysconfig.NewITMSSyncer(mgr))
+	err = mgr.Add(podplacement.NewITMSSyncer(mgr))
 	if err != nil {
 		setupLog.Error(err, "unable to add the IDMSSyncer Runnable to the manager")
 		os.Exit(1)
 	}
 
-	err = mgr.Add(openshiftsysconfig.NewImageRegistryConfigSyncer(mgr))
+	err = mgr.Add(podplacement.NewImageRegistryConfigSyncer(mgr))
 	if err != nil {
 		setupLog.Error(err, "unable to add the image registry config Runnable to the manager")
 		os.Exit(1)

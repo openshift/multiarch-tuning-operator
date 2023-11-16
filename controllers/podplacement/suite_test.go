@@ -49,9 +49,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	commonsysconfig "multiarch-operator/controllers/sysconfighandlers/common"
 	fakeregistry "multiarch-operator/pkg/image/fake/registry"
-	"multiarch-operator/pkg/systemconfig"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -235,16 +233,16 @@ func runManager() {
 			Scheme: mgr.GetScheme(),
 		}})
 	By("Setting up System Config Syncer")
-	err = mgr.Add(&systemconfig.ConfigSyncerRunnable{})
+	err = mgr.Add(NewConfigSyncerRunnable())
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Setting up Registry Certificates Syncer")
-	err = mgr.Add(commonsysconfig.NewRegistryCertificatesSyncer(clientset, "openshift-image-registry",
+	err = mgr.Add(NewRegistryCertificatesSyncer(clientset, "openshift-image-registry",
 		"image-registry-certificates"))
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Setting up Global Pull Secret Syncer")
-	err = mgr.Add(commonsysconfig.NewGlobalPullSecretSyncer(clientset, "openshift-config",
+	err = mgr.Add(NewGlobalPullSecretSyncer(clientset, "openshift-config",
 		"pull-secret"))
 	Expect(err).NotTo(HaveOccurred())
 

@@ -22,6 +22,9 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"multiarch-operator/pkg/testing/image/fake/registry"
+	testingutils "multiarch-operator/pkg/testing/utils"
+	"multiarch-operator/pkg/utils"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -48,8 +51,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	fakeregistry "multiarch-operator/pkg/image/fake/registry"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -81,11 +82,11 @@ var _ = BeforeSuite(func() {
 	SetDefaultEventuallyPollingInterval(5 * time.Millisecond)
 	SetDefaultEventuallyTimeout(5 * time.Second)
 	wg := &sync.WaitGroup{}
-	decorateWithWaitGroup(wg, startTestEnv)
-	decorateWithWaitGroup(wg, startRegistry)
+	testingutils.DecorateWithWaitGroup(wg, startTestEnv)
+	testingutils.DecorateWithWaitGroup(wg, startRegistry)
 	wg.Wait()
-	decorateWithWaitGroup(wg, seedRegistry)
-	decorateWithWaitGroup(wg, seedK8S)
+	testingutils.DecorateWithWaitGroup(wg, seedRegistry)
+	testingutils.DecorateWithWaitGroup(wg, seedK8S)
 	wg.Wait()
 	// TODO: should we continue running the manager in the BeforeSuite node?
 	runManager()
@@ -132,9 +133,9 @@ func startRegistry() {
 		err          error
 		registryChan = make(chan error)
 	)
-	registryAddress, registryCert, err = fakeregistry.RunRegistry(ctx, registryChan)
+	registryAddress, registryCert, err = registry.RunRegistry(ctx, registryChan)
 	Expect(err).NotTo(HaveOccurred(), "failed to start registry server")
-	startChannelMonitor(registryChan, "registry server failed")
+	testingutils.StartChannelMonitor(registryChan, "registry server failed")
 
 	// TODO: we miss a way to gracefully shutdown the registry server in the AfterSuite fixture.
 	By("Waiting for the registry server to be ready...")
@@ -159,11 +160,11 @@ func startRegistry() {
 
 func seedRegistry() {
 	By("Seeding the registry with images...")
-	err := fakeregistry.SeedMockRegistry(ctx)
+	err := registry.SeedMockRegistry(ctx)
 	Expect(err).NotTo(HaveOccurred())
 	// Just print the seed images for debugging purposes.
 	suiteLog.Info("Seed completed. The registry contains the following images:")
-	for _, image := range fakeregistry.GetMockImages() {
+	for _, image := range registry.GetMockImages() {
 		suiteLog.Info(image.GetUrl())
 	}
 }
@@ -171,7 +172,7 @@ func seedRegistry() {
 func seedK8S() {
 	var err error
 	By("Create internal namespaces")
-	ensureNamespaces("openshift-image-registry", "openshift-config", "test-namespace")
+	testingutils.EnsureNamespaces(ctx, k8sClient, "openshift-image-registry", "openshift-config", "test-namespace")
 	By("Create the global pull secret")
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -182,7 +183,7 @@ func seedK8S() {
 		Data: map[string][]byte{
 			".dockerconfigjson": []byte(fmt.Sprintf(`{"auths":{"%s":{"auth":"%s"}}}`,
 				registryAddress, base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(
-					"%s:%s", fakeregistry.GlobalPullSecretUser, fakeregistry.GlobalPullSecretPassword))))),
+					"%s:%s", registry.GlobalPullSecretUser, registry.GlobalPullSecretPassword))))),
 		},
 	}
 	err = k8sClient.Create(ctx, secret)
@@ -293,10 +294,10 @@ func getMutatingWebHook() *v1.MutatingWebhookConfiguration {
 				ClientConfig: v1.WebhookClientConfig{
 					Service: &v1.ServiceReference{
 						Name: "webhook-service",
-						Path: newPtr("/add-pod-scheduling-gate"),
+						Path: utils.NewPtr("/add-pod-scheduling-gate"),
 					},
 				},
-				FailurePolicy: newPtr(v1.Ignore),
+				FailurePolicy: utils.NewPtr(v1.Ignore),
 				Rules: []v1.RuleWithOperations{
 					{
 						Operations: []v1.OperationType{"CREATE"},
@@ -307,44 +308,8 @@ func getMutatingWebHook() *v1.MutatingWebhookConfiguration {
 						},
 					},
 				},
-				SideEffects: newPtr(v1.SideEffectClassNone),
+				SideEffects: utils.NewPtr(v1.SideEffectClassNone),
 			},
 		},
 	}
-}
-
-func ensureNamespaces(namespaces ...string) {
-	var err error
-	for _, ns := range namespaces {
-		namespace := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: ns,
-			},
-		}
-		err = k8sClient.Create(ctx, namespace)
-		Expect(err).NotTo(HaveOccurred())
-	}
-}
-
-// FIXME? The following methods might be useful in a utils package. Keeping them here for now
-
-func newPtr[T any](a T) *T {
-	return &a
-}
-
-func decorateWithWaitGroup(wg *sync.WaitGroup, f func()) {
-	wg.Add(1)
-	go func() {
-		defer GinkgoRecover()
-		f()
-		wg.Done()
-	}()
-}
-
-func startChannelMonitor(ch chan error, descr string) {
-	go func() {
-		defer GinkgoRecover()
-		err := <-ch
-		Expect(err).NotTo(HaveOccurred(), descr, err)
-	}()
 }

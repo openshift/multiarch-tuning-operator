@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"multiarch-operator/pkg/image/fake"
+	"multiarch-operator/pkg/testing/image/fake"
 	"os"
 	"strings"
 

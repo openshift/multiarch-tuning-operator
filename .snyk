@@ -5,7 +5,8 @@ exclude:
   global:
     - vendor/**
     - controllers/podplacement/pod_model_test.go
-    - pkg/image/fake/registry/seed.go
+    - pkg/testing/image/fake/registry/seed.go
+    - pkg/testing/utils/pod_factory.go
 # We'd prefer to use the following syntax, but it's not working and the snyk docs are unclear about ignoring CWE rules
 #ignore:
 #  7183df63-92dc-411f-a1ff-9aa8bf57ec65: # [Low] Use of Password Hash With Insufficient Computational Effort

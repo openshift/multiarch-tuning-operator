@@ -19,7 +19,7 @@ import (
 	"github.com/distribution/distribution/v3/configuration"
 	"github.com/distribution/distribution/v3/registry"
 
-	_ "multiarch-operator/pkg/image/fake/registry/auth/htpasswd"
+	_ "multiarch-operator/pkg/testing/image/fake/registry/auth/htpasswd"
 
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/inmemory"
 )

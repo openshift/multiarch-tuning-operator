@@ -36,13 +36,16 @@ import (
 type registryInspector struct {
 	globalPullSecret []byte
 	// mutex is used to protect the globalPullSecret field of the singletonImageFacade from concurrent write access
-	mutex sync.Mutex
+	mutex sync.RWMutex
 }
 
 func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (supportedArchitectures sets.Set[string], err error) {
 	// Create the auth file
 	log := ctrllog.FromContext(ctx, "imageReference", imageReference)
-	authFile, err := i.createAuthFile(log, append([][]byte{i.globalPullSecret}, secrets...)...)
+	i.mutex.RLock()
+	globalPullSecret := i.globalPullSecret
+	i.mutex.RUnlock()
+	authFile, err := i.createAuthFile(log, append([][]byte{globalPullSecret}, secrets...)...)
 	if err != nil {
 		log.Error(err, "Couldn't write auth file")
 		return nil, err
@@ -61,10 +64,10 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	}
 	sys := &types.SystemContext{
 		AuthFilePath:                authFile.Name(),
-		SystemRegistriesConfPath:    systemconfig.RegistriesConfPath,
-		SystemRegistriesConfDirPath: systemconfig.RegistryCertsDir,
-		SignaturePolicyPath:         systemconfig.PolicyConfPath,
-		DockerPerHostCertDirPath:    systemconfig.DockerCertsDir,
+		SystemRegistriesConfPath:    systemconfig.RegistriesConfPath(),
+		SystemRegistriesConfDirPath: systemconfig.RegistryCertsDir(),
+		SignaturePolicyPath:         systemconfig.PolicyConfPath(),
+		DockerPerHostCertDirPath:    systemconfig.DockerCertsDir(),
 	}
 	src, err := ref.NewImageSource(ctx, sys)
 	if err != nil {

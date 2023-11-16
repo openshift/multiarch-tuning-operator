@@ -27,7 +27,13 @@ import (
 )
 
 const (
-	archLabel = "kubernetes.io/arch"
+	archLabel                       = "kubernetes.io/arch"
+	schedulingGateLabel             = "multiarch.openshift.io/scheduling-gate"
+	schedulingGateLabelValueGated   = "gated"
+	schedulingGateLabelValueRemoved = "removed"
+	nodeAffinityLabel               = "multiarch.openshift.io/node-affinity"
+	nodeAffinityLabelValueSet       = "set"
+	nodeAffinityLabelValueUnset     = "unset"
 )
 
 var (
@@ -78,6 +84,13 @@ func (pod *Pod) RemoveSchedulingGate() {
 		}
 	}
 	pod.Spec.SchedulingGates = filtered
+	// The scheduling gate is removed. We also add a label to the pod to indicate that the scheduling gate was removed
+	// and this pod was processed by the operator. That's useful for testing and debugging, but also gives the user
+	// an indication that the pod was processed by the operator.
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[schedulingGateLabel] = schedulingGateLabelValueRemoved
 }
 
 // SetNodeAffinityArchRequirement wraps the logic to set the nodeAffinity for the pod.
@@ -138,6 +151,7 @@ func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) 
 	// kubernetes.io/arch label has compatible values.
 	// Note that the NodeSelectorTerms will always be long at least 1, because we (re-)created it with size 1 above if it was nil (or having 0 length).
 	var skipMatchExpressionPatch bool
+	var patched bool
 	for i := range nodeSelectorTerms {
 		skipMatchExpressionPatch = false
 		if nodeSelectorTerms[i].MatchExpressions == nil {
@@ -154,7 +168,16 @@ func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) 
 		// if skipMatchExpressionPatch is true, we skip to add the matchExpression so that conflictual matchExpressions provided by the user are not overwritten.
 		if !skipMatchExpressionPatch {
 			nodeSelectorTerms[i].MatchExpressions = append(nodeSelectorTerms[i].MatchExpressions, requirement)
+			patched = true
 		}
+	}
+	// if the nodeSelectorTerms were patched at least once, we set the nodeAffinity label to the set value, to keep
+	// track of the fact that the nodeAffinity was patched by the operator.
+	if patched {
+		if pod.Labels == nil {
+			pod.Labels = make(map[string]string)
+		}
+		pod.Labels[nodeAffinityLabel] = nodeAffinityLabelValueSet
 	}
 }
 

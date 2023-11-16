@@ -27,13 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
-const (
-	RegistriesConfPath = "/tmp/containers/registries.conf"
-	PolicyConfPath     = "/tmp/containers/policy.json"
-	DockerCertsDir     = "/tmp/docker/certs.d"
-	RegistryCertsDir   = "/tmp/containers/registries.d"
-)
-
 type PullType string
 
 const (
@@ -46,9 +39,51 @@ type registryCertTuple struct {
 	cert     string
 }
 
+var (
+	dockerCertsDir,
+	registriesCertsDir,
+	registriesConfPath,
+	policyConfPath string
+)
+
+func DockerCertsDir() string {
+	if dockerCertsDir == "" {
+		dockerCertsDir = lookupEnvOr("DOCKER_CERTS_DIR", "/tmp/docker/certs.d")
+	}
+	return dockerCertsDir
+}
+
+func RegistryCertsDir() string {
+	if registriesCertsDir == "" {
+		registriesCertsDir = lookupEnvOr("REGISTRIES_CERTS_DIR", "/tmp/containers/registries.d")
+	}
+	return registriesCertsDir
+}
+
+func RegistriesConfPath() string {
+	if registriesConfPath == "" {
+		registriesConfPath = lookupEnvOr("REGISTRIES_CONF_PATH", "/tmp/containers/registries.conf")
+	}
+	return registriesConfPath
+}
+
+func PolicyConfPath() string {
+	if policyConfPath == "" {
+		policyConfPath = lookupEnvOr("POLICY_CONF_PATH", "/tmp/containers/policy.json")
+	}
+	return policyConfPath
+}
+
+func lookupEnvOr(key, defaultValue string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return defaultValue
+}
+
 func (t registryCertTuple) writeToFile() error {
 	// create folder if it doesn't exist
-	absoluteFolderPath := fmt.Sprintf("%s/%s", DockerCertsDir, t.getFolderName())
+	absoluteFolderPath := fmt.Sprintf("%s/%s", DockerCertsDir(), t.getFolderName())
 	if _, err := os.Stat(absoluteFolderPath); os.IsNotExist(err) {
 		err = os.MkdirAll(absoluteFolderPath, 0700)
 		if err != nil {
@@ -56,7 +91,7 @@ func (t registryCertTuple) writeToFile() error {
 		}
 	}
 	// write cert to file
-	absoluteFilePath := fmt.Sprintf("%s/%s/ca.crt", DockerCertsDir, t.getFolderName())
+	absoluteFilePath := fmt.Sprintf("%s/%s/ca.crt", DockerCertsDir(), t.getFolderName())
 	f, err := os.Create(filepath.Clean(absoluteFilePath))
 	if err != nil {
 		return err
@@ -95,7 +130,7 @@ func (rsc *registriesConf) getRegistryConfOrCreate(registry string) *registryCon
 }
 
 func (rsc *registriesConf) writeToFile() error {
-	return writeTomlFile(RegistriesConfPath, rsc)
+	return writeTomlFile(RegistriesConfPath(), rsc)
 }
 
 func (rsc *registriesConf) getRegistryConf(registry string) (*registryConf, bool) {
@@ -193,7 +228,7 @@ func (pc *policyConf) setRejectForRegistryOnTransport(registry, transport string
 }
 
 func (pc *policyConf) writeToFile() error {
-	return writeJSONFile(PolicyConfPath, pc)
+	return writeJSONFile(PolicyConfPath(), pc)
 }
 
 // defaultPolicyConf returns a default policyConf object

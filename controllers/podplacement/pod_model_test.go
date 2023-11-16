@@ -2,7 +2,9 @@ package podplacement
 
 import (
 	"context"
-	"log"
+	"crypto/sha1"
+	"encoding/hex"
+	mmoimage "multiarch-operator/pkg/image"
 	"multiarch-operator/pkg/image/fake"
 	"sort"
 	"testing"
@@ -17,9 +19,6 @@ var ctx context.Context
 
 func init() {
 	ctx = context.TODO()
-	// Replace the facade singleton with a fake one. The init() function is called after the initialization of the
-	// facade singleton, so replacing it here is safe.
-	imageInspectionCache = fake.FacadeSingleton()
 }
 
 // PodFactory is a builder for v1.Pod objects to be used only in unit tests.
@@ -57,8 +56,12 @@ func (p *PodFactory) withSchedulingGates(schedulingGates ...string) *PodFactory 
 func (p *PodFactory) withContainersImages(images ...string) *PodFactory {
 	p.pod.Spec.Containers = make([]v1.Container, len(images))
 	for i, image := range images {
+		// compute hash of the image name
+		sha := sha1.New()
+		sha.Write([]byte(image))
 		p.pod.Spec.Containers[i] = v1.Container{
 			Image: image,
+			Name:  hex.EncodeToString(sha.Sum(nil)), // hash of the image name (40 characters, 63 is max)
 		}
 	}
 	return p
@@ -121,11 +124,21 @@ func (p *PodFactory) withNodeSelectors(kv ...string) *PodFactory {
 		p.pod.Spec.NodeSelector = make(map[string]string)
 	}
 	if len(kv)%2 != 0 {
-		log.Fatal("the number of arguments must be even")
+		panic("the number of arguments must be even")
 	}
 	for i := 0; i < len(kv); i += 2 {
 		p.pod.Spec.NodeSelector[kv[i]] = kv[i+1]
 	}
+	return p
+}
+
+func (p *PodFactory) withGenerateName(name string) *PodFactory {
+	p.pod.GenerateName = name
+	return p
+}
+
+func (p *PodFactory) withNamespace(namespace string) *PodFactory {
+	p.pod.Namespace = namespace
 	return p
 }
 
@@ -357,6 +370,7 @@ func TestPod_intersectImagesArchitecture(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			imageInspectionCache = fake.FacadeSingleton()
 			pod := &Pod{
 				Pod: tt.pod,
 				ctx: ctx,
@@ -372,6 +386,7 @@ func TestPod_intersectImagesArchitecture(t *testing.T) {
 				return sets.New[string](arches...)
 			}, Equal(tt.wantSupportedArchitectures)),
 				"the set in gotSupportedArchitectures is not equal to the expected one")
+			imageInspectionCache = mmoimage.FacadeSingleton()
 		})
 	}
 }
@@ -427,6 +442,7 @@ func TestPod_getArchitecturePredicate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			imageInspectionCache = fake.FacadeSingleton()
 			pod := &Pod{
 				Pod: tt.pod,
 				ctx: ctx,
@@ -438,6 +454,7 @@ func TestPod_getArchitecturePredicate(t *testing.T) {
 			// sort the architectures to make the comparison easier
 			sort.Strings(got.Values)
 			g.Expect(got).To(Equal(tt.want))
+			imageInspectionCache = mmoimage.FacadeSingleton()
 		})
 	}
 }
@@ -579,6 +596,7 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			imageInspectionCache = fake.FacadeSingleton()
 			pod := &Pod{
 				Pod: tt.pod,
 				ctx: ctx,
@@ -588,6 +606,7 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 			g.Expect(err).ShouldNot(HaveOccurred())
 			pod.setArchNodeAffinity(pred)
 			g.Expect(pod.Spec.Affinity).Should(Equal(tt.want.Spec.Affinity))
+			imageInspectionCache = mmoimage.FacadeSingleton()
 		})
 	}
 }
@@ -759,6 +778,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			imageInspectionCache = fake.FacadeSingleton()
 			pod := &Pod{
 				Pod: tt.pod,
 				ctx: ctx,
@@ -766,6 +786,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 			pod.SetNodeAffinityArchRequirement(tt.pullSecretDataList)
 			g := NewGomegaWithT(t)
 			g.Expect(pod.Spec.Affinity).Should(Equal(tt.want.Spec.Affinity))
+			imageInspectionCache = mmoimage.FacadeSingleton()
 		})
 	}
 }

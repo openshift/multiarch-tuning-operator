@@ -61,7 +61,7 @@ endif
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.26.0
+ENVTEST_K8S_VERSION = 1.28.3
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -334,10 +334,5 @@ GO_JUNIT_REPORT_VERSION ?= v2.1.0
 
 unit:
 	mkdir -p ${ARTIFACT_DIR}
-	GOBIN=$(LOCALBIN) GOFLAGS='' go install github.com/jstemmer/go-junit-report/v2@$(GO_JUNIT_REPORT_VERSION)
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
-		go test ./... -coverprofile ${ARTIFACT_DIR}/test-unit-coverage.out -covermode atomic -v | \
-		$(LOCALBIN)/go-junit-report -iocopy -out ${ARTIFACT_DIR}/junit-mmo-unit.xml
-	go tool cover -html=${ARTIFACT_DIR}/test-unit-coverage.out -o ${ARTIFACT_DIR}/test-unit-coverage.html
-	echo -n "Coverage "
-	go tool cover -func=${ARTIFACT_DIR}/test-unit-coverage.out | tail -n 1
+		./hack/ci-test.sh

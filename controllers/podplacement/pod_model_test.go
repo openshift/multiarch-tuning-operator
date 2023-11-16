@@ -10,10 +10,10 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	mmoimage "multiarch-operator/pkg/image"
-	"multiarch-operator/pkg/testing/image/fake"
+	mmoimage "github.com/openshift/multiarch-manager-operator/pkg/image"
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake"
 
-	. "multiarch-operator/pkg/testing/utils"
+	. "github.com/openshift/multiarch-manager-operator/pkg/testing/utils"
 )
 
 var ctx context.Context

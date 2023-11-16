@@ -1,9 +1,11 @@
 package utils
 
 import (
+	//#nosec G505: Blocklisted import crypto/sha1: weak cryptographic primitive
 	"crypto/sha1"
 	"encoding/hex"
-	"k8s.io/api/core/v1"
+
+	v1 "k8s.io/api/core/v1"
 )
 
 // PodFactory is a builder for v1.Pod objects to be used only in unit tests.
@@ -42,6 +44,7 @@ func (p *PodFactory) WithContainersImages(images ...string) *PodFactory {
 	p.pod.Spec.Containers = make([]v1.Container, len(images))
 	for i, image := range images {
 		// compute hash of the image name
+		//#nosec G401: Use of weak cryptographic primitive
 		sha := sha1.New()
 		sha.Write([]byte(image))
 		p.pod.Spec.Containers[i] = v1.Container{

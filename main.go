@@ -18,21 +18,14 @@ package main
 
 import (
 	"flag"
-	"multiarch-operator/controllers/operator"
 	"os"
 
-	ocpv1 "github.com/openshift/api/config/v1"
-	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"k8s.io/klog/v2"
-
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
-	multiarchv1alpha1 "multiarch-operator/apis/multiarch/v1alpha1"
-	podplacement "multiarch-operator/controllers/podplacement"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -41,10 +34,16 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	//+kubebuilder:scaffold:imports
 
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	ocpv1 "github.com/openshift/api/config/v1"
+	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+
+	multiarchv1alpha1 "github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-manager-operator/controllers/operator"
+	"github.com/openshift/multiarch-manager-operator/controllers/podplacement"
 )
 
 var (

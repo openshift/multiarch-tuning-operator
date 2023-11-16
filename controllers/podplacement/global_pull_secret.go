@@ -20,15 +20,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"multiarch-operator/pkg/image"
-	"multiarch-operator/pkg/utils"
 
 	"github.com/go-logr/logr"
+
 	corev1 "k8s.io/api/core/v1"
 	clientv1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/image"
+	"github.com/openshift/multiarch-manager-operator/pkg/utils"
 )
 
 type GlobalPullSecretSyncer struct {

@@ -2,21 +2,20 @@ package podplacement
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"multiarch-operator/pkg/testing/image/fake"
-	"multiarch-operator/pkg/testing/image/fake/registry"
-	"multiarch-operator/pkg/testing/utils"
-	utils2 "multiarch-operator/pkg/utils"
-	. "github.com/openshift/multiarch-manager-operator/pkg/testing/utils"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
-	. "multiarch-operator/pkg/testing/utils"
-	"multiarch-operator/pkg/utils"
 
 	corev1 "k8s.io/api/core/v1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake"
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake/registry"
+	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+
+	. "github.com/openshift/multiarch-manager-operator/pkg/testing/utils"
 )
 
 var _ = Describe("Controllers/Podplacement/PodReconciler", func() {

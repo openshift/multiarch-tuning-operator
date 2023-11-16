@@ -22,9 +22,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
-	"multiarch-operator/pkg/testing/image/fake/registry"
-	testingutils "multiarch-operator/pkg/testing/utils"
-	"multiarch-operator/pkg/utils"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -32,14 +29,12 @@ import (
 	"testing"
 	"time"
 
-	v1 "k8s.io/api/admissionregistration/v1"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"go.uber.org/zap/zapcore"
 
+	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -51,6 +46,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake/registry"
+	testingutils "github.com/openshift/multiarch-manager-operator/pkg/testing/utils"
+	"github.com/openshift/multiarch-manager-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
 

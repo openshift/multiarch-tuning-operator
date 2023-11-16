@@ -19,18 +19,21 @@ package image
 import (
 	"context"
 	"fmt"
-	"multiarch-operator/pkg/systemconfig"
 	"os"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/containers/image/v5/docker"
 	"github.com/containers/image/v5/image"
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/types"
+
 	"github.com/go-logr/logr"
 	"golang.org/x/sys/unix"
-	"k8s.io/apimachinery/pkg/util/sets"
-	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
 )
 
 type registryInspector struct {

@@ -20,13 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"multiarch-operator/pkg/systemconfig"
 
 	"github.com/go-logr/logr"
-	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
 )
 
 // ICSPs report the set of registry sources that the cluster needs to reach via mirrors.

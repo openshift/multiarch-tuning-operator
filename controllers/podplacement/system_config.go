@@ -6,7 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"multiarch-operator/pkg/systemconfig"
+	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
 )
 
 type ConfigSyncerRunnable struct {

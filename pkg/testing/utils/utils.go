@@ -2,12 +2,13 @@ package utils
 
 import (
 	"context"
+	"sync"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sync"
 )
 
 func DecorateWithWaitGroup(wg *sync.WaitGroup, f func()) {

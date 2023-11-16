@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"multiarch-operator/pkg/testing/image/fake"
 	"os"
 	"strings"
 
@@ -14,6 +13,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake"
 )
 
 const (

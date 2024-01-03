@@ -20,10 +20,15 @@ ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
 endif
 
-# We want HOME to be set for all the targets
-ifneq ($(origin HOME), undefined)
-HOME := /tmp/build
-export HOME
+# We want HOME to be set for all the targets. When running in Prow pods, the HOME is set to /, which is not writable.
+$(info HOME is $(HOME))
+ifeq ($(shell test -w /$(HOME) && echo writable),writable)
+ $(info HOME is writable)
+else
+ $(info HOME is not writable, setting it to /tmp/build)
+ HOME := /tmp/build
+ export HOME
+ $(shell mkdir -p $(HOME))
 endif
 
 # DEFAULT_CHANNEL defines the default channel used in the bundle.

@@ -27,8 +27,8 @@ ifeq ($(shell test -w /$(HOME) && echo writable),writable)
 else
  $(info HOME is not writable, setting it to /tmp/build)
  HOME := /tmp/build
- export HOME
  $(shell mkdir -p $(HOME))
+ export HOME
 endif
 
 # DEFAULT_CHANNEL defines the default channel used in the bundle.
@@ -337,7 +337,8 @@ catalog-push: ## Push a catalog image.
 
 GO_JUNIT_REPORT_VERSION ?= v2.1.0
 
-unit:
+unit: manifests generate envtest
 	mkdir -p ${ARTIFACT_DIR}
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
 		./hack/ci-test.sh
+

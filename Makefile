@@ -342,3 +342,7 @@ unit: manifests generate envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
 		./hack/ci-test.sh
 
+.PHONY: clean
+clean:
+	rm -rf ${ARTIFACT_DIR}
+	rm -rf ${LOCALBIN}

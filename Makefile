@@ -20,10 +20,15 @@ ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
 endif
 
-# We want HOME to be set for all the targets
-ifneq ($(origin HOME), undefined)
-HOME := /tmp/build
-export HOME
+# We want HOME to be set for all the targets. When running in Prow pods, the HOME is set to /, which is not writable.
+$(info HOME is $(HOME))
+ifeq ($(shell test -w /$(HOME) && echo writable),writable)
+ $(info HOME is writable)
+else
+ $(info HOME is not writable, setting it to /tmp/build)
+ HOME := /tmp/build
+ $(shell mkdir -p $(HOME))
+ export HOME
 endif
 
 # DEFAULT_CHANNEL defines the default channel used in the bundle.
@@ -189,7 +194,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: test ## Build docker image with the manager.
+docker-build: manifests generate ## Build docker image with the manager.
 	$(ENGINE) build -t ${IMG} --build-arg BUILD_IMAGE=$(BUILD_IMAGE) --build-arg RUNTIME_IMAGE=$(RUNTIME_IMAGE) .
 
 .PHONY: docker-push
@@ -204,7 +209,7 @@ docker-push: ## Push docker image with the manager.
 # To properly provided solutions that supports more than one platform you should use this option.
 PLATFORMS ?= linux/arm64,linux/amd64
 .PHONY: docker-buildx
-docker-buildx: test ## Build and push docker image for the manager for cross-platform support
+docker-buildx: manifests generate ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
 	- docker buildx create --name project-v3-builder
@@ -332,7 +337,12 @@ catalog-push: ## Push a catalog image.
 
 GO_JUNIT_REPORT_VERSION ?= v2.1.0
 
-unit:
+unit: manifests generate envtest
 	mkdir -p ${ARTIFACT_DIR}
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
 		./hack/ci-test.sh
+
+.PHONY: clean
+clean:
+	rm -rf ${ARTIFACT_DIR}
+	rm -rf ${LOCALBIN}

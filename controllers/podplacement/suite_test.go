@@ -105,8 +105,8 @@ var _ = AfterSuite(func() {
 func startTestEnv() {
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: false,
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		ErrorIfCRDPathMissing: true,
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
 			MutatingWebhooks: []*v1.MutatingWebhookConfiguration{getMutatingWebHook()},
 		},

@@ -20,16 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +kubebuilder:validation:Enum=Normal;Debug;Trace;TraceAll
-type LogVerbosityLevel string
-
-const (
-	LogVerbosityLevelNormal   LogVerbosityLevel = "Normal"
-	LogVerbosityLevelDebug    LogVerbosityLevel = "Debug"
-	LogVerbosityLevelTrace    LogVerbosityLevel = "Trace"
-	LogVerbosityLevelTraceAll LogVerbosityLevel = "TraceAll"
-)
-
 // PodPlacementConfigSpec defines the desired state of PodPlacementConfig
 type PodPlacementConfigSpec struct {
 	// LogVerbosity is the log level for the pod placement controller

@@ -18,16 +18,24 @@ package operator
 
 import (
 	"context"
-	"errors"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	errorutils "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/library-go/pkg/operator/events"
+
 	multiarchv1alpha1 "github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-manager-operator/pkg/utils"
 )
 
 // PodPlacementConfigReconciler reconciles a PodPlacementConfig object
@@ -35,91 +43,152 @@ type PodPlacementConfigReconciler struct {
 	client.Client
 	Scheme    *runtime.Scheme
 	ClientSet *kubernetes.Clientset
+	Recorder  events.Recorder
 }
 
 const (
-	// Pod MutatingWebHook name
-	podMutatingWebhookName                       = "pod-placement-scheduling-gate.multiarch.openshift.io"
-	operatorMutatingWebhookConfigurationselector = "multiarch.openshift.io/webhook=mutating"
+	podMutatingWebhookName              = "pod-placement-scheduling-gate.multiarch.openshift.io"
+	podMutatingWebhookConfigurationName = "pod-placement-mutating-webhook-configuration"
+
+	podPlacementControllerName               = "pod-placement-controller"
+	podPlacementControllerMetricsServiceName = "pod-placement-controller-metrics-service"
+	podPlacementWebhookName                  = "pod-placement-web-hook"
+	podPlacementWebhookMetricsServiceName    = "pod-placement-web-hook-metrics-service"
+	operandName                              = "pod-placement-controller"
 )
 
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs/finalizers,verbs=update
-//+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;update;patch
+//+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;update;patch;create;delete;list;watch
+//+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations/status,verbs=get
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the PodPlacementConfig object against the actual cluster state, and then
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=core,resources=services/status,verbs=get
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create
+
+// Reconcile reconciles the PodPlacementConfig object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
 func (r *PodPlacementConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
-
+	log.V(3).Info("Reconciling PodPlacementConfig...")
 	// Lookup the PodPlacementConfig instance for this reconcile request
 	podPlacementConfig := &multiarchv1alpha1.PodPlacementConfig{}
-	if err := r.Get(ctx, client.ObjectKey{
+	var err error
+
+	if err = r.Get(ctx, client.ObjectKey{
 		Namespace: req.NamespacedName.Namespace,
 		Name:      req.NamespacedName.Name,
-	}, podPlacementConfig); err != nil {
+	}, podPlacementConfig); client.IgnoreNotFound(err) != nil {
 		log.Error(err, "Unable to fetch PodPlacementConfig")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
-	if podPlacementConfig.Name != "cluster" {
-		err := errors.New("no PodPlacementConfig with name different than cluster should be created")
-		log.Error(err, "PodPlacementConfig name is not cluster")
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateMutatingAdmissionWebhook(ctx, podPlacementConfig); err != nil {
-		// TODO: implement backoff retry
-		return ctrl.Result{}, err
+	log.V(3).Info("PodPlacementConfig fetched...", "name", podPlacementConfig.Name)
+	if req.NamespacedName.Name == multiarchv1alpha1.SingletonResourceObjectName {
+		if apierrors.IsNotFound(err) || !podPlacementConfig.DeletionTimestamp.IsZero() {
+			// Only execute deletion iff the name of the object is 'cluster' and the object is being deleted or not found
+			return ctrl.Result{}, r.handleDelete(ctx)
+		}
+		return ctrl.Result{}, r.reconcile(ctx, podPlacementConfig)
 	}
 
-	// TODO: Any update to the PodPlacementConfig we should consider?
-	err := r.Client.Update(ctx, podPlacementConfig)
-	if err != nil {
-		log.Error(err, "Unable to update the podPlacementConfig")
-		return ctrl.Result{}, err
+	// If we hit here, the PodPlacementConfig has an invalid name.
+	log.V(3).Info("PodPlacementConfig name is not cluster", "name", podPlacementConfig.Name)
+	if podPlacementConfig.DeletionTimestamp.IsZero() {
+		// Only execute deletion iff the name of the object is different from 'cluster' and the object is not yet deleted.
+		log.V(3).Info("Deleting PodPlacementConfig", "name", podPlacementConfig.Name)
+		err := r.Delete(ctx, podPlacementConfig)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 	}
-
+	log.Info("The PodPlacementConfig is already pending deletion, nothing to do.", "name", podPlacementConfig.Name)
 	return ctrl.Result{}, nil
 }
 
-func (r *PodPlacementConfigReconciler) updateMutatingAdmissionWebhook(ctx context.Context, ppc *multiarchv1alpha1.PodPlacementConfig) error {
+// handleDelete handles the deletion of the PodPlacement operand's resources.
+func (r *PodPlacementConfigReconciler) handleDelete(ctx context.Context) error {
+	// The PodPlacementConfig is being deleted, cleanup the resources
 	log := ctrllog.FromContext(ctx)
+	log.Info("Deleting the PodPlacement operand's resources")
 
-	// getting by label as the name for the mutating webhook can change based on the kustomization
-	podPlacementWebhooks, err := r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, metav1.ListOptions{
-		LabelSelector: operatorMutatingWebhookConfigurationselector,
-	})
-	if err != nil {
-		log.Error(err, "Unable to fetch mutating webhook")
-		return err
+	objsToDelete := []utils.ToDeleteRef{
+		{
+			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
+			ObjName:               podPlacementControllerName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
+			ObjName:               podPlacementWebhookName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
+			ObjName:               podPlacementWebhookName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
+			ObjName:               podPlacementControllerMetricsServiceName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
+			ObjName:               podPlacementWebhookMetricsServiceName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations(),
+			ObjName:               podMutatingWebhookConfigurationName,
+		},
 	}
-	if len(podPlacementWebhooks.Items) != 1 {
-		err := errors.New("the length of the list of mutating webhooks is not 1")
-		log.Error(err, "Unable to fetch mutating webhook", "length", len(podPlacementWebhooks.Items))
-		return err
+	return utils.DeleteResources(ctx, objsToDelete)
+}
+
+// reconcile reconciles the PodPlacementConfig operand's resources.
+func (r *PodPlacementConfigReconciler) reconcile(ctx context.Context, podPlacementConfig *multiarchv1alpha1.PodPlacementConfig) error {
+	log := ctrllog.FromContext(ctx)
+	objects := []client.Object{
+		buildDeployment(podPlacementConfig, podPlacementControllerName, 2, []string{
+			"--leader-elect",
+			"--enable-ppc-controllers",
+		}),
+		buildDeployment(podPlacementConfig, podPlacementWebhookName, 3, []string{
+			"--enable-ppc-webhook",
+		}),
+		buildService(podPlacementControllerName, podPlacementControllerName,
+			443, intstr.FromInt32(9443)),
+		buildService(podPlacementWebhookName, podPlacementWebhookName,
+			443, intstr.FromInt32(9443)),
+		buildService(
+			podPlacementControllerMetricsServiceName, podPlacementControllerName,
+			8443, intstr.FromInt32(8443)),
+		buildService(
+			podPlacementWebhookMetricsServiceName, podPlacementWebhookName,
+			8443, intstr.FromInt32(8443)),
+		buildMutatingWebhookConfiguration(podPlacementConfig),
 	}
-	podPlacementWebhook := &podPlacementWebhooks.Items[0]
-	for _, webhook := range podPlacementWebhook.Webhooks {
-		if webhook.Name == podMutatingWebhookName {
-			webhook.NamespaceSelector = ppc.Spec.NamespaceSelector
-			break
+
+	errs := make([]error, 0)
+	for _, o := range objects {
+		if err := ctrl.SetControllerReference(podPlacementConfig, o, r.Scheme); err != nil {
+			log.Error(err, "Unable to set controller reference", "name", o.GetName())
+			errs = append(errs, err)
 		}
 	}
 
-	podPlacementWebhook, err = r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations().Update(ctx, podPlacementWebhook, metav1.UpdateOptions{})
-	if err != nil {
-		log.Error(err, "Unable to update MutatingWebhookConfiguration", "name", podPlacementWebhook.Name)
+	if len(errs) > 0 {
+		return errorutils.NewAggregate(errs)
+	}
+
+	if err := utils.ApplyResources(ctx, r.ClientSet, r.Recorder, objects); err != nil {
+		log.Error(err, "Unable to apply resources")
 		return err
 	}
+
+	/* TODO: Updates to the PodPlacementConfig's status will probably be considered in the future to address the
+	 * ordered un-installation of the operator and operands.
+	 */
 	return nil
 }
 
@@ -127,5 +196,8 @@ func (r *PodPlacementConfigReconciler) updateMutatingAdmissionWebhook(ctx contex
 func (r *PodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiarchv1alpha1.PodPlacementConfig{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
+		Owns(&admissionv1.MutatingWebhookConfiguration{}).
 		Complete(r)
 }

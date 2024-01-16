@@ -22,31 +22,34 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openshift/multiarch-manager-operator/controllers/operator"
-	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	//+kubebuilder:scaffold:imports
 
 	ocpv1 "github.com/openshift/api/config/v1"
 	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/library-go/pkg/operator/events"
 
 	multiarchv1alpha1 "github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-manager-operator/controllers/operator"
 	"github.com/openshift/multiarch-manager-operator/controllers/podplacement"
+	"github.com/openshift/multiarch-manager-operator/pkg/utils"
 )
 
 const (
@@ -143,10 +146,17 @@ func main() {
 func RunOperator(mgr ctrl.Manager) {
 	config := ctrl.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
+	gvk, _ := apiutil.GVKForObject(&multiarchv1alpha1.PodPlacementConfig{}, mgr.GetScheme())
 	must((&operator.PodPlacementConfigReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,
+		Recorder: events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, &corev1.ObjectReference{
+			Kind:       gvk.Kind,
+			Name:       multiarchv1alpha1.SingletonResourceObjectName,
+			Namespace:  utils.Namespace(),
+			APIVersion: gvk.GroupVersion().String(),
+		}),
 	}).SetupWithManager(mgr), unableToCreateController, controllerKey, "PodPlacementConfig")
 }
 

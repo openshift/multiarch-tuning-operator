@@ -1,8 +1,2 @@
 resources:
-  - manifests.yaml
-  - service.yaml
-
-labels:
-  - pairs:
-      multiarch.openshift.io/webhook: mutating-webhook
-
+  - ./service.yaml

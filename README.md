@@ -52,6 +52,48 @@ make docker-buildx IMG=<some-registry>/multiarch-manager-operator:tag
 make deploy IMG=<some-registry>/multiarch-manager-operator:tag
 ```
 
+### Deploy the Pod Placement Operand
+
+After the operator is running, you can deploy the Pod Placement Operand on the cluster through the PodPlacementConfig CR.
+It is expected to be a singleton, cluster-scoped resource, named `cluster`.
+
+The following is an example of a PodPlacementConfig CR that sets the log verbosity level to `Normal` and 
+will watch and setup CPU architecture node affinities on all the pods, except the ones in namespaces labeled with 
+`multiarch.openshift.io/exclude-pod-placement`.
+
+**Note**: the namespaces `openshift-*`, `kube-*1`, and `hypershift-*` are excluded by default and cannot be included back for
+safety reasons.
+
+```shell
+# Deploy the pod placement operand on the cluster
+kubectl create -f - <<EOF
+apiVersion: multiarch.openshift.io/v1alpha1
+kind: PodPlacement
+metadata:
+  name: cluster
+spec:
+  logVerbosityLevel: Normal
+  namespaceSelector:
+    matchExpressions:
+      - key: multiarch.openshift.io/exclude-pod-placement
+        operator: DoesNotExist
+```
+
+### Undeploy the PodPlacementConfig operand
+
+```shell
+kubectl delete podplacementconfig/cluster
+```
+
+Ordered uninstallation of the operand will be implemented in the future, and will remove the pod placement controller
+only after all the scheduling gated pods have been ungated.
+
+To overcome this limitation currently, you can execute the following to ensure the deletion of the scheduling gate 
+from all the pods:
+```shell
+kubectl get pods -A -l multiarch.openshift.io/scheduling-gate=gated -o json  | jq 'del(.items[].spec.schedulingGates[] | select(.name=="multiarch.openshift.io/scheduling-gate"))' | kubectl apply -f -
+```
+
 ### Uninstall CRDs
 To delete the CRDs from the cluster:
 

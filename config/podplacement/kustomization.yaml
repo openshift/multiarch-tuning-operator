@@ -1,0 +1,8 @@
+resources:
+  - podplacement_controller_role_binding.yaml
+  - podplacement_controller_service_account.yaml
+  - podplacement_controller_role.yaml
+  - podplacement_webhook_role_binding.yaml
+  - podplacement_webhook_service_account.yaml
+  - podplacement_webhook_role.yaml
+  - podplacement_leader_election_role_binding.yaml

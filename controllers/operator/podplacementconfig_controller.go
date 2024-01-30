@@ -149,13 +149,15 @@ func (r *PodPlacementConfigReconciler) handleDelete(ctx context.Context) error {
 func (r *PodPlacementConfigReconciler) reconcile(ctx context.Context, podPlacementConfig *multiarchv1alpha1.PodPlacementConfig) error {
 	log := ctrllog.FromContext(ctx)
 	objects := []client.Object{
-		buildDeployment(podPlacementConfig, podPlacementControllerName, 2, []string{
+		buildDeployment(podPlacementConfig, podPlacementControllerName, 2,
+			"multiarch-operator-podplacement-controller",
 			"--leader-elect",
 			"--enable-ppc-controllers",
-		}),
-		buildDeployment(podPlacementConfig, podPlacementWebhookName, 3, []string{
+		),
+		buildDeployment(podPlacementConfig, podPlacementWebhookName, 3,
+			"multiarch-operator-podplacement-webhook",
 			"--enable-ppc-webhook",
-		}),
+		),
 		buildService(podPlacementControllerName, podPlacementControllerName,
 			443, intstr.FromInt32(9443)),
 		buildService(podPlacementWebhookName, podPlacementWebhookName,

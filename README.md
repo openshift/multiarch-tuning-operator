@@ -68,7 +68,7 @@ safety reasons.
 # Deploy the pod placement operand on the cluster
 kubectl create -f - <<EOF
 apiVersion: multiarch.openshift.io/v1alpha1
-kind: PodPlacement
+kind: PodPlacementConfig
 metadata:
   name: cluster
 spec:

@@ -77,6 +77,7 @@ spec:
     matchExpressions:
       - key: multiarch.openshift.io/exclude-pod-placement
         operator: DoesNotExist
+EOF
 ```
 
 ### Undeploy the PodPlacementConfig operand

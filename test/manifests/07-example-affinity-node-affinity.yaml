@@ -3,7 +3,7 @@ apiVersion: v1
 metadata:
   name: test-project-2
   labels:
-    multiarch.openshift.io/excludeNamespace:
+    multiarch.openshift.io/exclude-pod-placement:
 ---
 apiVersion: v1
 kind: Pod

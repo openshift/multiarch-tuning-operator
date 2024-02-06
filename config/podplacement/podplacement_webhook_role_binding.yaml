@@ -1,5 +1,6 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: rolebinding
@@ -8,12 +9,11 @@ metadata:
     app.kubernetes.io/created-by: multiarch-operator
     app.kubernetes.io/part-of: multiarch-operator
     app.kubernetes.io/managed-by: kustomize
-  name: image-registry-certificates-rolebinding
-  namespace: openshift-image-registry
+  name: podplacement-webhook-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: image-registry-certificates-role
+  kind: ClusterRole
+  name: podplacement-webhook-role
 subjects:
   - kind: ServiceAccount
-    name: podplacement-controller
+    name: podplacement-webhook

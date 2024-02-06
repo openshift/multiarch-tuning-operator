@@ -1,19 +1,20 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: rolebinding
-    app.kubernetes.io/instance: image-registry-certificates-rolebinding
+    app.kubernetes.io/instance: podplacement-leader-election-rolebinding
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: multiarch-operator
     app.kubernetes.io/part-of: multiarch-operator
     app.kubernetes.io/managed-by: kustomize
-  name: image-registry-certificates-rolebinding
-  namespace: openshift-image-registry
+  name: podplacement-leader-election-rolebinding
+  namespace: system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: image-registry-certificates-role
+  name: leader-election-role
 subjects:
   - kind: ServiceAccount
     name: podplacement-controller

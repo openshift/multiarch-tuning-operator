@@ -37,9 +37,11 @@ type PodReconciler struct {
 	ClientSet *kubernetes.Clientset
 }
 
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
-//+kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
+// RBACs for the operands' controllers are added manually because kubebuilder can't handle multiple service accounts
+// and roles.
+//#kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
+//#kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update;patch
+//#kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

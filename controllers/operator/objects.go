@@ -88,7 +88,7 @@ func buildService(name string, controllerName string, port int32, targetPort int
 }
 
 func buildDeployment(podPlacementConfig *v1alpha1.PodPlacementConfig,
-	name string, replicas int32, args []string) *appsv1.Deployment {
+	name string, replicas int32, serviceAccountName string, args ...string) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -231,7 +231,7 @@ func buildDeployment(podPlacementConfig *v1alpha1.PodPlacementConfig,
 							},
 						},
 					},
-					ServiceAccountName: "multiarch-operator-controller-manager", // TODO: change me
+					ServiceAccountName: serviceAccountName,
 					Volumes: []corev1.Volume{
 						{
 							Name: "webhook-server-cert",

@@ -1,14 +1,13 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: image-registry-certificates-role
-  namespace: openshift-image-registry
   labels:
     app.kubernetes.io/name: role
     app.kubernetes.io/instance: image-registry-certificates-role
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: multiarch-operator
-    app.kubernetes.io/part-of: multiarch-operator
+    app.kubernetes.io/created-by: multiarch-manager-operator
+    app.kubernetes.io/part-of: multiarch-manager-operator
     app.kubernetes.io/managed-by: kustomize
 rules:
   - apiGroups:

@@ -1,4 +1,5 @@
-# permissions to do leader election.
+# role to perform leader election by the operands.
+# This is added manually as OLM manages the name of the same role for the operator
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -9,7 +10,7 @@ metadata:
     app.kubernetes.io/created-by: multiarch-manager-operator
     app.kubernetes.io/part-of: multiarch-manager-operator
     app.kubernetes.io/managed-by: kustomize
-  name: leader-election-role
+  name: multiarch-manager-operator-leader-election-role
 rules:
 - apiGroups:
   - ""

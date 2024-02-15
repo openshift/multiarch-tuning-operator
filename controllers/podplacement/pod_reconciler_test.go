@@ -11,11 +11,10 @@ import (
 
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake"
-	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake/registry"
 	"github.com/openshift/multiarch-manager-operator/pkg/utils"
 
-	. "github.com/openshift/multiarch-manager-operator/pkg/testing/utils"
+	. "github.com/openshift/multiarch-manager-operator/pkg/testing/framework"
+	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake/registry"
 )
 
 var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
@@ -42,37 +41,32 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
 						Name: schedulingGateName,
 					}), "scheduling gate not removed")
-					g.Expect(pod.Labels).To(HaveKeyWithValue(schedulingGateLabel, schedulingGateLabelValueRemoved),
+					g.Expect(pod.Labels).To(HaveKeyWithValue(utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved),
 						"scheduling gate annotation not found")
 				}).Should(Succeed(), "failed to remove scheduling gate from pod")
 				Eventually(func(g Gomega) {
-					g.Expect(pod.Spec.Affinity).NotTo(BeNil(), "pod affinity is nil")
-					g.Expect(pod.Spec.Affinity.NodeAffinity).NotTo(BeNil(),
-						"pod nodeAffinity is nil")
-					g.Expect(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution).NotTo(BeNil(),
-						"requiredDuringSchedulingIgnoredDuringExecution is nil")
-					g.Expect(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms).
-						NotTo(BeEmpty(), "node selector terms is empty")
-					g.Expect(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms).
-						Should(WithTransform(utils.SortMatchExpressions, ConsistOf(
-							utils.SortMatchExpressions([]corev1.NodeSelectorTerm{
-								{
-									MatchExpressions: []corev1.NodeSelectorRequirement{
-										{
-											Key:      archLabel,
-											Operator: corev1.NodeSelectorOpIn,
-											Values:   supportedArchitectures,
+					g.Expect(pod).To(HaveEquivalentNodeAffinity(
+						&corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      utils.ArchLabel,
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   supportedArchitectures,
+											},
 										},
 									},
 								},
-							}))), "unexpected node selector terms")
+							},
+						}), "unexpected node affinity")
 				}).Should(Succeed(), "failed to set node affinity to pod")
 			},
-				Entry("OCI Index Images", imgspecv1.MediaTypeImageIndex, fake.ArchitectureAmd64, fake.ArchitectureArm64),
-				Entry("Docker images", imgspecv1.MediaTypeImageManifest, fake.ArchitecturePpc64le),
+				Entry("OCI Index Images", imgspecv1.MediaTypeImageIndex, utils.ArchitectureAmd64, utils.ArchitectureArm64),
+				Entry("Docker images", imgspecv1.MediaTypeImageManifest, utils.ArchitecturePpc64le),
 			)
-		},
-		)
+		})
 
 		Context("with different pull secrets", func() {
 			It("handles images with global pull secrets correctly", func() {

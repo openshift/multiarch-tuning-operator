@@ -178,7 +178,7 @@ spec:
             metadata:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
-                multiarch.openshift.io/image: registry.ci.openshift.org/origin/multiarch-manager-operator:main
+                multiarch.openshift.io/image: registry.ci.openshift.org/origin/multiarch-manager-operator:v0.0.1
               labels:
                 control-plane: controller-manager
             spec:
@@ -216,7 +216,7 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.annotations['multiarch.openshift.io/image']
-                image: registry.ci.openshift.org/origin/multiarch-manager-operator:main
+                image: registry.ci.openshift.org/origin/multiarch-manager-operator:v0.0.1
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:

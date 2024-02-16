@@ -5,6 +5,6 @@ kind: Kustomization
 images:
 - name: controller
   newName: registry.ci.openshift.org/origin/multiarch-manager-operator
-  newTag: main
+  newTag: v0.0.1
 commonAnnotations:
-  multiarch.openshift.io/image: registry.ci.openshift.org/origin/multiarch-manager-operator:main
+  multiarch.openshift.io/image: registry.ci.openshift.org/origin/multiarch-manager-operator:v0.0.1

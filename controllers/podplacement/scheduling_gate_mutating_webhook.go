@@ -86,11 +86,6 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 
 	pod.Spec.SchedulingGates = append(pod.Spec.SchedulingGates, schedulingGate)
 
-	// Temporary workaround. TODO[aleskandro]: remove when kubernetes/kubernetes#118052 is fixed.
-	if pod.Spec.Affinity == nil {
-		pod.Spec.Affinity = &corev1.Affinity{}
-	}
-
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string)
 	}

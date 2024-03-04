@@ -1,26 +1,25 @@
-package framework
+package builder
 
 import (
-	//#nosec G505: Blocklisted import crypto/sha1: weak cryptographic primitive
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 
 	v1 "k8s.io/api/core/v1"
 )
 
-// PodFactory is a builder for v1.Pod objects to be used only in unit tests.
-type PodFactory struct {
+// PodBuilder is a builder for v1.Pod objects to be used only in unit tests.
+type PodBuilder struct {
 	pod v1.Pod
 }
 
-// NewPod returns a new PodFactory to build v1.Pod objects. It is meant to be used only in unit tests.
-func NewPod() *PodFactory {
-	return &PodFactory{
+// NewPod returns a new PodBuilder to build v1.Pod objects. It is meant to be used only in unit tests.
+func NewPod() *PodBuilder {
+	return &PodBuilder{
 		pod: v1.Pod{},
 	}
 }
 
-func (p *PodFactory) WithImagePullSecrets(imagePullSecrets ...string) *PodFactory {
+func (p *PodBuilder) WithImagePullSecrets(imagePullSecrets ...string) *PodBuilder {
 	p.pod.Spec.ImagePullSecrets = make([]v1.LocalObjectReference, len(imagePullSecrets))
 	for i, secret := range imagePullSecrets {
 		p.pod.Spec.ImagePullSecrets[i] = v1.LocalObjectReference{
@@ -30,7 +29,7 @@ func (p *PodFactory) WithImagePullSecrets(imagePullSecrets ...string) *PodFactor
 	return p
 }
 
-func (p *PodFactory) WithSchedulingGates(schedulingGates ...string) *PodFactory {
+func (p *PodBuilder) WithSchedulingGates(schedulingGates ...string) *PodBuilder {
 	p.pod.Spec.SchedulingGates = make([]v1.PodSchedulingGate, len(schedulingGates))
 	for i, gate := range schedulingGates {
 		p.pod.Spec.SchedulingGates[i] = v1.PodSchedulingGate{
@@ -40,22 +39,21 @@ func (p *PodFactory) WithSchedulingGates(schedulingGates ...string) *PodFactory 
 	return p
 }
 
-func (p *PodFactory) WithContainersImages(images ...string) *PodFactory {
+func (p *PodBuilder) WithContainersImages(images ...string) *PodBuilder {
 	p.pod.Spec.Containers = make([]v1.Container, len(images))
 	for i, image := range images {
 		// compute hash of the image name
-		//#nosec G401: Use of weak cryptographic primitive
-		sha := sha1.New()
-		sha.Write([]byte(image))
+		hasher := sha256.New()
+		hasher.Write([]byte(image))
 		p.pod.Spec.Containers[i] = v1.Container{
 			Image: image,
-			Name:  hex.EncodeToString(sha.Sum(nil)), // hash of the image name (40 characters, 63 is max)
+			Name:  hex.EncodeToString(hasher.Sum(nil))[:63], // hash of the image name (63 is max)
 		}
 	}
 	return p
 }
 
-func (p *PodFactory) WithInitContainersImages(images ...string) *PodFactory {
+func (p *PodBuilder) WithInitContainersImages(images ...string) *PodBuilder {
 	p.pod.Spec.InitContainers = make([]v1.Container, len(images))
 	for i, image := range images {
 		p.pod.Spec.InitContainers[i] = v1.Container{
@@ -67,7 +65,7 @@ func (p *PodFactory) WithInitContainersImages(images ...string) *PodFactory {
 
 // WithAffinity adds the affinity to the pod. If initialAffinity is not nil, it is used as the initial value
 // of the pod's affinity. Otherwise, the pod's affinity is initialized to an empty affinity if it is nil.
-func (p *PodFactory) WithAffinity(initialAffinity *v1.Affinity) *PodFactory {
+func (p *PodBuilder) WithAffinity(initialAffinity *v1.Affinity) *PodBuilder {
 	if p.pod.Spec.Affinity == nil {
 		p.pod.Spec.Affinity = &v1.Affinity{}
 	}
@@ -77,7 +75,7 @@ func (p *PodFactory) WithAffinity(initialAffinity *v1.Affinity) *PodFactory {
 	return p
 }
 
-func (p *PodFactory) WithNodeAffinity() *PodFactory {
+func (p *PodBuilder) WithNodeAffinity() *PodBuilder {
 	p.WithAffinity(nil)
 	if p.pod.Spec.Affinity.NodeAffinity == nil {
 		p.pod.Spec.Affinity.NodeAffinity = &v1.NodeAffinity{}
@@ -85,7 +83,7 @@ func (p *PodFactory) WithNodeAffinity() *PodFactory {
 	return p
 }
 
-func (p *PodFactory) WithRequiredDuringSchedulingIgnoredDuringExecution() *PodFactory {
+func (p *PodBuilder) WithRequiredDuringSchedulingIgnoredDuringExecution() *PodBuilder {
 	p.WithNodeAffinity()
 	if p.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
 		p.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &v1.NodeSelector{}
@@ -93,8 +91,8 @@ func (p *PodFactory) WithRequiredDuringSchedulingIgnoredDuringExecution() *PodFa
 	return p
 }
 
-func (p *PodFactory) WithNodeSelectorTermsMatchExpressions(
-	nodeSelectorTermsMatchExpressions ...[]v1.NodeSelectorRequirement) *PodFactory {
+func (p *PodBuilder) WithNodeSelectorTermsMatchExpressions(
+	nodeSelectorTermsMatchExpressions ...[]v1.NodeSelectorRequirement) *PodBuilder {
 	p.WithRequiredDuringSchedulingIgnoredDuringExecution()
 	p.pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = make(
 		[]v1.NodeSelectorTerm, len(nodeSelectorTermsMatchExpressions))
@@ -107,7 +105,7 @@ func (p *PodFactory) WithNodeSelectorTermsMatchExpressions(
 	return p
 }
 
-func (p *PodFactory) WithNodeSelectors(kv ...string) *PodFactory {
+func (p *PodBuilder) WithNodeSelectors(kv ...string) *PodBuilder {
 	if p.pod.Spec.NodeSelector == nil {
 		p.pod.Spec.NodeSelector = make(map[string]string)
 	}
@@ -120,16 +118,16 @@ func (p *PodFactory) WithNodeSelectors(kv ...string) *PodFactory {
 	return p
 }
 
-func (p *PodFactory) WithGenerateName(name string) *PodFactory {
+func (p *PodBuilder) WithGenerateName(name string) *PodBuilder {
 	p.pod.GenerateName = name
 	return p
 }
 
-func (p *PodFactory) WithNamespace(namespace string) *PodFactory {
+func (p *PodBuilder) WithNamespace(namespace string) *PodBuilder {
 	p.pod.Namespace = namespace
 	return p
 }
 
-func (p *PodFactory) Build() v1.Pod {
+func (p *PodBuilder) Build() v1.Pod {
 	return p.pod
 }

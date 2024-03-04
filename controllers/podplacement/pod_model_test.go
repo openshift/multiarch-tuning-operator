@@ -14,7 +14,7 @@ import (
 	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake"
 	"github.com/openshift/multiarch-manager-operator/pkg/utils"
 
-	. "github.com/openshift/multiarch-manager-operator/pkg/testing/framework"
+	. "github.com/openshift/multiarch-manager-operator/pkg/testing/builder"
 )
 
 var ctx context.Context

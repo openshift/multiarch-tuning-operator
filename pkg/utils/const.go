@@ -18,6 +18,7 @@ const (
 	NodeAffinityLabel               = "multiarch.openshift.io/node-affinity"
 	NodeAffinityLabelValueSet       = "set"
 	NodeAffinityLabelValueUnset     = "unset"
+	HostnameLabel                   = "kubernetes.io/hostname"
 	SchedulingGateLabel             = "multiarch.openshift.io/scheduling-gate"
 	SchedulingGateLabelValueGated   = "gated"
 	SchedulingGateLabelValueRemoved = "removed"

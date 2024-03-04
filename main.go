@@ -46,10 +46,10 @@ import (
 	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/events"
 
-	multiarchv1alpha1 "github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
-	"github.com/openshift/multiarch-manager-operator/controllers/operator"
-	"github.com/openshift/multiarch-manager-operator/controllers/podplacement"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
+	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 const (

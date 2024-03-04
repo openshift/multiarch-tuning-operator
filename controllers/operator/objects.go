@@ -10,8 +10,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 func buildMutatingWebhookConfiguration(podPlacementConfig *v1alpha1.PodPlacementConfig) *admissionv1.MutatingWebhookConfiguration {

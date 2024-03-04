@@ -1,4 +1,4 @@
-module github.com/openshift/multiarch-manager-operator
+module github.com/openshift/multiarch-tuning-operator
 
 go 1.20
 

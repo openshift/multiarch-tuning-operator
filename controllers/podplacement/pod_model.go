@@ -24,8 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/image"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/pkg/image"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 var (

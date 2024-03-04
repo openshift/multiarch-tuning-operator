@@ -44,8 +44,8 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/openshift/library-go/pkg/operator/events"
-	"github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
 

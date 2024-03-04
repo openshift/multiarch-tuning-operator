@@ -34,8 +34,8 @@ import (
 
 	"github.com/openshift/library-go/pkg/operator/events"
 
-	multiarchv1alpha1 "github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 // PodPlacementConfigReconciler reconciles a PodPlacementConfig object

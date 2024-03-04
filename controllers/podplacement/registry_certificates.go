@@ -29,7 +29,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
+	"github.com/openshift/multiarch-tuning-operator/pkg/systemconfig"
 )
 
 // RegistryCertificatesSyncer watches a configmap (openshift-image-registry/image-registry-certificates) and updates

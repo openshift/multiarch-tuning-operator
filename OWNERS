@@ -4,4 +4,4 @@ reviewers:
 approvers:
   - aleskandro
   - Prashanth684
-components: multiarch-manager-operator
+components: multiarch-tuning-operator

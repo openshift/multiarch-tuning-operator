@@ -346,7 +346,7 @@ spec:
   - pod-placement
   links:
   - name: Multiarch Tuning Operator
-    url: https://github.com/openshift/multiarch-manager-operator
+    url: https://github.com/openshift/multiarch-tuning-operator
   maturity: alpha
   minKubeVersion: 1.27.0
   provider:

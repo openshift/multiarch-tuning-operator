@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/e2e"
+	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

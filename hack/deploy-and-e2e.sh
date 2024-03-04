@@ -8,7 +8,7 @@ if ! which kubectl >/dev/null; then
 fi
 
 export NO_DOCKER=1
-NAMESPACE=openshift-multiarch-manager-operator
+NAMESPACE=openshift-multiarch-tuning-operator
 oc create namespace ${NAMESPACE}
 oc annotate namespace ${NAMESPACE} \
   scheduler.alpha.kubernetes.io/node-selector="kubernetes.io/arch=amd64"
@@ -29,7 +29,7 @@ else
 fi
 
 oc wait deployments -n ${NAMESPACE} \
-  -l app.kubernetes.io/part-of=multiarch-manager-operator \
+  -l app.kubernetes.io/part-of=multiarch-tuning-operator \
   --for=condition=Available=True
 oc wait pods -n ${NAMESPACE} \
   -l control-plane=controller-manager \

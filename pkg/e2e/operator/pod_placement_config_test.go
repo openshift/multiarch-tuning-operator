@@ -12,7 +12,7 @@ import (
 	"github.com/openshift/multiarch-manager-operator/pkg/utils"
 )
 
-var _ = Describe("The Multiarch Manager Operator", func() {
+var _ = Describe("The Multiarch Tuning Operator", func() {
 	Context("When the operator is running and a pod placement config is created", func() {
 		It("should deploy the operands", func() {
 			err := client.Create(ctx, &v1alpha1.PodPlacementConfig{

@@ -9,11 +9,11 @@ metadata:
           "kind": "PodPlacementConfig",
           "metadata": {
             "labels": {
-              "app.kubernetes.io/created-by": "multiarch-manager-operator",
+              "app.kubernetes.io/created-by": "multiarch-tuning-operator",
               "app.kubernetes.io/instance": "podplacementconfig-sample",
               "app.kubernetes.io/managed-by": "kustomize",
               "app.kubernetes.io/name": "podplacementconfig",
-              "app.kubernetes.io/part-of": "multiarch-manager-operator"
+              "app.kubernetes.io/part-of": "multiarch-tuning-operator"
             },
             "name": "cluster"
           },
@@ -34,8 +34,8 @@ metadata:
     createdAt: "2024-02-15T17:56:12Z"
     operators.operatorframework.io/builder: operator-sdk-v1.33.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: multiarch-manager-operator.v0.0.1
-  namespace: openshift-multiarch-manager-operator
+  name: multiarch-tuning-operator.v0.0.1
+  namespace: openshift-multiarch-tuning-operator
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -45,13 +45,13 @@ spec:
       kind: PodPlacementConfig
       name: podplacementconfigs.multiarch.openshift.io
       version: v1alpha1
-  description: The Multiarch Manager Operator (MMO) enhances the user experience for
+  description: The Multiarch Tuning Operator (MTO) enhances the user experience for
     administrators of Openshift clusters  with multi-architecture compute nodes or
     Site Reliability Engineers willing to migrate from single-arch to multi-arch OpenShift.
     When diverse CPU architectures coexist within a cluster, the MMO operator stands
     out as a pivotal tool to enhance efficiency and streamline operations such as
     architecture-aware scheduling of workloads.
-  displayName: multiarch-manager-operator
+  displayName: multiarch-tuning-operator
   icon:
   - base64data: ""
     mediatype: ""
@@ -157,17 +157,17 @@ spec:
           - subjectaccessreviews
           verbs:
           - create
-        serviceAccountName: multiarch-manager-operator-controller-manager
+        serviceAccountName: multiarch-tuning-operator-controller-manager
       deployments:
       - label:
           app.kubernetes.io/component: manager
-          app.kubernetes.io/created-by: multiarch-manager-operator
+          app.kubernetes.io/created-by: multiarch-tuning-operator
           app.kubernetes.io/instance: controller-manager
           app.kubernetes.io/managed-by: kustomize
           app.kubernetes.io/name: deployment
-          app.kubernetes.io/part-of: multiarch-manager-operator
+          app.kubernetes.io/part-of: multiarch-tuning-operator
           control-plane: controller-manager
-        name: multiarch-manager-operator-controller-manager
+        name: multiarch-tuning-operator-controller-manager
         spec:
           replicas: 2
           selector:
@@ -178,7 +178,7 @@ spec:
             metadata:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
-                multiarch.openshift.io/image: registry.ci.openshift.org/origin/multiarch-manager-operator:main
+                multiarch.openshift.io/image: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
               labels:
                 control-plane: controller-manager
             spec:
@@ -216,7 +216,7 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.annotations['multiarch.openshift.io/image']
-                image: registry.ci.openshift.org/origin/multiarch-manager-operator:main
+                image: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -275,7 +275,7 @@ spec:
                     - ALL
               securityContext:
                 runAsNonRoot: true
-              serviceAccountName: multiarch-manager-operator-controller-manager
+              serviceAccountName: multiarch-tuning-operator-controller-manager
               terminationGracePeriodSeconds: 10
               volumes:
               - name: webhook-server-cert
@@ -329,7 +329,7 @@ spec:
           verbs:
           - create
           - patch
-        serviceAccountName: multiarch-manager-operator-controller-manager
+        serviceAccountName: multiarch-tuning-operator-controller-manager
     strategy: deployment
   installModes:
   - supported: false
@@ -341,11 +341,11 @@ spec:
   - supported: true
     type: AllNamespaces
   keywords:
-  - multiarch-manager-operator
-  - mmo
+  - multiarch-tuning-operator
+  - mto
   - pod-placement
   links:
-  - name: Multiarch Operator
+  - name: Multiarch Tuning Operator
     url: https://github.com/openshift/multiarch-manager-operator
   maturity: alpha
   minKubeVersion: 1.27.0

@@ -6,10 +6,10 @@ metadata:
   labels:
     control-plane: controller-manager
     app.kubernetes.io/name: servicemonitor
-    app.kubernetes.io/instance: controller-manager-metrics-monitor
+    app.kubernetes.io/instance: controller-tuning-metrics-monitor
     app.kubernetes.io/component: metrics
-    app.kubernetes.io/created-by: multiarch-manager-operator
-    app.kubernetes.io/part-of: multiarch-manager-operator
+    app.kubernetes.io/created-by: multiarch-tuning-operator
+    app.kubernetes.io/part-of: multiarch-tuning-operator
     app.kubernetes.io/managed-by: kustomize
   name: controller-manager-metrics-monitor
   namespace: system

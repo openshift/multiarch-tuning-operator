@@ -45,8 +45,8 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# my.domain/multiarch-manager-operator-bundle:$VERSION and my.domain/multiarch-manager-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= my.domain/multiarch-manager-operator
+# my.domain/multiarch-tuning-operator-bundle:$VERSION and my.domain/multiarch-tuning-operator-catalog:$VERSION.
+IMAGE_TAG_BASE ?= my.domain/multiarch-tuning-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -64,7 +64,7 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= registry.ci.openshift.org/origin/multiarch-manager-operator:main
+IMG ?= registry.ci.openshift.org/origin/multiarch-tuning-operator:main
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28.3
 

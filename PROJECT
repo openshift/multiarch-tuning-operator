@@ -9,7 +9,7 @@ multigroup: true
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
-projectName: multiarch-manager-operator
+projectName: multiarch-tuning-operator
 repo: multiarch-manager-operator
 resources:
 - controller: true

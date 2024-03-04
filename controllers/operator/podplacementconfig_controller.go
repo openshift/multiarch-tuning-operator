@@ -150,12 +150,12 @@ func (r *PodPlacementConfigReconciler) reconcile(ctx context.Context, podPlaceme
 	log := ctrllog.FromContext(ctx)
 	objects := []client.Object{
 		buildDeployment(podPlacementConfig, PodPlacementControllerName, 2,
-			"multiarch-manager-operator-podplacement-controller",
+			"multiarch-tuning-operator-podplacement-controller",
 			"--leader-elect",
 			"--enable-ppc-controllers",
 		),
 		buildDeployment(podPlacementConfig, PodPlacementWebhookName, 3,
-			"multiarch-manager-operator-podplacement-webhook",
+			"multiarch-tuning-operator-podplacement-webhook",
 			"--enable-ppc-webhook",
 		),
 		buildService(PodPlacementControllerName, PodPlacementControllerName,

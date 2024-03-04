@@ -33,7 +33,7 @@ func init() {
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "MMO Suite (PodPlacementOperand E2E)", Label("e2e", "pod-placement-operand"))
+	RunSpecs(t, "Multiarch Tuning Operator Suite (PodPlacementOperand E2E)", Label("e2e", "pod-placement-operand"))
 }
 
 var _ = BeforeSuite(func() {

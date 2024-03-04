@@ -1,8 +1,8 @@
 # Multiarch Tuning Operator
 
-The Multiarch Tuning Operator (MTO) enhances the user experience for administrators of Openshift clusters with
+The Multiarch Tuning Operator enhances the user experience for administrators of Openshift clusters with
 multi-architecture compute nodes or Site Reliability Engineers willing to migrate from single-arch to multi-arch
-OpenShift. When diverse CPU architectures coexist within a cluster, the MMO operator stands out as a pivotal tool to
+OpenShift. When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator operator stands out as a pivotal tool to
 enhance efficiency and streamline operations such as architecture-aware scheduling of workloads.
 
 The development work is still ongoing and there is no official, general available, release of it yet.

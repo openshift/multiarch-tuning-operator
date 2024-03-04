@@ -27,7 +27,7 @@ func init() {
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "MMO Suite (Operator E2E)", Label("e2e", "operator"))
+	RunSpecs(t, "Multiarch Tuning Operator Suite (Operator E2E)", Label("e2e", "operator"))
 }
 
 var _ = BeforeSuite(func() {

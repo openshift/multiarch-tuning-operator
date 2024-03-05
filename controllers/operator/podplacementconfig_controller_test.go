@@ -19,7 +19,7 @@ package operator
 import (
 	"fmt"
 
-	"github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -30,7 +30,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 func validateReconcile() {

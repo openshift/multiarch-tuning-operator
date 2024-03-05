@@ -29,7 +29,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
+	"github.com/openshift/multiarch-tuning-operator/pkg/systemconfig"
 )
 
 // ITMSs report the set of registry sources that the cluster needs to reach via mirrors.

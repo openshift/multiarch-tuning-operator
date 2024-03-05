@@ -10,10 +10,10 @@ import (
 
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/e2e"
-	. "github.com/openshift/multiarch-manager-operator/pkg/testing/builder"
-	"github.com/openshift/multiarch-manager-operator/pkg/testing/framework"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
+	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 const helloOpenshiftPublicMultiarchImage = "quay.io/openshifttest/hello-openshift:1.2.0"

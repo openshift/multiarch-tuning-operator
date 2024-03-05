@@ -16,7 +16,7 @@ import (
 	"github.com/go-logr/logr"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/testing/framework"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 )
 
 func CommonInit() {

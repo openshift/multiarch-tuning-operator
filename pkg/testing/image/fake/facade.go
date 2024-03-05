@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/image"
+	"github.com/openshift/multiarch-tuning-operator/pkg/image"
 )
 
 var (

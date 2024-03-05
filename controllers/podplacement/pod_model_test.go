@@ -10,11 +10,11 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	mmoimage "github.com/openshift/multiarch-manager-operator/pkg/image"
-	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	mmoimage "github.com/openshift/multiarch-tuning-operator/pkg/image"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 
-	. "github.com/openshift/multiarch-manager-operator/pkg/testing/builder"
+	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 )
 
 var ctx context.Context
@@ -74,17 +74,17 @@ func TestPod_HasSchedulingGate(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "pod with the multiarch-manager-operator scheduling gate",
+			name: "pod with the multiarch-tuning-operator scheduling gate",
 			pod:  NewPod().WithSchedulingGates(schedulingGateName).Build(),
 			want: true,
 		},
 		{
-			name: "pod with scheduling gates and NO multiarch-manager-operator scheduling gate",
+			name: "pod with scheduling gates and NO multiarch-tuning-operator scheduling gate",
 			pod:  NewPod().WithSchedulingGates("some-other-scheduling-gate").Build(),
 			want: false,
 		},
 		{
-			name: "pod with scheduling gates and the multiarch-manager-operator scheduling gate",
+			name: "pod with scheduling gates and the multiarch-tuning-operator scheduling gate",
 			pod: NewPod().WithSchedulingGates(
 				"some-other-scheduling-gate-bar", schedulingGateName, "some-other-scheduling-gate-foo").Build(),
 			want: true,
@@ -119,12 +119,12 @@ func TestPod_RemoveSchedulingGate(t *testing.T) {
 			want: []v1.PodSchedulingGate{},
 		},
 		{
-			name: "pod with the multiarch-manager-operator scheduling gate",
+			name: "pod with the multiarch-tuning-operator scheduling gate",
 			pod:  NewPod().WithSchedulingGates(schedulingGateName).Build(),
 			want: []v1.PodSchedulingGate{},
 		},
 		{
-			name: "pod with scheduling gates and NO multiarch-manager-operator scheduling gate",
+			name: "pod with scheduling gates and NO multiarch-tuning-operator scheduling gate",
 			pod:  NewPod().WithSchedulingGates("some-other-scheduling-gate").Build(),
 			want: []v1.PodSchedulingGate{
 				{
@@ -133,7 +133,7 @@ func TestPod_RemoveSchedulingGate(t *testing.T) {
 			},
 		},
 		{
-			name: "pod with scheduling gates and the multiarch-manager-operator scheduling gate",
+			name: "pod with scheduling gates and the multiarch-tuning-operator scheduling gate",
 			pod: NewPod().WithSchedulingGates(
 				"some-other-scheduling-gate-bar", schedulingGateName,
 				"some-other-scheduling-gate-foo").Build(),

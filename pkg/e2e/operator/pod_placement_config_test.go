@@ -7,12 +7,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/openshift/multiarch-manager-operator/apis/multiarch/v1alpha1"
-	"github.com/openshift/multiarch-manager-operator/controllers/operator"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-var _ = Describe("The Multiarch Manager Operator", func() {
+var _ = Describe("The Multiarch Tuning Operator", func() {
 	Context("When the operator is running and a pod placement config is created", func() {
 		It("should deploy the operands", func() {
 			err := client.Create(ctx, &v1alpha1.PodPlacementConfig{

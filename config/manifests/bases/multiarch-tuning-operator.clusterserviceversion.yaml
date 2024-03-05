@@ -4,8 +4,8 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-  name: multiarch-manager-operator.v0.0.1
-  namespace: openshift-multiarch-manager-operator
+  name: multiarch-tuning-operator.v0.0.1
+  namespace: openshift-multiarch-tuning-operator
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -15,13 +15,13 @@ spec:
       kind: PodPlacementConfig
       name: podplacementconfigs.multiarch.openshift.io
       version: v1alpha1
-  description: The Multiarch Manager Operator (MMO) enhances the user experience for
+  description: The Multiarch Tuning Operator enhances the user experience for
     administrators of Openshift clusters  with multi-architecture compute nodes or
     Site Reliability Engineers willing to migrate from single-arch to multi-arch OpenShift.
-    When diverse CPU architectures coexist within a cluster, the MMO operator stands
+    When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator operator stands
     out as a pivotal tool to enhance efficiency and streamline operations such as
     architecture-aware scheduling of workloads.
-  displayName: multiarch-manager-operator
+  displayName: multiarch-tuning-operator
   icon:
   - base64data: ""
     mediatype: ""
@@ -39,12 +39,11 @@ spec:
   - supported: true
     type: AllNamespaces
   keywords:
-  - multiarch-manager-operator
-  - mmo
+  - multiarch-tuning-operator
   - pod-placement
   links:
-  - name: Multiarch Operator
-    url: https://github.com/openshift/multiarch-manager-operator
+  - name: Multiarch Tuning Operator
+    url: https://github.com/openshift/multiarch-tuning-operator
   maturity: alpha
   minKubeVersion: 1.27.0
   provider:

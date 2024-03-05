@@ -7,8 +7,8 @@ metadata:
     app.kubernetes.io/name: role
     app.kubernetes.io/instance: read-configmaps-role
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: multiarch-manager-operator
-    app.kubernetes.io/part-of: multiarch-manager-operator
+    app.kubernetes.io/created-by: multiarch-tuning-operator
+    app.kubernetes.io/part-of: multiarch-tuning-operator
     app.kubernetes.io/managed-by: kustomize
 rules:
   - apiGroups:

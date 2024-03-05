@@ -28,7 +28,7 @@ import (
 
 	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
+	"github.com/openshift/multiarch-tuning-operator/pkg/systemconfig"
 )
 
 // ICSPs report the set of registry sources that the cluster needs to reach via mirrors.

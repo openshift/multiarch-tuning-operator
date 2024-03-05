@@ -1,8 +1,8 @@
-# Multiarch Manager Operator
+# Multiarch Tuning Operator
 
-The Multiarch Manager Operator (MMO) enhances the user experience for administrators of Openshift clusters with
+The Multiarch Tuning Operator enhances the user experience for administrators of Openshift clusters with
 multi-architecture compute nodes or Site Reliability Engineers willing to migrate from single-arch to multi-arch
-OpenShift. When diverse CPU architectures coexist within a cluster, the MMO operator stands out as a pivotal tool to
+OpenShift. When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator operator stands out as a pivotal tool to
 enhance efficiency and streamline operations such as architecture-aware scheduling of workloads.
 
 The development work is still ongoing and there is no official, general available, release of it yet.
@@ -31,10 +31,10 @@ will be carried out on Openshift clusters.
 
 ```shell
 # Multi-arch image build
-make docker-buildx IMG=<some-registry>/multiarch-manager-operator:tag
+make docker-buildx IMG=<some-registry>/multiarch-tuning-operator:tag
 
 # Single arch image build
-make docker-build IMG=<some-registry>/multiarch-manager-operator:tag
+make docker-build IMG=<some-registry>/multiarch-tuning-operator:tag
 
 # Local build
 make build
@@ -45,14 +45,14 @@ create an empty `.persistent-buildx` file in the root of the repository.
 
 ```shell
 touch .persistent-buildx
-make docker-buildx IMG=<some-registry>/multiarch-manager-operator:tag
+make docker-buildx IMG=<some-registry>/multiarch-tuning-operator:tag
 ```
 
 ### Deploy the operator
 
 ```shell
 # Deploy the operator on the cluster
-make deploy IMG=<some-registry>/multiarch-manager-operator:tag
+make deploy IMG=<some-registry>/multiarch-tuning-operator:tag
 ```
 
 ### Deploy the Pod Placement Operand
@@ -143,7 +143,7 @@ make fmt
 # Run unit tests
 make test
 # Run e2e tests (after the operator is deployed, e.g., via `make deploy`)
-KUBECONFIG=/path/to/cluster/kubeconfig NAMESPACE=openshift-multiarch-manager-operator make e2e 
+KUBECONFIG=/path/to/cluster/kubeconfig NAMESPACE=openshift-multiarch-tuning-operator make e2e 
 ```
 
 All the checks run on a containerized environment by default. 

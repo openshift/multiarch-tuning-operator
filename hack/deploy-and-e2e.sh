@@ -8,7 +8,7 @@ if ! which kubectl >/dev/null; then
 fi
 
 export NO_DOCKER=1
-NAMESPACE=openshift-multiarch-manager-operator
+export NAMESPACE=openshift-multiarch-tuning-operator
 oc create namespace ${NAMESPACE}
 oc annotate namespace ${NAMESPACE} \
   scheduler.alpha.kubernetes.io/node-selector="kubernetes.io/arch=amd64"
@@ -20,7 +20,9 @@ if [ "${USE_OLM:-}" == "true" ]; then
 
   mkdir -p $XDG_RUNTIME_DIR
   unset KUBECONFIG
-  oc registry login || sleepUntilUnlocked
+  # The following is required for prow, we allow failures as in general we don't expect
+  # this to be required in non-prow envs, for example dev environments.
+  oc registry login || echo "[WARN] Unable to login the registry, this could be expected in non-Prow envs"
 
   export KUBECONFIG="${OLD_KUBECONFIG}"
   operator-sdk run bundle "${OO_BUNDLE}" -n "${NAMESPACE}"
@@ -29,7 +31,7 @@ else
 fi
 
 oc wait deployments -n ${NAMESPACE} \
-  -l app.kubernetes.io/part-of=multiarch-manager-operator \
+  -l app.kubernetes.io/part-of=multiarch-tuning-operator \
   --for=condition=Available=True
 oc wait pods -n ${NAMESPACE} \
   -l control-plane=controller-manager \

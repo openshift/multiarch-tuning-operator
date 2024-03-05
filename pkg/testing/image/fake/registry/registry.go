@@ -21,7 +21,7 @@ import (
 
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/inmemory"
 
-	_ "github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake/registry/auth/htpasswd"
+	_ "github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake/registry/auth/htpasswd"
 )
 
 // Adapted from https://github.com/distribution/distribution/blob/main/registry/registry_test.go#L56

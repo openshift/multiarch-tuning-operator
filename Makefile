@@ -45,8 +45,8 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# my.domain/multiarch-manager-operator-bundle:$VERSION and my.domain/multiarch-manager-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= my.domain/multiarch-manager-operator
+# my.domain/multiarch-tuning-operator-bundle:$VERSION and my.domain/multiarch-tuning-operator-catalog:$VERSION.
+IMAGE_TAG_BASE ?= registry.ci.openshift.org/origin/multiarch-tuning-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -64,7 +64,7 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= registry.ci.openshift.org/origin/multiarch-manager-operator:main
+IMG ?= registry.ci.openshift.org/origin/multiarch-tuning-operator:main
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28.3
 
@@ -112,7 +112,7 @@ ifeq ($(NO_DOCKER), 1)
   DOCKER_CMD =
   IMAGE_BUILD_CMD = imagebuilder
 else
-  DOCKER_CMD := $(ENGINE) run --env GO111MODULE=$(GO111MODULE) --env GOFLAGS=$(GOFLAGS) --rm -v "$(PWD)":/go/src/github.com/openshift/multiarch-manager-operator:Z -w /go/src/github.com/openshift/multiarch-manager-operator $(BUILD_IMAGE)
+  DOCKER_CMD := $(ENGINE) run --env GO111MODULE=$(GO111MODULE) --env GOFLAGS=$(GOFLAGS) --rm -v "$(PWD)":/go/src/github.com/openshift/multiarch-tuning-operator:Z -w /go/src/github.com/openshift/multiarch-tuning-operator $(BUILD_IMAGE)
   IMAGE_BUILD_CMD = $(ENGINE) build
 endif
 

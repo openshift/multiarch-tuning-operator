@@ -29,8 +29,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/image"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/pkg/image"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 type GlobalPullSecretSyncer struct {

@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 const (

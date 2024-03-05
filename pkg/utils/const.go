@@ -3,7 +3,7 @@ package utils
 const (
 	ControllerNameKey = "controller"
 	OperandLabelKey   = "multiarch.openshift.io/operand"
-	OperatorName      = "multiarch-manager-operator"
+	OperatorName      = "multiarch-tuning-operator"
 )
 
 const (

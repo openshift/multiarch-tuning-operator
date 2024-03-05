@@ -37,7 +37,7 @@ if [ $HOME == "/" ]; then
 fi
 
 if [ "$OPENSHIFT_CI" == "true" ] && [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_DIR" ]; then # detect ci environment there
-  GINKGO_ARGS="${GINKGO_ARGS} --junit-report=junit_multiarch_manager_operator.xml --output-dir=${ARTIFACT_DIR}"
+  GINKGO_ARGS="${GINKGO_ARGS} --junit-report=junit_multiarch_tuning_operator.xml --output-dir=${ARTIFACT_DIR}"
 fi
 
 if [ "$SKIP_COVERAGE" != "true" ] && [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_DIR" ]; then
@@ -45,7 +45,7 @@ if [ "$SKIP_COVERAGE" != "true" ] && [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_D
 fi
 
 if [ "${TEST_LABEL}" == "e2e" ]; then
-  export NAMESPACE="openshift-multiarch-manager-operator"
+  export NAMESPACE="openshift-multiarch-tuning-operator"
 fi
 
 # Print the command we are going to run as Make would.

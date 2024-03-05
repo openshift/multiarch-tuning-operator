@@ -29,7 +29,7 @@ import (
 
 	ocpv1 "github.com/openshift/api/config/v1"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
+	"github.com/openshift/multiarch-tuning-operator/pkg/systemconfig"
 )
 
 // ImageRegistryConfigSyncer watches the image.config.openshift.io/cluster object and updates the registry configuration accordingly by using

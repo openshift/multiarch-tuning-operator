@@ -49,9 +49,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	testingutils "github.com/openshift/multiarch-manager-operator/pkg/testing/framework"
-	"github.com/openshift/multiarch-manager-operator/pkg/testing/image/fake/registry"
-	"github.com/openshift/multiarch-manager-operator/pkg/utils"
+	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake/registry"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
 

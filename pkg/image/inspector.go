@@ -33,7 +33,7 @@ import (
 	"github.com/go-logr/logr"
 	"golang.org/x/sys/unix"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/systemconfig"
+	"github.com/openshift/multiarch-tuning-operator/pkg/systemconfig"
 )
 
 type registryInspector struct {

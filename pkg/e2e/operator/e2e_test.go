@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openshift/multiarch-manager-operator/pkg/e2e"
+	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,7 +27,7 @@ func init() {
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "MMO Suite (Operator E2E)", Label("e2e", "operator"))
+	RunSpecs(t, "Multiarch Tuning Operator Suite (Operator E2E)", Label("e2e", "operator"))
 }
 
 var _ = BeforeSuite(func() {

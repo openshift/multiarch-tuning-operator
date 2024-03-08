@@ -1,6 +1,4 @@
-FROM registry.access.redhat.com/ubi9/ubi-micro:latest AS unused
-FROM scratch
-
+FROM gcr.io/distroless/base:latest
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
 LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/

@@ -236,8 +236,7 @@ func verifyPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue s
 		if len(nodeSelectorTerms) == 0 {
 			g.Expect(pods.Items).To(HaveEach(WithTransform(func(p corev1.Pod) *corev1.Affinity {
 				return p.Spec.Affinity
-			}, Equal(&corev1.Affinity{NodeAffinity: nil, PodAffinity: nil, PodAntiAffinity: nil}))))
-			// TODO: Change Equal(...) to BeNil() when MIXEDARCH-430 is done.
+			}, BeNil())))
 		} else {
 			g.Expect(pods.Items).To(HaveEach(framework.HaveEquivalentNodeAffinity(
 				&corev1.NodeAffinity{

@@ -542,7 +542,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 		},
 		{
 			name: "pod with no node affinity",
-			pod:  NewPod().WithContainersImages(fake.MultiArchImage).WithAffinity(nil).Build(),
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage).Build(),
 			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
 				[]v1.NodeSelectorRequirement{
 					{

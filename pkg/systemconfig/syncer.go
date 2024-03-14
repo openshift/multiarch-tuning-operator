@@ -56,22 +56,24 @@ func (s *SystemConfigSyncer) StoreImageRegistryConf(allowedRegistries []string, 
 	defer s.unlockAndSync()
 	// Ensure the previous state is reset
 	for _, rc := range s.registriesConfContent.Registries {
-		rc.Allowed = nil
 		rc.Blocked = nil
 		rc.Insecure = nil
 	}
-	s.policyConfContent.resetTransports()
+	s.policyConfContent.reset()
+	if len(allowedRegistries) > 0 {
+		// Set the default policy to reject
+		s.policyConfContent.Default = []policyEntry{rejectPolicyEntry()}
+	}
 	// At the time of writing, we don't see the need to generate multiple bool pointers. Keeping it the same, but at
 	// the registryConf level.
 	trueValue := true
 	for _, registry := range allowedRegistries {
 		rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
-		rc.Allowed = &trueValue
+		s.policyConfContent.setInsecureAcceptAnythingForRegistry(registry)
 		rc.Blocked = nil
 	}
 	for _, registry := range blockedRegistries {
 		rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
-		rc.Allowed = nil
 		rc.Blocked = &trueValue
 		s.policyConfContent.setRejectForRegistry(registry)
 	}

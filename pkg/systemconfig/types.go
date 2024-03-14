@@ -140,7 +140,7 @@ func (rsc *registriesConf) getRegistryConf(registry string) (*registryConf, bool
 
 func (rsc *registriesConf) cleanupRegistryConfIfEmpty(registry string) {
 	if rc, ok := rsc.getRegistryConf(registry); ok {
-		if rc.Insecure == nil && rc.Allowed == nil && rc.Blocked == nil && len(rc.Mirrors) == 0 {
+		if rc.Insecure == nil && rc.Blocked == nil && len(rc.Mirrors) == 0 {
 			delete(rsc.registriesMap, registry)
 			for i, r := range rsc.Registries {
 				if r == rc {
@@ -164,7 +164,6 @@ type registryConf struct {
 	Mirrors  []Mirror `toml:"mirror"`
 	// Setting the blocked, allowed and insecure fields to nil will cause them to be omitted from the output
 	Blocked  *bool `toml:"blocked"`
-	Allowed  *bool `toml:"allowed"`
 	Insecure *bool `toml:"insecure"`
 }
 
@@ -212,6 +211,11 @@ type policyConf struct {
 	Transports map[string]map[string][]policyEntry `json:"transports"`
 }
 
+func (pc *policyConf) reset() {
+	pc.Default = defaultPolicyConf().Default
+	pc.resetTransports()
+}
+
 func (pc *policyConf) resetTransports() {
 	pc.Transports = defaultTransports()
 }
@@ -221,9 +225,20 @@ func (pc *policyConf) setRejectForRegistry(registry string) {
 	pc.setRejectForRegistryOnTransport(registry, atomicTransport)
 }
 
+func (pc *policyConf) setInsecureAcceptAnythingForRegistry(registry string) {
+	pc.setInsecureAcceptAnythingForRegistryOnTransport(registry, dockerTransport)
+	pc.setInsecureAcceptAnythingForRegistryOnTransport(registry, atomicTransport)
+}
+
 func (pc *policyConf) setRejectForRegistryOnTransport(registry, transport string) {
 	pc.Transports[transport][registry] = []policyEntry{
 		rejectPolicyEntry(),
+	}
+}
+
+func (pc *policyConf) setInsecureAcceptAnythingForRegistryOnTransport(registry, transport string) {
+	pc.Transports[transport][registry] = []policyEntry{
+		insecureAcceptAnythingPolicyEntry(),
 	}
 }
 

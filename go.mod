@@ -1,12 +1,15 @@
 module github.com/openshift/multiarch-tuning-operator
 
-go 1.20
+go 1.21
+
+toolchain go1.21.6
 
 require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/containers/image/v5 v5.29.0
 	github.com/distribution/distribution/v3 v3.0.0-20231103163034-28c8bc6c0e4b
 	github.com/go-logr/logr v1.4.1
+	github.com/google/uuid v1.5.0
 	github.com/onsi/ginkgo/v2 v2.14.0
 	github.com/onsi/gomega v1.30.0
 	github.com/opencontainers/go-digest v1.0.0
@@ -61,7 +64,6 @@ require (
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20231101202521-4ca4178f5c7a // indirect
-	github.com/google/uuid v1.5.0 // indirect
 	github.com/gorilla/handlers v1.5.1 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

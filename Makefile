@@ -89,7 +89,8 @@ ifeq ($(DBG),1)
 GOGCFLAGS ?= -gcflags=all="-N -l"
 endif
 
-BUILD_IMAGE ?= registry.ci.openshift.org/openshift/release:golang-1.21
+# TODO: We'd need an upstream builder image that includes gpgme-devel (libgpgme-dev)
+BUILD_IMAGE ?= registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-builder-multi-openshift-4.16
 RUNTIME_IMAGE ?= quay.io/centos/centos:stream9-minimal
 
 NO_DOCKER ?= 0

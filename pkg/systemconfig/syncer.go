@@ -22,6 +22,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/containers/image/v5/signature"
+
 	"github.com/go-logr/logr"
 )
 
@@ -33,7 +35,7 @@ var (
 
 type SystemConfigSyncer struct {
 	registriesConfContent registriesConf
-	policyConfContent     policyConf
+	policyConfContent     signature.Policy
 	registryCertTuples    []registryCertTuple
 
 	ch chan bool
@@ -59,23 +61,37 @@ func (s *SystemConfigSyncer) StoreImageRegistryConf(allowedRegistries []string, 
 		rc.Blocked = nil
 		rc.Insecure = nil
 	}
-	s.policyConfContent.reset()
+	s.policyConfContent = signature.Policy{
+		Default: signature.PolicyRequirements{signature.NewPRInsecureAcceptAnything()},
+		Transports: map[string]signature.PolicyTransportScopes{
+			dockerTransport: {},
+			atomicTransport: {},
+			dockerDaemonTransport: {
+				"": {signature.NewPRInsecureAcceptAnything()},
+			},
+		},
+	}
 	if len(allowedRegistries) > 0 {
 		// Set the default policy to reject
-		s.policyConfContent.Default = []policyEntry{rejectPolicyEntry()}
+		s.policyConfContent.Default = signature.PolicyRequirements{signature.NewPRReject()}
 	}
+
 	// At the time of writing, we don't see the need to generate multiple bool pointers. Keeping it the same, but at
 	// the registryConf level.
 	trueValue := true
 	for _, registry := range allowedRegistries {
 		rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
-		s.policyConfContent.setInsecureAcceptAnythingForRegistry(registry)
+		s.policyConfContent.Transports[dockerTransport][registry] = signature.PolicyRequirements{
+			signature.NewPRInsecureAcceptAnything(),
+		}
 		rc.Blocked = nil
 	}
 	for _, registry := range blockedRegistries {
 		rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
 		rc.Blocked = &trueValue
-		s.policyConfContent.setRejectForRegistry(registry)
+		s.policyConfContent.Transports[dockerTransport][registry] = signature.PolicyRequirements{
+			signature.NewPRReject(),
+		}
 	}
 	for _, registry := range insecureRegistries {
 		rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
@@ -135,7 +151,7 @@ func (s *SystemConfigSyncer) sync() error {
 		return err
 	}
 	// marshall policy.json and write to file
-	if err := s.policyConfContent.writeToFile(); err != nil {
+	if err := writeJSONFile(PolicyConfPath(), s.policyConfContent); err != nil {
 		log.Error(err, "Error writing policy.json")
 		return err
 	}
@@ -187,7 +203,7 @@ func (s *SystemConfigSyncer) Run(ctx context.Context) error {
 func newSystemConfigSyncer() IConfigSyncer {
 	ic := &SystemConfigSyncer{
 		registriesConfContent: defaultRegistriesConf(),
-		policyConfContent:     defaultPolicyConf(),
+		policyConfContent:     signature.Policy{},
 		registryCertTuples:    []registryCertTuple{},
 		ch:                    make(chan bool),
 	}

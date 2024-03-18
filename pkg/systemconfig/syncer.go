@@ -61,16 +61,7 @@ func (s *SystemConfigSyncer) StoreImageRegistryConf(allowedRegistries []string, 
 		rc.Blocked = nil
 		rc.Insecure = nil
 	}
-	s.policyConfContent = signature.Policy{
-		Default: signature.PolicyRequirements{signature.NewPRInsecureAcceptAnything()},
-		Transports: map[string]signature.PolicyTransportScopes{
-			dockerTransport: {},
-			atomicTransport: {},
-			dockerDaemonTransport: {
-				"": {signature.NewPRInsecureAcceptAnything()},
-			},
-		},
-	}
+	s.policyConfContent = defaultPolicy()
 	if len(allowedRegistries) > 0 {
 		// Set the default policy to reject
 		s.policyConfContent.Default = signature.PolicyRequirements{signature.NewPRReject()}
@@ -203,7 +194,7 @@ func (s *SystemConfigSyncer) Run(ctx context.Context) error {
 func newSystemConfigSyncer() IConfigSyncer {
 	ic := &SystemConfigSyncer{
 		registriesConfContent: defaultRegistriesConf(),
-		policyConfContent:     signature.Policy{},
+		policyConfContent:     defaultPolicy(),
 		registryCertTuples:    []registryCertTuple{},
 		ch:                    make(chan bool),
 	}

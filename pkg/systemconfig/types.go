@@ -24,6 +24,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
+	"github.com/containers/image/v5/signature"
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
@@ -200,6 +201,19 @@ func defaultRegistriesConf() registriesConf {
 		ShortNameMode:               "",
 		Registries:                  []*registryConf{},
 		registriesMap:               map[string]*registryConf{},
+	}
+}
+
+func defaultPolicy() signature.Policy {
+	return signature.Policy{
+		Default: signature.PolicyRequirements{signature.NewPRInsecureAcceptAnything()},
+		Transports: map[string]signature.PolicyTransportScopes{
+			dockerTransport: {},
+			atomicTransport: {},
+			dockerDaemonTransport: {
+				"": {signature.NewPRInsecureAcceptAnything()},
+			},
+		},
 	}
 }
 

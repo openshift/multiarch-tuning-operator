@@ -166,6 +166,10 @@ func (s *SystemConfigSyncer) getch() chan bool {
 }
 
 func (s *SystemConfigSyncer) Run(ctx context.Context) error {
+	err := s.sync()
+	if err != nil {
+		log.Error(err, "Error when initializing the initial containers system context")
+	}
 	for {
 		select {
 		case <-s.getch():

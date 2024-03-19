@@ -94,6 +94,6 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	// an indication that the pod is waiting for processing and can support kubectl queries to find out which pods are
 	// waiting for processing, for example when the operator is being uninstalled.
 	pod.Labels[utils.SchedulingGateLabel] = utils.SchedulingGateLabelValueGated
-	pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueUnset
+	pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueNotSet
 	return a.patchedPodResponse(pod, req)
 }

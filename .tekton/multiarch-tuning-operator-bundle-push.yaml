@@ -18,7 +18,7 @@ metadata:
 spec:
   params:
     - name: dockerfile
-      value: bundle.Dockerfile
+      value: bundle.konflux.Dockerfile
     - name: git-url
       value: '{{source_url}}'
     - name: output-image

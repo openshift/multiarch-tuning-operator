@@ -15,12 +15,12 @@ spec:
       kind: PodPlacementConfig
       name: podplacementconfigs.multiarch.openshift.io
       version: v1alpha1
-  description: The Multiarch Tuning Operator enhances the user experience for
-    administrators of Openshift clusters  with multi-architecture compute nodes or
-    Site Reliability Engineers willing to migrate from single-arch to multi-arch OpenShift.
-    When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator operator stands
-    out as a pivotal tool to enhance efficiency and streamline operations such as
-    architecture-aware scheduling of workloads.
+  description: The Multiarch Tuning Operator enhances the user experience for administrators
+    of Openshift clusters  with multi-architecture compute nodes or Site Reliability
+    Engineers willing to migrate from single-arch to multi-arch OpenShift. When diverse
+    CPU architectures coexist within a cluster, the Multiarch Tuning Operator operator
+    stands out as a pivotal tool to enhance efficiency and streamline operations such
+    as architecture-aware scheduling of workloads.
   displayName: multiarch-tuning-operator
   icon:
   - base64data: ""

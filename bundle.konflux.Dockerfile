@@ -8,7 +8,8 @@ COPY --from=osdk /usr/local/bin/operator-sdk /usr/local/bin/
 RUN chmod -R g+rwX /code
 WORKDIR /code
 
-RUN test -n "${IMG}" && make bundle IMG="${IMG}"
+# VERSION is set in the base image to the golang version. However, we want to default to the one set in the Makefile.
+RUN unset VERSION; test -n "${IMG}" && make bundle IMG="${IMG}"
 
 FROM gcr.io/distroless/base:latest
 # Core bundle labels.

@@ -89,7 +89,8 @@ ifeq ($(DBG),1)
 GOGCFLAGS ?= -gcflags=all="-N -l"
 endif
 
-BUILD_IMAGE ?= registry.ci.openshift.org/openshift/release:golang-1.21
+# TODO: We'd need an upstream builder image that includes gpgme-devel (libgpgme-dev)
+BUILD_IMAGE ?= registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-builder-multi-openshift-4.16
 RUNTIME_IMAGE ?= quay.io/centos/centos:stream9-minimal
 
 NO_DOCKER ?= 0
@@ -210,13 +211,14 @@ PLATFORMS ?= linux/arm64,linux/amd64
 .PHONY: docker-buildx
 docker-buildx: manifests generate ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
+	# sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
+	# Disabled because we need CGO_ENABLED=1
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross \
+	- docker buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile \
  		--build-arg BUILD_IMAGE=$(BUILD_IMAGE) --build-arg RUNTIME_IMAGE=$(RUNTIME_IMAGE) .
 	- [ -f .persistent-buildx ] || docker buildx rm project-v3-builder
-	rm Dockerfile.cross
+	# rm Dockerfile.cross
 
 ##@ Deployment
 

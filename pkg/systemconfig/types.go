@@ -24,6 +24,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/containers/image/v5/pkg/sysregistriesv2"
+	"github.com/containers/image/v5/signature"
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
@@ -32,6 +33,10 @@ type PullType string
 const (
 	PullTypeDigestOnly PullType = sysregistriesv2.MirrorByDigestOnly
 	PullTypeTagOnly    PullType = sysregistriesv2.MirrorByTagOnly
+
+	dockerDaemonTransport = "docker-daemon"
+	dockerTransport       = "docker"
+	atomicTransport       = "atomic"
 )
 
 type registryCertTuple struct {
@@ -140,7 +145,7 @@ func (rsc *registriesConf) getRegistryConf(registry string) (*registryConf, bool
 
 func (rsc *registriesConf) cleanupRegistryConfIfEmpty(registry string) {
 	if rc, ok := rsc.getRegistryConf(registry); ok {
-		if rc.Insecure == nil && rc.Allowed == nil && rc.Blocked == nil && len(rc.Mirrors) == 0 {
+		if rc.Insecure == nil && rc.Blocked == nil && len(rc.Mirrors) == 0 {
 			delete(rsc.registriesMap, registry)
 			for i, r := range rsc.Registries {
 				if r == rc {
@@ -164,7 +169,6 @@ type registryConf struct {
 	Mirrors  []Mirror `toml:"mirror"`
 	// Setting the blocked, allowed and insecure fields to nil will cause them to be omitted from the output
 	Blocked  *bool `toml:"blocked"`
-	Allowed  *bool `toml:"allowed"`
 	Insecure *bool `toml:"insecure"`
 }
 
@@ -200,73 +204,17 @@ func defaultRegistriesConf() registriesConf {
 	}
 }
 
-const (
-	dockerDaemonTransport = "docker-daemon"
-	dockerTransport       = "docker"
-	atomicTransport       = "atomic"
-)
-
-// {"default":[{"type":"insecureAcceptAnything"}],"transports":{"atomic":{"docker.io":[{"type":"reject"}]},"docker":{"docker.io":[{"type":"reject"}]},"docker-daemon":{"":[{"type":"insecureAcceptAnything"}]}}}
-type policyConf struct {
-	Default    []policyEntry                       `json:"default"`
-	Transports map[string]map[string][]policyEntry `json:"transports"`
-}
-
-func (pc *policyConf) resetTransports() {
-	pc.Transports = defaultTransports()
-}
-
-func (pc *policyConf) setRejectForRegistry(registry string) {
-	pc.setRejectForRegistryOnTransport(registry, dockerTransport)
-	pc.setRejectForRegistryOnTransport(registry, atomicTransport)
-}
-
-func (pc *policyConf) setRejectForRegistryOnTransport(registry, transport string) {
-	pc.Transports[transport][registry] = []policyEntry{
-		rejectPolicyEntry(),
-	}
-}
-
-func (pc *policyConf) writeToFile() error {
-	return writeJSONFile(PolicyConfPath(), pc)
-}
-
-// defaultPolicyConf returns a default policyConf object
-func defaultPolicyConf() policyConf {
-	return policyConf{
-		Default: []policyEntry{
-			insecureAcceptAnythingPolicyEntry(),
-		},
-		Transports: defaultTransports(),
-	}
-}
-
-func defaultTransports() map[string]map[string][]policyEntry {
-	return map[string]map[string][]policyEntry{
-		dockerDaemonTransport: {
-			"": []policyEntry{
-				insecureAcceptAnythingPolicyEntry(),
+func defaultPolicy() signature.Policy {
+	return signature.Policy{
+		Default: signature.PolicyRequirements{signature.NewPRInsecureAcceptAnything()},
+		Transports: map[string]signature.PolicyTransportScopes{
+			dockerTransport: {},
+			atomicTransport: {},
+			dockerDaemonTransport: {
+				"": {signature.NewPRInsecureAcceptAnything()},
 			},
 		},
-		atomicTransport: {},
-		dockerTransport: {},
 	}
-}
-
-func insecureAcceptAnythingPolicyEntry() policyEntry {
-	return policyEntry{
-		Type: "insecureAcceptAnything",
-	}
-}
-
-func rejectPolicyEntry() policyEntry {
-	return policyEntry{
-		Type: "reject",
-	}
-}
-
-type policyEntry struct {
-	Type string `json:"type"`
 }
 
 func writeTomlFile(path string, data interface{}) error {

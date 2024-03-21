@@ -18,6 +18,7 @@ package image
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -28,6 +29,7 @@ import (
 	"github.com/containers/image/v5/docker"
 	"github.com/containers/image/v5/image"
 	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
 
 	"github.com/go-logr/logr"
@@ -88,6 +90,31 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 		log.Error(err, "Error getting the image manifest: %v")
 		return nil, err
 	}
+	policy, err := signature.DefaultPolicy(sys)
+	if err != nil {
+		log.Error(err, "Error loading the systemContext's policy")
+		return nil, err
+	}
+	policyCtx, err := signature.NewPolicyContext(policy)
+	if err != nil {
+		log.Error(err, "Error creating the PolicyContext")
+		return nil, err
+	}
+	if allowed, err := policyCtx.IsRunningImageAllowed(ctx, image.UnparsedInstance(src, nil)); !allowed {
+		// IsRunningImageAllowed returns true iff the policy allows running the image.
+		// If it returns false, err must be non-nil, and should be an PolicyRequirementError if evaluation
+		// succeeded but the result was rejection.
+		var e *signature.PolicyRequirementError
+		if errors.As(err, &e) {
+			// false and valid error
+			log.V(5).Info("The signature policy JSON file configuration does not allow inspecting this image",
+				"validationError", e)
+			return nil, e
+		}
+		log.Error(err, "Unable to perform the signature validation")
+		return nil, err
+	}
+
 	if manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest)) {
 		supportedArchitectures = sets.New[string]()
 		log.V(5).Info("Image is a manifest list... getting the list of supported architectures")

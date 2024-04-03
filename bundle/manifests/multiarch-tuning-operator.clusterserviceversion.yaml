@@ -31,7 +31,11 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2024-02-15T17:56:12Z"
+    console.openshift.io/disable-operand-delete: "true"
+    createdAt: "2024-03-19T21:51:59Z"
+    operator.openshift.io/uninstall-message: This action won't automatically delete
+      managed resources (operands). To prevent data loss or disruption, you'll need
+      to manually delete them.
     operators.operatorframework.io/builder: operator-sdk-v1.33.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: multiarch-tuning-operator.v0.0.1

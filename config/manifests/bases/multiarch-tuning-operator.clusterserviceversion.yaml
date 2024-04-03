@@ -4,6 +4,10 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
+    console.openshift.io/disable-operand-delete: "true"
+    operator.openshift.io/uninstall-message: This action won't automatically delete
+      managed resources (operands). To prevent data loss or disruption, you'll need
+      to manually delete them.
   name: multiarch-tuning-operator.v0.0.1
   namespace: openshift-multiarch-tuning-operator
 spec:

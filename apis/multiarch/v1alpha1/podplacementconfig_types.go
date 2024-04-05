@@ -22,56 +22,35 @@ import (
 
 // PodPlacementConfigSpec defines the desired state of PodPlacementConfig
 type PodPlacementConfigSpec struct {
-	// LogVerbosity is the log level for the pod placement controller
+	// LogVerbosity is the log level for the pod placement controller.
 	// Valid values are: "Normal", "Debug", "Trace", "TraceAll".
 	// Defaults to "Normal".
 	// +optional
 	// +kubebuilder:default=Normal
 	LogVerbosity LogVerbosityLevel `json:"logVerbosity,omitempty"`
 
-	// NamespaceSelector decides whether to run the admission control policy on an object based
-	// on whether the namespace for that object matches the selector. If the
-	// object itself is a namespace, the matching is performed on
-	// object.metadata.labels. If the object is another cluster scoped resource,
-	// it never skips the policy.
+	// NamespaceSelector filters the namespaces that the architecture aware pod placement can operate.
 	//
-	// For example, to run the webhook on any objects whose namespace is not
-	// associated with "runlevel" of "0" or "1";  you will set the selector as
-	// follows:
-	// "namespaceSelector": {
-	//   "matchExpressions": [
-	//     {
-	//       "key": "runlevel",
-	//       "operator": "NotIn",
-	//       "values": [
-	//         "0",
-	//         "1"
-	//       ]
-	//     }
-	//   ]
-	// }
+	// For example, users can configure an opt-out filter to disallow the operand from operating on namespaces with a given
+	// label:
 	//
-	// If instead you want to only run the policy on any objects whose
-	// namespace is associated with the "environment" of "prod" or "staging";
-	// you will set the selector as follows:
-	// "namespaceSelector": {
-	//   "matchExpressions": [
-	//     {
-	//       "key": "environment",
-	//       "operator": "In",
-	//       "values": [
-	//         "prod",
-	//         "staging"
-	//       ]
-	//     }
-	//   ]
-	// }
+	// {"namespaceSelector":{"matchExpressions":[{"key":"multiarch.openshift.io/exclude-pod-placement","operator":"DoesNotExist"}]}}
+	//
+	// The operand will set the node affinity requirement in all the pods created in namespaces that do not have
+	// the `multiarch.openshift.io/exclude-pod-placement` label.
+	//
+	// Alternatively, users can configure an opt-in filter to operate only on namespaces with specific labels:
+	//
+	// {"namespaceSelector":{"matchExpressions":[{"key":"multiarch.openshift.io/include-pod-placement","operator":"Exists"}]}}
+	//
+	// The operand will set the node affinity requirement in all the pods created in namespace labeled with the key
+	// `multiarch.ioenshift.io/include-pod-placement`.
 	//
 	// See
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 	// for more examples of label selectors.
 	//
-	// Default to the empty LabelSelector, which matches everything.
+	// Default to the empty LabelSelector, which matches everything. Selectors are ANDed.
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
 }
@@ -82,10 +61,12 @@ type PodPlacementConfigStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
+// PodPlacementConfig defines the configuration for the PodPlacement operand.
+// It is a singleton resource that can consist of an object named cluster.
+// Creating this object will trigger the deployment of the architecture aware pod placement operand.
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=podplacementconfigs,scope=Cluster
-// PodPlacementConfig is the Schema for the podplacementconfigs API
 type PodPlacementConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

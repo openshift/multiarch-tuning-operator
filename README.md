@@ -2,22 +2,27 @@
 
 The Multiarch Tuning Operator enhances the user experience for administrators of Openshift clusters with
 multi-architecture compute nodes or Site Reliability Engineers willing to migrate from single-arch to multi-arch
-OpenShift. When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator operator stands out as a pivotal tool to
+OpenShift. When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator stands out as a pivotal tool to
 enhance efficiency and streamline operations such as architecture-aware scheduling of workloads.
 
 The development work is still ongoing and there is no official, general available, release of it yet.
 
-## Description
+## Operands
 
-- **Architecture aware Pod Placement**: The pod placement operand aims to automate the 
-  inspection of the container images, derive a set of architectures supported by a pod and use it to
-  automatically define strong predicates based on the `kubernetes.io/arch` label in the pod's nodeAffinity. 
+- **Architecture aware Pod Placement**: The pod placement operand consists of
+  the `PodPlacementController` and the `PodPlacementWebhook` and is managed through
+  a singleton custom resource - `podplacementconfigs.multiarch.openshift.io`.
+  Its aim is to automate the set up of strong predicates based on the
+  `kubernetes.io/arch` label in the pod's _nodeAffinity_ by inspecting the container
+  images in each pod and deriving a set of architectures supported by
+  the pod. When a pod is created, the `PodPlacementWebhook` will add the
+  `multiarch.openshift.io/scheduling-gate` scheduling gate.
+  It will prevent the pod from being scheduled until the `PodPlacementController`
+  computes a predicate for the `kubernetes.io/arch` label, adds it as a node affinity
+  requirement to the pod spec, and removes the scheduling gate.
   This operand is based on the [KEP-3521](https://github.com/kubernetes/enhancements/blob/afad6f270c7ac2ae853f4d1b72c379a6c3c7c042/keps/sig-scheduling/3521-pod-scheduling-readiness/README.md) and
   [KEP-3838](https://github.com/kubernetes/enhancements/blob/afad6f270c7ac2ae853f4d1b72c379a6c3c7c042/keps/sig-scheduling/3838-pod-mutable-scheduling-directives/README.md), as
   described in the [Openshift EP](https://github.com/openshift/enhancements/blob/6cebc13f0672c601ebfae669ea4fc8ca632721b5/enhancements/multi-arch/multiarch-manager-operator.md) introducing it.
-  When a pod is created, the mutating webhook will add the `multiarch.openshift.io/scheduling-gate` scheduling gate, that will
-  prevent the pod from being scheduled until the controller computes a predicate for the `kubernetes.io/arch` label,
-  adds it as node affinity requirement to the pod spec and removes the scheduling gate.
 
 ## Getting Started
 
@@ -26,6 +31,17 @@ will be carried out on Openshift clusters.
 
 
 ### Development
+
+### Prerequisites
+
+The development tooling of this repository depends on the following tools/technologies:
+
+- Golang
+- Docker (Community Edition)
+- Development headers and libraries for gpgme (`gpgme-devel` in Fedora/CS9/RHEL, `libgpgme-dev` in Debian)
+- `operator-sdk`
+- `make`
+- `qemu-user-static` (to support building multi-arch container images via `docker buildx`)
 
 ### Build the operator
 

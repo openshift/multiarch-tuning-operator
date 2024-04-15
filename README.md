@@ -1,0 +1,1 @@
+This folder is meant to be used for the internal Red Hat builds of a file-based catalog.

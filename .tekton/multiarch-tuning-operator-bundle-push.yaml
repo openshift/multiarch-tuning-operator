@@ -23,8 +23,6 @@ spec:
       value: '{{source_url}}'
     - name: output-image
       value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/multiarch-tuning-operator/multiarch-tuning-operator-bundle:{{revision}}
-    - name: operator-image
-      value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/multiarch-tuning-operator/multiarch-tuning-operator:{{revision}}
     - name: path-context
       value: .
     - name: revision
@@ -133,74 +131,6 @@ spec:
         name: JAVA_COMMUNITY_DEPENDENCIES
         value: $(tasks.build-container-amd64.results.JAVA_COMMUNITY_DEPENDENCIES)
     tasks:
-      - name: replace-img-arg
-        runAfter:
-          - clone-repository
-        taskSpec:
-          workspaces:
-            - name: workspace
-          steps:
-            - image: quay.io/centos/centos:stream9-minimal
-              command:
-                - /bin/sed
-              args:
-                - -i
-                - s|^ARG IMG=''|ARG IMG='$(params.operator-image)'|
-                - $(workspaces.workspace.path)/source/bundle.konflux.Dockerfile
-        workspaces:
-          - name: workspace
-            workspace: workspace
-      - name: replace-img-arg-arm64
-        runAfter:
-          - clone-repository-arm64
-        taskSpec:
-          workspaces:
-            - name: workspace
-          steps:
-            - image: quay.io/centos/centos:stream9-minimal
-              command:
-                - /bin/sed
-              args:
-                - -i
-                - s|^ARG IMG=''|ARG IMG='$(params.operator-image)'|
-                - $(workspaces.workspace.path)/source/bundle.konflux.Dockerfile
-        workspaces:
-          - name: workspace
-            workspace: workspace-arm64
-      - name: replace-img-arg-ppc64le
-        runAfter:
-          - clone-repository-ppc64le
-        taskSpec:
-          workspaces:
-            - name: workspace
-          steps:
-            - image: quay.io/centos/centos:stream9-minimal
-              command:
-                - /bin/sed
-              args:
-                - -i
-                - s|^ARG IMG=''|ARG IMG='$(params.operator-image)'|
-                - $(workspaces.workspace.path)/source/bundle.konflux.Dockerfile
-        workspaces:
-          - name: workspace
-            workspace: workspace-ppc64le
-      - name: replace-img-arg-s390x
-        runAfter:
-          - clone-repository-s390x
-        taskSpec:
-          workspaces:
-            - name: workspace
-          steps:
-            - image: quay.io/centos/centos:stream9-minimal
-              command:
-                - /bin/sed
-              args:
-                - -i
-                - s|^ARG IMG=''|ARG IMG='$(params.operator-image)'|
-                - $(workspaces.workspace.path)/source/bundle.konflux.Dockerfile
-        workspaces:
-          - name: workspace
-            workspace: workspace-s390x
       - name: init
         params:
           - name: image-url
@@ -370,7 +300,6 @@ spec:
             value: $(tasks.clone-repository.results.commit)
         runAfter:
           - prefetch-dependencies
-          - replace-image-arg
         taskRef:
           params:
             - name: name
@@ -407,7 +336,7 @@ spec:
           - name: PLATFORM
             value: linux/arm64
         runAfter:
-          - replace-img-arg-arm64
+          - clone-repository-arm64
         taskRef:
           params:
             - name: name
@@ -444,7 +373,7 @@ spec:
           - name: PLATFORM
             value: linux/s390x
         runAfter:
-          - replace-image-arg-s390x
+          - clone-repository-s390x
         taskRef:
           params:
             - name: name
@@ -482,7 +411,7 @@ spec:
           - name: PLATFORM
             value: linux/ppc64le
         runAfter:
-          - replace-image-arg-ppc64le
+          - clone-repository-ppc64le
         taskRef:
           params:
             - name: name

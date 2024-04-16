@@ -179,19 +179,7 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 			It("should refuse to create a ClusterPodPlacementConfig with an invalid name", func() {
 				ppc := newClusterPodPlacementConfig().WithName("invalid-name").Build()
 				err := k8sClient.Create(ctx, ppc)
-				Expect(err).NotTo(HaveOccurred(), "failed to create ClusterPodPlacementConfig", err)
-				Eventually(func(g Gomega) {
-					ppc := &v1alpha1.ClusterPodPlacementConfig{}
-					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.ClusterPodPlacementConfig{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "invalid-name",
-							Namespace: utils.Namespace(),
-						},
-					}), ppc)
-					g.Expect(err).To(HaveOccurred(), "An error should have been detected")
-					g.Expect(crclient.IgnoreNotFound(err)).NotTo(HaveOccurred(),
-						"The error should not be different than a NotFound error")
-				}).Should(Succeed())
+				Expect(err).To(HaveOccurred(), "The creation of the ClusterPodPlacementConfig with a wrong name did not fail", err)
 			})
 			It("should reconcile the deployment pod-placement-controller", func() {
 				// get the deployment

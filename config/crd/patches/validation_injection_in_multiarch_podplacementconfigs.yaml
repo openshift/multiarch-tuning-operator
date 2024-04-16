@@ -1,0 +1,10 @@
+- op: add
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/metadata
+  value:
+    type: object
+    properties:
+      name:
+        type: string
+        # Force "cluster" as CR name.
+        enum:
+          - cluster

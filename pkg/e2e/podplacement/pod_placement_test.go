@@ -16,9 +16,15 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-const helloOpenshiftPublicMultiarchImage = "quay.io/openshifttest/hello-openshift:1.2.0"
+const (
+	helloOpenshiftPublicMultiarchImage = "quay.io/openshifttest/hello-openshift:1.2.0"
+	helloOpenshiftPublicArmImage       = "quay.io/openshifttest/hello-openshift:arm-1.2.0"
+	helloOpenshiftPublicArmAmdImage    = "quay.io/openshifttest/hello-openshift:arm-amd-1.2.0"
+	helloOpenshiftPublicArmPpcImage    = "quay.io/openshifttest/hello-openshift:arm-ppc64le-1.2.0"
+)
 
 var _ = Describe("The Pod Placement Operand", func() {
+	var podLabel = map[string]string{"app": "test"}
 	Context("When a deployment is deployed with a single container and a public image", func() {
 		It("should set the node affinity", func() {
 			var err error
@@ -31,7 +37,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				Build()
 			d := NewDeployment().
-				WithSelectorAndPodLabels("app", "test").
+				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(ps).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -89,7 +95,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithVolumes(v).
 				Build()
 			d := NewDeployment().
-				WithSelectorAndPodLabels("app", "test").
+				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(ps).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -122,7 +128,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithNodeSelectorTerms(hostnameLabelNSTs).
 				Build()
 			d := NewDeployment().
-				WithSelectorAndPodLabels("app", "test").
+				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(ps).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -152,7 +158,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				WithNodeSelectorTerms(archLabelNSTs).Build()
 			d := NewDeployment().
-				WithSelectorAndPodLabels("app", "test").
+				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(ps).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -181,7 +187,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				WithNodeSelectorTerms(archLabelNSTs, hostnameLabelNSTs).Build()
 			d := NewDeployment().
-				WithSelectorAndPodLabels("app", "test").
+				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(ps).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -196,8 +202,9 @@ var _ = Describe("The Pod Placement Operand", func() {
 			expectedHostnameNST := NewNodeSelectorTerm().WithMatchExpressions(&hostnameLabelNSR, &expectedArchLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedHostnameNST, archLabelNSTs)
 		})
-		It("should set the node affinity when nodeSelector exist", func() {
+		It("should not set the node affinity when nodeSelector exist", func() {
 			var err error
+			var nodeSelectors = map[string]string{utils.ArchLabel: utils.ArchitectureAmd64}
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
@@ -205,10 +212,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 			defer client.Delete(ctx, ns)
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
-				WithNodeSelectors(utils.ArchLabel, utils.ArchitectureAmd64).
+				WithNodeSelectors(nodeSelectors).
 				Build()
 			d := NewDeployment().
-				WithSelectorAndPodLabels("app", "test").
+				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(ps).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -217,6 +224,234 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, &d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test")
+		})
+	})
+	Context("When a statefulset is deployed with single vs multi container images", func() {
+		It("should set the node affinity when with a single container and a singlearch image", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicArmImage).
+				Build()
+			s := NewStatefulSet().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-statefulset").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &s)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+		It("should set the node affinity when with a single container and a multiarch image", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				Build()
+			s := NewStatefulSet().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-statefulset").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &s)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+		It("should set the node affinity when with more containers some with singlearch image some with multiarch image", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage, helloOpenshiftPublicArmImage).
+				Build()
+			s := NewStatefulSet().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-statefulset").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &s)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+		It("should not set the node affinity when with more containers all with multiarch image but users node affinity conflicts", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
+				Build()
+			archLabelNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage, helloOpenshiftPublicArmPpcImage).
+				WithNodeSelectorTerms(archLabelNSTs).Build()
+			s := NewStatefulSet().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-statefulset").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &s)
+			Expect(err).NotTo(HaveOccurred())
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+		It("should set the node affinity when with more containers all with multiarch image", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage, helloOpenshiftPublicArmAmdImage, helloOpenshiftPublicArmPpcImage).
+				Build()
+			s := NewStatefulSet().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-statefulset").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &s)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+	})
+	Context("PodPlacementOperand works with several high-level resources owning pods", func() {
+		It("should set the node affinity on DaemonSet owning pod", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				Build()
+			d := NewDaemonSet().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithName("test-daemonset").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			verifyDaemonSetPodNodeAffinity(ns, "app", "test", archLabelNSR)
+		})
+		It("should set the node affinity on Job owning pod", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				WithRestartPolicy("OnFailure").
+				Build()
+			j := NewJob().
+				WithPodSpec(ps).
+				WithPodLabels(podLabel).
+				WithName("test-job").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &j)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+		It("should set the node affinity on Build owning pod", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			b := NewBuild().
+				WithDockerImage(helloOpenshiftPublicMultiarchImage).
+				WithName("test-build").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &b)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "openshift.io/build.name", "test-build", expectedNSTs)
+		})
+		It("should set the node affinity on DeploymentConfig owning pod", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				Build()
+			d := NewDeploymentConfig().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(int32(1)).
+				WithName("test-deploymentconfig").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 	})
 })
@@ -242,6 +477,35 @@ func verifyPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue s
 				&corev1.NodeAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 						NodeSelectorTerms: nodeSelectorTerms,
+					},
+				})))
+		}
+	}, e2e.WaitShort).Should(Succeed())
+}
+
+func verifyDaemonSetPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue string, nodeSelectorRequirement corev1.NodeSelectorRequirement) {
+	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
+	labelSelector := labels.NewSelector().Add(*r)
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(func(g Gomega) {
+		pods := &corev1.PodList{}
+		err := client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		for i := 0; i < len(pods.Items); i++ {
+			pod := pods.Items[i]
+			nodename := pod.Spec.NodeName
+			nodenameNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues("metadata.name", corev1.NodeSelectorOpIn, nodename).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&nodeSelectorRequirement).WithMatchFields(&nodenameNSR).Build()
+			g.Expect([]corev1.Pod{pod}).To(HaveEach(framework.HaveEquivalentNodeAffinity(
+				&corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{expectedNSTs},
 					},
 				})))
 		}

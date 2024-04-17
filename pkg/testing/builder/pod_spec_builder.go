@@ -44,6 +44,11 @@ func (ps *PodSpecBuilder) WithContainers(containers ...v1.Container) *PodSpecBui
 	return ps
 }
 
+func (ps *PodSpecBuilder) WithRestartPolicy(restartPolicy v1.RestartPolicy) *PodSpecBuilder {
+	ps.podspec.RestartPolicy = restartPolicy
+	return ps
+}
+
 func (ps *PodSpecBuilder) WithContainersImages(images ...string) *PodSpecBuilder {
 	ps.podspec.Containers = make([]v1.Container, len(images))
 
@@ -114,15 +119,12 @@ func (ps *PodSpecBuilder) WithNodeSelectorTerms(nodeSelectorTerms ...v1.NodeSele
 	return ps
 }
 
-func (ps *PodSpecBuilder) WithNodeSelectors(kv ...string) *PodSpecBuilder {
-	if ps.podspec.NodeSelector == nil {
-		ps.podspec.NodeSelector = make(map[string]string)
+func (ps *PodSpecBuilder) WithNodeSelectors(entries map[string]string) *PodSpecBuilder {
+	if ps.podspec.NodeSelector == nil && len(entries) > 0 {
+		ps.podspec.NodeSelector = make(map[string]string, len(entries))
 	}
-	if len(kv)%2 != 0 {
-		panic("the number of arguments must be even")
-	}
-	for i := 0; i < len(kv); i += 2 {
-		ps.podspec.NodeSelector[kv[i]] = kv[i+1]
+	for k, v := range entries {
+		ps.podspec.NodeSelector[k] = v
 	}
 	return ps
 }

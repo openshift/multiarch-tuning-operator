@@ -11,6 +11,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	ocpappsv1 "github.com/openshift/api/apps/v1"
+	ocpbuildv1 "github.com/openshift/api/build/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -38,7 +41,13 @@ func TestE2E(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	client, clientset, ctx, suiteLog = e2e.CommonBeforeSuite()
-	err := client.Create(ctx, &v1alpha1.PodPlacementConfig{
+	err := ocpappsv1.Install(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = ocpbuildv1.Install(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = client.Create(ctx, &v1alpha1.PodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},

@@ -1,12 +1,6 @@
 apiVersion: multiarch.openshift.io/v1alpha1
 kind: PodPlacementConfig
 metadata:
-  labels:
-    app.kubernetes.io/name: podplacementconfig
-    app.kubernetes.io/instance: podplacementconfig-sample
-    app.kubernetes.io/part-of: multiarch-tuning-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: multiarch-tuning-operator
   name: cluster
 spec:
   logVerbosity: Normal

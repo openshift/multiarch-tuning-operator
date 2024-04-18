@@ -28,22 +28,19 @@ func (d *DeploymentBuilder) WithReplicas(num *int32) *DeploymentBuilder {
 	return d
 }
 
-func (d *DeploymentBuilder) WithSelectorAndPodLabels(kv ...string) *DeploymentBuilder {
-	if d.deployment.Spec.Template.Labels == nil {
-		d.deployment.Spec.Template.Labels = make(map[string]string)
+func (d *DeploymentBuilder) WithSelectorAndPodLabels(entries map[string]string) *DeploymentBuilder {
+	if d.deployment.Spec.Template.Labels == nil && len(entries) > 0 {
+		d.deployment.Spec.Template.Labels = make(map[string]string, len(entries))
 	}
 	if d.deployment.Spec.Selector == nil {
 		d.deployment.Spec.Selector = &metav1.LabelSelector{}
 	}
-	if d.deployment.Spec.Selector.MatchLabels == nil {
-		d.deployment.Spec.Selector.MatchLabels = make(map[string]string)
+	if d.deployment.Spec.Selector.MatchLabels == nil && len(entries) > 0 {
+		d.deployment.Spec.Selector.MatchLabels = make(map[string]string, len(entries))
 	}
-	if len(kv)%2 != 0 {
-		panic("the number of arguments must be even")
-	}
-	for i := 0; i < len(kv); i += 2 {
-		d.deployment.Spec.Template.Labels[kv[i]] = kv[i+1]
-		d.deployment.Spec.Selector.MatchLabels[kv[i]] = kv[i+1]
+	for k, v := range entries {
+		d.deployment.Spec.Template.Labels[k] = v
+		d.deployment.Spec.Selector.MatchLabels[k] = v
 	}
 	return d
 }

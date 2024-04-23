@@ -1,7 +1,7 @@
 FROM quay.io/operator-framework/operator-sdk:v1.26.0 as osdk
 
 # TODO: use another base image when possible (we depend on gpgme-devel)
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-builder-multi-openshift-4.16 as builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.21 as builder
 ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:9e0a14311ae40821dbb83359b5d1037ba06469b599c79241f2eb0a55d4dbbe43
 COPY . /code
 COPY --from=osdk /usr/local/bin/operator-sdk /usr/local/bin/

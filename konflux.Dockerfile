@@ -1,6 +1,7 @@
 # TODO: delete this Dockerfile when https://issues.redhat.com/browse/KONFLUX-2361
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-builder-multi-openshift-4.16 as builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.21 as builder
 ARG TARGETARCH
+ENV GOEXPERIMENT=strictfipsruntime
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -22,11 +23,9 @@ COPY vendor/ vendor/
 # was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
+RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-enterprise-base-multi-openshift-4.16
+FROM registry.redhat.io/rhel9-2-els/rhel:9.2
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532

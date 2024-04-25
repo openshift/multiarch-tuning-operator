@@ -1,4 +1,4 @@
-FROM quay.io/operator-framework/operator-sdk:v1.26.0 as osdk
+FROM quay.io/operator-framework/operator-sdk:v1.31.0 as osdk
 
 # TODO: use another base image when possible (we depend on gpgme-devel)
 FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.21 as builder
@@ -19,7 +19,7 @@ LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
 LABEL operators.operatorframework.io.bundle.package.v1=multiarch-tuning-operator
 LABEL operators.operatorframework.io.bundle.channels.v1=tech-preview
 LABEL operators.operatorframework.io.bundle.channel.default.v1=tech-preview
-LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.33.0
+LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.31.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v3
 

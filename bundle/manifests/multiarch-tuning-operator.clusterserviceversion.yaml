@@ -26,13 +26,13 @@ metadata:
     capabilities: Seamless Upgrades
     categories: OpenShift Optional, Other
     console.openshift.io/disable-operand-delete: "true"
-    createdAt: "2024-04-25T11:04:43Z"
+    createdAt: "2024-04-25T19:15:40Z"
     operator.openshift.io/uninstall-message: This action won't automatically delete
       managed resources (operands). To prevent data loss or disruption, you'll need
       to manually delete them.
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: openshift-multiarch-tuning-operator
-    operators.operatorframework.io/builder: operator-sdk-v1.33.0
+    operators.operatorframework.io/builder: operator-sdk-v1.31.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/openshift/multiarch-tuning-operator
     support: Red Hat

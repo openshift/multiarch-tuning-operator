@@ -290,6 +290,41 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)
 	operator-sdk bundle validate ./bundle
 
+.PHONY: bundle-verify
+bundle-verify:
+	@echo "#############################################"
+	@echo "####### Preparing to verify the bundle ######"
+	@echo "#############################################"
+	rm -f *.clusterserviceversion.yaml.created-at
+	grep -rl 'createdAt:' bundle/manifests | xargs -I {} sh -c 'grep "createdAt:" {} | cut -d\" -f2 > $$(basename {}).created-at'
+	@echo "######################################################"
+	@echo "###### Run the creation of the bundle manfiests ######"
+	@echo "######################################################"
+	@$(MAKE) bundle
+	@echo "##########################################################################################################"
+	@echo "###### Restoring the createdAt timestamp in the bundle/manifests/*.clusterserviceversion.yaml files ######"
+	@echo "##########################################################################################################"
+	# Restore the createdAt timestamp in the bundle/manifests/*.clusterserviceversion.yaml files from a file named
+	# *.clusterserviceversion.yaml.created-at
+	for file in *.clusterserviceversion.yaml.created-at; do \
+		[[ -e "$${file}" ]] || break; \
+		created_at=$$(cat $${file}); \
+		# single quotes are used to prevent the removal of double quotes in $${created_at} \
+		sed -i 's/createdAt: .*$$/createdAt: "'$${created_at}'"/' bundle/manifests/$${file%.created-at}; \
+	done
+	rm -f ./*.clusterserviceversion.yaml.created-at
+	@echo "#########################################################################################################"
+	@echo "#### Verifying that the bundle.konflux.Dockerfile labels are in sync with the bundle.Dockerfile ones ####"
+	@echo "#########################################################################################################"
+	diff <(grep ^LABEL bundle.konflux.Dockerfile | sort) <(grep ^LABEL bundle.Dockerfile | sort)
+	@echo "################################################################################################"
+	@echo "#### Verifying no other files changed in the working tree after the bundle generation test #####"
+	@echo "################################################################################################"
+	@$(MAKE) verify-diff
+	@echo "########################################################################"
+	@echo "#### Closing successfully the verification of the bundle generation ####"
+	@echo "########################################################################"
+
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
 	$(ENGINE) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .

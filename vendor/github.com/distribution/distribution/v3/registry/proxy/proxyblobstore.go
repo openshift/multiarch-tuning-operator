@@ -62,7 +62,8 @@ func (pbs *proxyBlobStore) copyContent(ctx context.Context, dgst digest.Digest, 
 		return distribution.Descriptor{}, err
 	}
 
-	proxyMetrics.BlobPush(uint64(desc.Size))
+	proxyMetrics.BlobPull(uint64(desc.Size))
+	proxyMetrics.BlobPush(uint64(desc.Size), false)
 
 	return desc, nil
 }
@@ -75,7 +76,7 @@ func (pbs *proxyBlobStore) serveLocal(ctx context.Context, w http.ResponseWriter
 		return false, nil
 	}
 
-	proxyMetrics.BlobPush(uint64(localDesc.Size))
+	proxyMetrics.BlobPush(uint64(localDesc.Size), true)
 	return true, pbs.localStore.ServeBlob(ctx, w, r, dgst)
 }
 
@@ -138,7 +139,10 @@ func (pbs *proxyBlobStore) ServeBlob(ctx context.Context, w http.ResponseWriter,
 	}
 
 	if pbs.scheduler != nil && pbs.ttl != nil {
-		pbs.scheduler.AddBlob(blobRef, *pbs.ttl)
+		if err := pbs.scheduler.AddBlob(blobRef, *pbs.ttl); err != nil {
+			dcontext.GetLogger(ctx).Errorf("Error adding blob: %s", err)
+			return err
+		}
 	}
 
 	return nil

@@ -11,8 +11,8 @@ linters:
     - misspell
     - bodyclose
     - prealloc
-  disable:
     - errcheck
+    - tparallel
 
 linters-settings:
   revive:

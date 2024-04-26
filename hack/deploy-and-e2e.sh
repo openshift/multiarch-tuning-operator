@@ -25,7 +25,7 @@ if [ "${USE_OLM:-}" == "true" ]; then
   oc registry login || echo "[WARN] Unable to login the registry, this could be expected in non-Prow envs"
 
   export KUBECONFIG="${OLD_KUBECONFIG}"
-  operator-sdk run bundle "${OO_BUNDLE}" -n "${NAMESPACE}"
+  operator-sdk run bundle "${OO_BUNDLE}" -n "${NAMESPACE}" --security-context-config restricted
 else
   make deploy IMG="${OPERATOR_IMAGE}"
 fi

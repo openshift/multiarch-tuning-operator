@@ -1,6 +1,4 @@
 FROM quay.io/operator-framework/operator-sdk:v1.31.0 as osdk
-
-# TODO: use another base image when possible (we depend on gpgme-devel)
 FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.21 as builder
 ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:6eb3e10671b6bb8f54139312e4acf291a7078e2912bec75105c84e65ab495460
 COPY . /code
@@ -11,7 +9,7 @@ WORKDIR /code
 # VERSION is set in the base image to the golang version. However, we want to default to the one set in the Makefile.
 RUN unset VERSION; test -n "${IMG}" && make bundle IMG="${IMG}"
 
-FROM gcr.io/distroless/base:latest
+FROM scratch
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
 LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/

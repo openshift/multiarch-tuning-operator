@@ -222,7 +222,7 @@ func buildDeployment(podPlacementConfig *v1alpha1.PodPlacementConfig,
 							},
 						}, {
 							Name:            "kube-rbac-proxy",
-							Image:           "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1",
+							Image:           "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Args: []string{
 								"--secure-listen-address=0.0.0.0:8443",

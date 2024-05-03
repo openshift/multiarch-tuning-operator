@@ -10,7 +10,7 @@ COPY go.sum go.sum
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
 COPY vendor/ vendor/
-RUN go mod download
+#RUN go mod download
 
 # Copy the go source
 COPY main.go main.go
@@ -25,9 +25,29 @@ COPY pkg/ pkg/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-FROM registry.redhat.io/rhel9-2-els/rhel:9.2
+FROM registry.redhat.io/rhel9-2-els/rhel:9.2-1222
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532
+
+LABEL com.redhat.component="Multiarch Tuning Operator"
+LABEL distribution-scope="public"
+LABEL name="multiarch-tuning-operator"
+LABEL release="0.9.0"
+LABEL version="0.9.0"
+LABEL url="https://github.com/openshift/multiarch-tuning-operator"
+LABEL vendor="Red Hat, Inc."
+LABEL description="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \
+                   clusters with multi-architecture compute nodes or Site Reliability Engineers willing to \
+                   migrate from single-arch to multi-arch OpenShift"
+LABEL io.k8s.description="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \
+                   clusters with multi-architecture compute nodes or Site Reliability Engineers willing to \
+                   migrate from single-arch to multi-arch OpenShift"
+
+LABEL summary="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \
+                   clusters with multi-architecture compute nodes or Site Reliability Engineers willing to \
+                   migrate from single-arch to multi-arch OpenShift"
+LABEL io.k8s.display-name="Multiarch Tuning Operator"
+LABEL io.openshift.tags="openshift,operator,multiarch,scheduling"
 
 ENTRYPOINT ["/manager"]

@@ -291,6 +291,7 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 	cd config/manager && $(KUSTOMIZE) edit set annotation multiarch.openshift.io/image:$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)
 	operator-sdk bundle validate ./bundle
+	hack/patch-bundle-dockerfile.sh
 
 .PHONY: bundle-verify
 bundle-verify:

@@ -1,6 +1,4 @@
 FROM quay.io/operator-framework/operator-sdk:v1.31.0 as osdk
-
-# TODO: use another base image when possible (we depend on gpgme-devel)
 FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.21 as builder
 ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:6eb3e10671b6bb8f54139312e4acf291a7078e2912bec75105c84e65ab495460
 COPY . /code
@@ -11,7 +9,7 @@ WORKDIR /code
 # VERSION is set in the base image to the golang version. However, we want to default to the one set in the Makefile.
 RUN unset VERSION; test -n "${IMG}" && make bundle IMG="${IMG}"
 
-FROM gcr.io/distroless/base:latest
+FROM registry.redhat.io/rhel9-2-els/rhel:9.2-1222
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
 LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/
@@ -31,3 +29,23 @@ LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 COPY --from=builder /code/bundle/manifests /manifests/
 COPY --from=builder /code/bundle/metadata /metadata/
 COPY --from=builder /code/bundle/tests/scorecard /tests/scorecard/
+
+# Labels from hack/patch-bundle-dockerfile.sh
+LABEL com.redhat.component="Multiarch Tuning Operator"
+LABEL distribution-scope="public"
+LABEL name="multiarch-tuning-operator-bundle"
+LABEL release="0.9.0"
+LABEL version="0.9.0"
+LABEL url="https://github.com/openshift/multiarch-tuning-operator"
+LABEL vendor="Red Hat, Inc."
+LABEL description="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \
+                   clusters with multi-architecture compute nodes or Site Reliability Engineers willing to \
+                   migrate from single-arch to multi-arch OpenShift"
+LABEL io.k8s.description="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \
+                   clusters with multi-architecture compute nodes or Site Reliability Engineers willing to \
+                   migrate from single-arch to multi-arch OpenShift"
+LABEL summary="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \
+                   clusters with multi-architecture compute nodes or Site Reliability Engineers willing to \
+                   migrate from single-arch to multi-arch OpenShift"
+LABEL io.k8s.display-name="Multiarch Tuning Operator"
+LABEL io.openshift.tags="openshift,operator,multiarch,scheduling"

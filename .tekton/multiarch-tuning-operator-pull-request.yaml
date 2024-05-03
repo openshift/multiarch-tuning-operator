@@ -571,6 +571,35 @@ spec:
             operator: in
             values:
               - "false"
+      - name: build-source-image
+        params:
+          - name: BINARY_IMAGE
+            value: $(params.output-image)
+          - name: BASE_IMAGES
+            value: $(tasks.build-container-amd64.results.BASE_IMAGES_DIGESTS)
+        runAfter:
+          - build-container
+        taskRef:
+          params:
+            - name: name
+              value: source-build
+            - name: bundle
+              value: quay.io/redhat-appstudio-tekton-catalog/task-source-build:0.1@sha256:90dc9c66eb0123b5e5ff8a1b8c3891e91f0e952899e427eeca79b635fe81a348
+            - name: kind
+              value: task
+          resolver: bundles
+        when:
+          - input: $(tasks.init.results.build)
+            operator: in
+            values:
+              - "true"
+          - input: $(params.build-source-image)
+            operator: in
+            values:
+              - "true"
+        workspaces:
+          - name: workspace
+            workspace: workspace
       - name: sbom-json-check
         params:
           - name: IMAGE_URL

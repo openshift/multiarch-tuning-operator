@@ -6,11 +6,23 @@ metadata:
     capabilities: Seamless Upgrades
     categories: OpenShift Optional, Other
     console.openshift.io/disable-operand-delete: "true"
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/cni: "false"
+    features.operators.openshift.io/csi: "false"
+    features.operators.openshift.io/disconnected: "false"
+    features.operators.openshift.io/fips-compliant: "true"
+    features.operators.openshift.io/proxy-aware: "false"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
     operator.openshift.io/uninstall-message: This action won't automatically delete
       managed resources (operands). To prevent data loss or disruption, you'll need
       to manually delete them.
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: openshift-multiarch-tuning-operator
+    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
+      Container Platform", "OpenShift Platform Plus"]'
     repository: https://github.com/openshift/multiarch-tuning-operator
     support: Red Hat
   labels:

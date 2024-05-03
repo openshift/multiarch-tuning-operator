@@ -9,7 +9,7 @@ WORKDIR /code
 # VERSION is set in the base image to the golang version. However, we want to default to the one set in the Makefile.
 RUN unset VERSION; test -n "${IMG}" && make bundle IMG="${IMG}"
 
-FROM registry.redhat.io/rhel9-2-els/rhel:9.2-1222
+FROM scratch
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
 LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/

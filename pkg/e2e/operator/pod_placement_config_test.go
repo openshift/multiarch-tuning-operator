@@ -42,7 +42,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			Eventually(deploymentsAreRunning).Should(Succeed())
 		})
 	})
-	Context("The operator should respect to an opt-out namespaceSelector in PodPlacementConfig CR", func() {
+	Context("The webhook should get requests only for pods matching the namespaceSelector in the PodPlacementConfig CR", func() {
 		BeforeEach(func() {
 			err := client.Create(ctx, &v1alpha1.PodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
@@ -59,7 +59,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(deploymentsAreRunning).Should(Succeed())
 		})
-		It("should exclude namespaces which have the opt-out label", func() {
+		It("should exclude namespaces that have the opt-out label", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			ns.Labels = map[string]string{
@@ -84,7 +84,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			//should exclude the namespace
 			verifyPodNodeAffinity(ns, "app", "test")
 		})
-		It("should handle namespaces which does not have the opt-out lable", func() {
+		It("should handle namespaces that do not have the opt-out label", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
@@ -129,7 +129,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(deploymentsAreRunning).Should(Succeed())
 		})
-		It("should exclude namespaces which does not have the opt-in label", func() {
+		It("should exclude namespaces that do not match the opt-in configuration", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
@@ -151,7 +151,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			//should exclude the namespace
 			verifyPodNodeAffinity(ns, "app", "test")
 		})
-		It("should handle namespaces which match the opt-in lable", func() {
+		It("should handle namespaces that match the opt-in configuration", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			ns.Labels = map[string]string{

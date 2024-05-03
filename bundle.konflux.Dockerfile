@@ -1,6 +1,6 @@
 FROM quay.io/operator-framework/operator-sdk:v1.31.0 as osdk
 FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.21 as builder
-ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:6eb3e10671b6bb8f54139312e4acf291a7078e2912bec75105c84e65ab495460
+ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:84863ef4bc6d060506b4cd06111a8546800ea452728588f73cf31b85aeafc15a
 COPY . /code
 COPY --from=osdk /usr/local/bin/operator-sdk /usr/local/bin/
 RUN chmod -R g+rwX /code

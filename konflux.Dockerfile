@@ -51,3 +51,4 @@ LABEL io.k8s.display-name="Multiarch Tuning Operator"
 LABEL io.openshift.tags="openshift,operator,multiarch,scheduling"
 
 ENTRYPOINT ["/manager"]
+

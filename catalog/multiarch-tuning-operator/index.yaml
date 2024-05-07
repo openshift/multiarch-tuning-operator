@@ -37,7 +37,7 @@ name: tech-preview
 entries:
   - name: multiarch-tuning-operator.v0.9.0
 ---
-image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:57b5cc46985f981b8d9c6a7ed8b1adfac5a83de3d7a9d0af548d08cea2c680a7
+image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:2ecfecd45c811db7093cc72d57209225198c68e9b081c631e5578c1a55e9da73
 name: multiarch-tuning-operator.v0.9.0
 package: multiarch-tuning-operator
 properties:
@@ -161,8 +161,8 @@ properties:
 relatedImages:
 - image: gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522
   name: ""
-- image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:57b5cc46985f981b8d9c6a7ed8b1adfac5a83de3d7a9d0af548d08cea2c680a7
+- image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:2ecfecd45c811db7093cc72d57209225198c68e9b081c631e5578c1a55e9da73
   name: ""
-- image: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:c90ceae9d5785c0bc4a6000f7bb10b64a7c64a2d91f8fb50b7515b700b157d8a
+- image: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:2d218b58e1f6006d2d4a04fac9bae1f8303a6a3ef5ed94b30a623553793bb252
   name: ""
 schema: olm.bundle

@@ -1,0 +1,12 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: multiarch-tuning-operator-catalog
+  namespace: openshift-marketplace
+spec:
+  displayName: Multiarch Tuning Operator Catalog
+  image: CHANGE-ME
+  sourceType: grpc
+  updateStrategy:
+    registryPoll:
+      interval: 30m

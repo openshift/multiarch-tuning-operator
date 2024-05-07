@@ -25,7 +25,7 @@ COPY pkg/ pkg/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-FROM registry.redhat.io/rhel9-2-els/rhel:9.2-1222
+FROM registry.redhat.io/rhel9-2-els/rhel:9.2
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532

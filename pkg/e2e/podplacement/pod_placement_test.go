@@ -467,8 +467,8 @@ var _ = Describe("The Pod Placement Operand", func() {
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 	})
-	Context("When a deployment with images that require global vs local pull secrets", func() {
-		It("should not set the node affinity when pod with image that requires the pull secret but doest not be provided", func() {
+	Context("When deploying workloads with public and private images", func() {
+		It("should not set the node affinity if missing a pull secret", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
@@ -489,7 +489,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test")
 		})
-		It("should set the node affinity when pod with image that requires the global pull secret", func() {
+		It("should set the node affinity in pods with images requiring credentials set in the global pull secret", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
@@ -514,7 +514,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
-		It("should set the node affinity when pod with image that requires the local pull secret", func() {
+		It("should set the node affinity in pods with images requiring credentials set in a pull secret associated with the service account running the pods", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
@@ -555,7 +555,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
-		It("should set the node affinity when pod with images that require both global and local pull secrets", func() {
+		It("should set the node affinity in pods with images that require both global and local pull secrets", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)

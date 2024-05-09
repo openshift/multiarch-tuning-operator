@@ -9,4 +9,6 @@ const (
 	WaitLong        = 15 * time.Minute
 	WaitOverLong    = 30 * time.Minute
 	PollingInterval = 1 * time.Second
+	Present         = true
+	Absent          = false
 )

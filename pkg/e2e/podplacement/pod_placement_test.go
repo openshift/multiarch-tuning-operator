@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -514,7 +513,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
-		It("should set the node affinity in pods with images requiring credentials set in a pull secret associated with the service account running the pods", func() {
+		It("should set the node affinity in pods with images requiring credentials set in pods imagePullSecrets", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
@@ -534,10 +533,9 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, &secret)
 			Expect(err).NotTo(HaveOccurred())
-			// Patch local pull secret to it
-			updateSA(ns, "default", secret)
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPrivateMultiarchImageLocal).
+				WithImagePullSecrets(secret.Name).
 				Build()
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
@@ -575,11 +573,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, &secret)
 			Expect(err).NotTo(HaveOccurred())
-			// Patch local pull secret to it
-			updateSA(ns, "default", secret)
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPrivateMultiarchImageGlobal, helloOpenshiftPrivateArmImageGlobal,
 					helloOpenshiftPrivateArmPpcImageLocal, helloOpenshiftPrivateArmImageLocal).
+				WithImagePullSecrets(secret.Name).
 				Build()
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
@@ -677,26 +674,5 @@ func verifyPodAnnotations(ns *corev1.Namespace, labelKey string, labelInValue st
 				g.Expect(pod.Annotations).To(HaveKeyWithValue(kv[j], kv[j+1]))
 			}
 		}
-	}, e2e.WaitShort).Should(Succeed())
-}
-
-func updateSA(ns *corev1.Namespace, name string, secret corev1.Secret) {
-	Eventually(func(g Gomega) {
-		sa := corev1.ServiceAccount{}
-		err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&corev1.ServiceAccount{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: ns.Name,
-			},
-		}), &sa)
-		g.Expect(err).NotTo(HaveOccurred())
-		sa.ImagePullSecrets = append(sa.ImagePullSecrets, corev1.LocalObjectReference{
-			Name: secret.Name,
-		})
-		sa.Secrets = append(sa.Secrets, corev1.ObjectReference{
-			Name: secret.Name,
-		})
-		err = client.Update(ctx, &sa)
-		g.Expect(err).NotTo(HaveOccurred())
 	}, e2e.WaitShort).Should(Succeed())
 }

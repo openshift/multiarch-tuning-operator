@@ -1,6 +1,9 @@
 package podplacement_test
 
 import (
+	"encoding/base64"
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -17,10 +20,19 @@ import (
 )
 
 const (
-	helloOpenshiftPublicMultiarchImage = "quay.io/openshifttest/hello-openshift:1.2.0"
-	helloOpenshiftPublicArmImage       = "quay.io/openshifttest/hello-openshift:arm-1.2.0"
-	helloOpenshiftPublicArmAmdImage    = "quay.io/openshifttest/hello-openshift:arm-amd-1.2.0"
-	helloOpenshiftPublicArmPpcImage    = "quay.io/openshifttest/hello-openshift:arm-ppc64le-1.2.0"
+	helloOpenshiftPublicMultiarchImage        = "quay.io/openshifttest/hello-openshift:1.2.0"
+	helloOpenshiftPublicArmImage              = "quay.io/openshifttest/hello-openshift:arm-1.2.0"
+	helloOpenshiftPublicArmAmdImage           = "quay.io/openshifttest/hello-openshift:arm-amd-1.2.0"
+	helloOpenshiftPublicArmPpcImage           = "quay.io/openshifttest/hello-openshift:arm-ppc64le-1.2.0"
+	helloOpenshiftPrivateMultiarchImageGlobal = "quay.io/multi-arch/tuning-test-global:1.1.0"
+	helloOpenshiftPrivateArmImageGlobal       = "quay.io/multi-arch/tuning-test-global:arm-1.1.0"
+	helloOpenshiftPrivateArmPpcImageGlobal    = "quay.io/multi-arch/tuning-test-global:arm-ppc64le-1.1.0"
+	helloOpenshiftPrivateMultiarchImageLocal  = "quay.io/multi-arch/tuning-test-local:1.1.0"
+	helloOpenshiftPrivateArmImageLocal        = "quay.io/multi-arch/tuning-test-local:arm-1.1.0"
+	helloOpenshiftPrivateArmPpcImageLocal     = "quay.io/multi-arch/tuning-test-local:arm-ppc64le-1.1.0"
+	registryAddress                           = "quay.io/multi-arch/tuning-test-local"
+	auth_user_local                           = "multi-arch+mto_testing_local_ps"
+	auth_pass_local                           = "R9ATA6ENZ7DRD6AFX2VRMK5TTWN8MAPZEHG5QYUUXM1AA8LV6Y02O9Y926T8V28M"
 )
 
 var _ = Describe("The Pod Placement Operand", func() {
@@ -449,6 +461,134 @@ var _ = Describe("The Pod Placement Operand", func() {
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+	})
+	Context("When deploying workloads with public and private images", func() {
+		It("should not set the node affinity if missing a pull secret", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPrivateMultiarchImageLocal).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			verifyPodNodeAffinity(ns, "app", "test")
+		})
+		It("should set the node affinity in pods with images requiring credentials set in the global pull secret", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPrivateArmPpcImageGlobal).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+		It("should set the node affinity in pods with images requiring credentials set in pods imagePullSecrets", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			secretData := map[string][]byte{
+				".dockerconfigjson": []byte(fmt.Sprintf(`{"auths":{"%s":{"auth":"%s"}}}`,
+					registryAddress, base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(
+						"%s:%s", auth_user_local, auth_pass_local))))),
+			}
+			secret := NewSecret().
+				WithData(secretData).
+				WithDockerConfigJsonType().
+				WithName("mto-testing-local-pull-secret").
+				WithNameSpace(ns.Name).
+				Build()
+			err = client.Create(ctx, &secret)
+			Expect(err).NotTo(HaveOccurred())
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPrivateMultiarchImageLocal).
+				WithImagePullSecrets(secret.Name).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+		})
+		It("should set the node affinity in pods with images that require both global and local pull secrets", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			secretData := map[string][]byte{
+				".dockerconfigjson": []byte(fmt.Sprintf(`{"auths":{"%s":{"auth":"%s"}}}`,
+					registryAddress, base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(
+						"%s:%s", auth_user_local, auth_pass_local))))),
+			}
+			secret := NewSecret().
+				WithData(secretData).
+				WithDockerConfigJsonType().
+				WithName("mto-testing-local-pull-secret").
+				WithNameSpace(ns.Name).
+				Build()
+			err = client.Create(ctx, &secret)
+			Expect(err).NotTo(HaveOccurred())
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPrivateMultiarchImageGlobal, helloOpenshiftPrivateArmImageGlobal,
+					helloOpenshiftPrivateArmPpcImageLocal, helloOpenshiftPrivateArmImageLocal).
+				WithImagePullSecrets(secret.Name).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)

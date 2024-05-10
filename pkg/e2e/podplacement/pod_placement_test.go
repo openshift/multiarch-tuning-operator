@@ -36,7 +36,11 @@ const (
 )
 
 var _ = Describe("The Pod Placement Operand", func() {
-	var podLabel = map[string]string{"app": "test"}
+	var (
+		podLabel            = map[string]string{"app": "test"}
+		schedulingGateLabel = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
+	)
+
 	Context("When a deployment is deployed with a single container and a public image", func() {
 		It("should set the node affinity", func() {
 			var err error
@@ -63,6 +67,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity on privileged deployments", func() {
 			var err error
@@ -116,13 +121,15 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, &d)
 			Expect(err).NotTo(HaveOccurred())
 			// TODO: verify the pod has some scc label
-			verifyPodAnnotations(ns, "app", "test", "openshift.io/scc", "privileged")
+			sccAnnotation := map[string]string{"openshift.io/scc": "privileged"}
+			verifyPodAnnotations(ns, "app", "test", sccAnnotation)
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity when users node affinity do not conflict", func() {
 			var err error
@@ -154,6 +161,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&hostnameLabelNSR, &archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should not set the node affinity when users node affinity conflicts", func() {
 			var err error
@@ -179,6 +187,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, &d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test", archLabelNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should check each matchExpressions when users node affinity has multiple matchExpressions", func() {
 			var err error
@@ -213,6 +222,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedHostnameNST := NewNodeSelectorTerm().WithMatchExpressions(&hostnameLabelNSR, &expectedArchLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedHostnameNST, archLabelNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should not set the node affinity when nodeSelector exist", func() {
 			var err error
@@ -236,6 +246,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, &d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test")
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
 	Context("When a statefulset is deployed with single vs multi container images", func() {
@@ -263,6 +274,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity when with a single container and a multiarch image", func() {
 			var err error
@@ -289,6 +301,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity when with more containers some with singlearch image some with multiarch image", func() {
 			var err error
@@ -314,6 +327,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should not set the node affinity when with more containers all with multiarch image but users node affinity conflicts", func() {
 			var err error
@@ -340,6 +354,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			Expect(err).NotTo(HaveOccurred())
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity when with more containers all with multiarch image", func() {
 			var err error
@@ -365,6 +380,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
 	Context("PodPlacementOperand works with several high-level resources owning pods", func() {
@@ -391,6 +407,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			verifyDaemonSetPodNodeAffinity(ns, "app", "test", archLabelNSR)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity on Job owning pod", func() {
 			var err error
@@ -417,6 +434,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity on Build owning pod", func() {
 			var err error
@@ -438,6 +456,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "openshift.io/build.name", "test-build", expectedNSTs)
+			verifyPodLabels(ns, "openshift.io/build.name", "test-build", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity on DeploymentConfig owning pod", func() {
 			var err error
@@ -464,6 +483,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
 	Context("When deploying workloads with public and private images", func() {
@@ -487,6 +507,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, &d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test")
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity in pods with images requiring credentials set in the global pull secret", func() {
 			var err error
@@ -512,6 +533,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity in pods with images requiring credentials set in pods imagePullSecrets", func() {
 			var err error
@@ -552,6 +574,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 		It("should set the node affinity in pods with images that require both global and local pull secrets", func() {
 			var err error
@@ -592,6 +615,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
 })
@@ -652,10 +676,7 @@ func verifyDaemonSetPodNodeAffinity(ns *corev1.Namespace, labelKey string, label
 	}, e2e.WaitShort).Should(Succeed())
 }
 
-func verifyPodAnnotations(ns *corev1.Namespace, labelKey string, labelInValue string, kv ...string) {
-	if len(kv)%2 != 0 {
-		panic("the number of arguments must be even")
-	}
+func verifyPodAnnotations(ns *corev1.Namespace, labelKey string, labelInValue string, entries map[string]string) {
 	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
 	labelSelector := labels.NewSelector().Add(*r)
 	Expect(err).NotTo(HaveOccurred())
@@ -667,11 +688,35 @@ func verifyPodAnnotations(ns *corev1.Namespace, labelKey string, labelInValue st
 		})
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(pods.Items).NotTo(BeEmpty())
-		for i := 0; i < len(pods.Items); i++ {
-			pod := pods.Items[i]
-			g.Expect(pod.Annotations).NotTo(BeEmpty())
-			for j := 0; j < len(kv); j += 2 {
-				g.Expect(pod.Annotations).To(HaveKeyWithValue(kv[j], kv[j+1]))
+		for k, v := range entries {
+			g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
+				return p.Annotations
+			}, And(Not(BeEmpty()), HaveKeyWithValue(k, v)))))
+		}
+	}, e2e.WaitShort).Should(Succeed())
+}
+
+func verifyPodLabels(ns *corev1.Namespace, labelKey string, labelInValue string, ifPresent bool, entries map[string]string) {
+	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
+	labelSelector := labels.NewSelector().Add(*r)
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(func(g Gomega) {
+		pods := &corev1.PodList{}
+		err := client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		for k, v := range entries {
+			if ifPresent {
+				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
+					return p.Labels
+				}, And(Not(BeEmpty()), HaveKeyWithValue(k, v)))))
+			} else {
+				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
+					return p.Labels
+				}, Not(HaveKey(k)))))
 			}
 		}
 	}, e2e.WaitShort).Should(Succeed())

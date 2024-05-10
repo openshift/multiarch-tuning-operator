@@ -21,7 +21,10 @@ const (
 )
 
 var _ = Describe("The Multiarch Tuning Operator", func() {
-	var podLabel = map[string]string{"app": "test"}
+	var (
+		podLabel            = map[string]string{"app": "test"}
+		schedulingGateLabel = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
+	)
 	AfterEach(func() {
 		err := client.Delete(ctx, &v1alpha1.PodPlacementConfig{
 			ObjectMeta: metav1.ObjectMeta{
@@ -83,6 +86,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
 			verifyPodNodeAffinity(ns, "app", "test")
+			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
 		})
 		It("should handle namespaces that do not have the opt-out label", func() {
 			var err error
@@ -110,6 +114,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			//should handle the namespace
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
 	Context("The operator should respect to an opt-in namespaceSelector in PodPlacementConfig CR", func() {
@@ -150,6 +155,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
 			verifyPodNodeAffinity(ns, "app", "test")
+			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
 		})
 		It("should handle namespaces that match the opt-in configuration", func() {
 			var err error
@@ -180,6 +186,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			//should handle the namespace
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
 })
@@ -207,6 +214,32 @@ func verifyPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue s
 						NodeSelectorTerms: nodeSelectorTerms,
 					},
 				})))
+		}
+	}, e2e.WaitShort).Should(Succeed())
+}
+
+func verifyPodLabels(ns *corev1.Namespace, labelKey string, labelInValue string, ifPresent bool, entries map[string]string) {
+	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
+	labelSelector := labels.NewSelector().Add(*r)
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(func(g Gomega) {
+		pods := &corev1.PodList{}
+		err := client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		for k, v := range entries {
+			if ifPresent {
+				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
+					return p.Labels
+				}, And(Not(BeEmpty()), HaveKeyWithValue(k, v)))))
+			} else {
+				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
+					return p.Labels
+				}, Not(HaveKey(k)))))
+			}
 		}
 	}, e2e.WaitShort).Should(Succeed())
 }

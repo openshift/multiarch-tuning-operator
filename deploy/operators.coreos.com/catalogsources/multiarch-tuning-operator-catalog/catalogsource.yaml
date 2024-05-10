@@ -6,6 +6,11 @@ metadata:
 spec:
   displayName: Multiarch Tuning Operator Catalog
   image: CHANGE-ME
+  grpcPodConfig:
+    extractContent:
+      cacheDir: /tmp/cache
+      catalogDir: /configs
+    memoryTarget: 20Mi
   sourceType: grpc
   updateStrategy:
     registryPoll:

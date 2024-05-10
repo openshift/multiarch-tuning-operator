@@ -26,7 +26,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 		schedulingGateLabel = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
 	)
 	AfterEach(func() {
-		err := client.Delete(ctx, &v1alpha1.PodPlacementConfig{
+		err := client.Delete(ctx, &v1alpha1.ClusterPodPlacementConfig{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "cluster",
 			},
@@ -36,7 +36,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 	})
 	Context("When the operator is running and a pod placement config is created", func() {
 		It("should deploy the operands", func() {
-			err := client.Create(ctx, &v1alpha1.PodPlacementConfig{
+			err := client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
 				},
@@ -45,13 +45,13 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			Eventually(deploymentsAreRunning).Should(Succeed())
 		})
 	})
-	Context("The webhook should get requests only for pods matching the namespaceSelector in the PodPlacementConfig CR", func() {
+	Context("The webhook should get requests only for pods matching the namespaceSelector in the ClusterPodPlacementConfig CR", func() {
 		BeforeEach(func() {
-			err := client.Create(ctx, &v1alpha1.PodPlacementConfig{
+			err := client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
 				},
-				Spec: v1alpha1.PodPlacementConfigSpec{
+				Spec: v1alpha1.ClusterPodPlacementConfigSpec{
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{
@@ -117,13 +117,13 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
-	Context("The operator should respect to an opt-in namespaceSelector in PodPlacementConfig CR", func() {
+	Context("The operator should respect to an opt-in namespaceSelector in ClusterPodPlacementConfig CR", func() {
 		BeforeEach(func() {
-			err := client.Create(ctx, &v1alpha1.PodPlacementConfig{
+			err := client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
 				},
-				Spec: v1alpha1.PodPlacementConfigSpec{
+				Spec: v1alpha1.ClusterPodPlacementConfigSpec{
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{

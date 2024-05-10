@@ -51,7 +51,7 @@ var _ = BeforeSuite(func() {
 	err = ocpbuildv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = client.Create(ctx, &v1alpha1.PodPlacementConfig{
+	err = client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},
@@ -63,7 +63,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	err := client.Delete(ctx, &v1alpha1.PodPlacementConfig{
+	err := client.Delete(ctx, &v1alpha1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},

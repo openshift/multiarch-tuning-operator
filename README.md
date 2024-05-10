@@ -11,7 +11,7 @@ The development work is still ongoing and there is no official, general availabl
 
 - **Architecture aware Pod Placement**: The pod placement operand consists of
   the `PodPlacementController` and the `PodPlacementWebhook` and is managed through
-  a singleton custom resource - `podplacementconfigs.multiarch.openshift.io`.
+  a singleton custom resource - `clusterpodplacementconfigs.multiarch.openshift.io`.
   Its aim is to automate the set up of strong predicates based on the
   `kubernetes.io/arch` label in the pod's _nodeAffinity_ by inspecting the container
   images in each pod and deriving a set of architectures supported by
@@ -73,10 +73,10 @@ make deploy IMG=<some-registry>/multiarch-tuning-operator:tag
 
 ### Deploy the Pod Placement Operand
 
-After the operator is running, you can deploy the Pod Placement Operand on the cluster through the PodPlacementConfig CR.
+After the operator is running, you can deploy the Pod Placement Operand on the cluster through the ClusterPodPlacementConfig CR.
 It is expected to be a singleton, cluster-scoped resource, named `cluster`.
 
-The following is an example of a PodPlacementConfig CR that sets the log verbosity level to `Normal` and 
+The following is an example of a ClusterPodPlacementConfig CR that sets the log verbosity level to `Normal` and 
 will watch and setup CPU architecture node affinities on all the pods, except the ones in namespaces labeled with 
 `multiarch.openshift.io/exclude-pod-placement`.
 
@@ -87,7 +87,7 @@ safety reasons.
 # Deploy the pod placement operand on the cluster
 kubectl create -f - <<EOF
 apiVersion: multiarch.openshift.io/v1alpha1
-kind: PodPlacementConfig
+kind: ClusterPodPlacementConfig
 metadata:
   name: cluster
 spec:
@@ -99,10 +99,10 @@ spec:
 EOF
 ```
 
-### Undeploy the PodPlacementConfig operand
+### Undeploy the ClusterPodPlacementConfig operand
 
 ```shell
-kubectl delete podplacementconfig/cluster
+kubectl delete clusterpodplacementconfigs/cluster
 ```
 
 Ordered uninstallation of the operand will be implemented in the future, and will remove the pod placement controller

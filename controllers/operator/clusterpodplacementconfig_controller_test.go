@@ -163,26 +163,26 @@ func validateDeletion() {
 	}).Should(Succeed(), "the mutating webhook configuration "+podMutatingWebhookConfigurationName+" should be created")
 }
 
-var _ = Describe("Controllers/PodPlacementConfig/PodPlacementConfigReconciler", func() {
-	When("The PodPlacementConfig", func() {
+var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfigReconciler", func() {
+	When("The ClusterPodPlacementConfig", func() {
 		Context("is handling the lifecycle of the operand", func() {
 			BeforeEach(func() {
-				err := k8sClient.Create(ctx, newPodPlacementConfig().WithName(v1alpha1.SingletonResourceObjectName).Build())
-				Expect(err).NotTo(HaveOccurred(), "failed to create PodPlacementConfig", err)
+				err := k8sClient.Create(ctx, newClusterPodPlacementConfig().WithName(v1alpha1.SingletonResourceObjectName).Build())
+				Expect(err).NotTo(HaveOccurred(), "failed to create ClusterPodPlacementConfig", err)
 				validateReconcile()
 			})
 			AfterEach(func() {
-				err := k8sClient.Delete(ctx, newPodPlacementConfig().WithName(v1alpha1.SingletonResourceObjectName).Build())
-				Expect(err).NotTo(HaveOccurred(), "failed to delete PodPlacementConfig", err)
+				err := k8sClient.Delete(ctx, newClusterPodPlacementConfig().WithName(v1alpha1.SingletonResourceObjectName).Build())
+				Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
 				validateDeletion()
 			})
-			It("should refuse to create a PodPlacementConfig with an invalid name", func() {
-				ppc := newPodPlacementConfig().WithName("invalid-name").Build()
+			It("should refuse to create a ClusterPodPlacementConfig with an invalid name", func() {
+				ppc := newClusterPodPlacementConfig().WithName("invalid-name").Build()
 				err := k8sClient.Create(ctx, ppc)
-				Expect(err).NotTo(HaveOccurred(), "failed to create PodPlacementConfig", err)
+				Expect(err).NotTo(HaveOccurred(), "failed to create ClusterPodPlacementConfig", err)
 				Eventually(func(g Gomega) {
-					ppc := &v1alpha1.PodPlacementConfig{}
-					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.PodPlacementConfig{
+					ppc := &v1alpha1.ClusterPodPlacementConfig{}
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.ClusterPodPlacementConfig{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "invalid-name",
 							Namespace: utils.Namespace(),
@@ -308,19 +308,19 @@ var _ = Describe("Controllers/PodPlacementConfig/PodPlacementConfigReconciler", 
 				}).Should(Succeed(), "the mutating webhook configuration's failure policy never reconciled to Ignore")
 			})
 			It("should sync the deployments' logLevel arguments", func() {
-				// get the podplacementconfig
-				ppc2 := &v1alpha1.PodPlacementConfig{}
-				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.PodPlacementConfig{
+				// get the clusterpodplacementconfig
+				ppc2 := &v1alpha1.ClusterPodPlacementConfig{}
+				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.ClusterPodPlacementConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      v1alpha1.SingletonResourceObjectName,
 						Namespace: utils.Namespace(),
 					},
 				}), ppc2)
-				Expect(err).NotTo(HaveOccurred(), "failed to get PodPlacementConfig", err)
-				// change the podplacementconfig's logLevel
+				Expect(err).NotTo(HaveOccurred(), "failed to get ClusterPodPlacementConfig", err)
+				// change the clusterpodplacementconfig's logLevel
 				ppc2.Spec.LogVerbosity = v1alpha1.LogVerbosityLevelTraceAll
 				err = k8sClient.Update(ctx, ppc2)
-				Expect(err).NotTo(HaveOccurred(), "failed to update PodPlacementConfig", err)
+				Expect(err).NotTo(HaveOccurred(), "failed to update ClusterPodPlacementConfig", err)
 				Eventually(func(g Gomega) {
 					d := appsv1.Deployment{}
 					err = k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&appsv1.Deployment{
@@ -347,23 +347,23 @@ var _ = Describe("Controllers/PodPlacementConfig/PodPlacementConfigReconciler", 
 				}).Should(Succeed(), "the deployment "+PodPlacementWebhookName+" should be updated")
 			})
 			It("Should sync the namespace selector", func() {
-				// get the podplacementconfig
-				ppc := &v1alpha1.PodPlacementConfig{}
-				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.PodPlacementConfig{
+				// get the clusterpodplacementconfig
+				ppc := &v1alpha1.ClusterPodPlacementConfig{}
+				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.ClusterPodPlacementConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      v1alpha1.SingletonResourceObjectName,
 						Namespace: utils.Namespace(),
 					},
 				}), ppc)
-				Expect(err).NotTo(HaveOccurred(), "failed to get PodPlacementConfig", err)
-				// change the podplacementconfig's namespace selector
+				Expect(err).NotTo(HaveOccurred(), "failed to get ClusterPodPlacementConfig", err)
+				// change the clusterpodplacementconfig's namespace selector
 				ppc.Spec.NamespaceSelector = &metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"foo": "bar",
 					},
 				}
 				err = k8sClient.Update(ctx, ppc)
-				Expect(err).NotTo(HaveOccurred(), "failed to update PodPlacementConfig", err)
+				Expect(err).NotTo(HaveOccurred(), "failed to update ClusterPodPlacementConfig", err)
 				Eventually(func(g Gomega) {
 					mw := &admissionv1.MutatingWebhookConfiguration{}
 					err = k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&admissionv1.MutatingWebhookConfiguration{
@@ -379,31 +379,31 @@ var _ = Describe("Controllers/PodPlacementConfig/PodPlacementConfigReconciler", 
 	})
 })
 
-type podPlacementConfigFactory struct {
-	*v1alpha1.PodPlacementConfig
+type clusterPodPlacementConfigFactory struct {
+	*v1alpha1.ClusterPodPlacementConfig
 }
 
-func newPodPlacementConfig() *podPlacementConfigFactory {
-	return &podPlacementConfigFactory{
-		PodPlacementConfig: &v1alpha1.PodPlacementConfig{},
+func newClusterPodPlacementConfig() *clusterPodPlacementConfigFactory {
+	return &clusterPodPlacementConfigFactory{
+		ClusterPodPlacementConfig: &v1alpha1.ClusterPodPlacementConfig{},
 	}
 }
 
-func (p *podPlacementConfigFactory) WithName(name string) *podPlacementConfigFactory {
+func (p *clusterPodPlacementConfigFactory) WithName(name string) *clusterPodPlacementConfigFactory {
 	p.Name = name
 	return p
 }
 
-func (p *podPlacementConfigFactory) WithNamespaceSelector(labelSelector *metav1.LabelSelector) *podPlacementConfigFactory {
+func (p *clusterPodPlacementConfigFactory) WithNamespaceSelector(labelSelector *metav1.LabelSelector) *clusterPodPlacementConfigFactory {
 	p.Spec.NamespaceSelector = labelSelector
 	return p
 }
 
-func (p *podPlacementConfigFactory) WithLogVerbosity(logVerbosity v1alpha1.LogVerbosityLevel) *podPlacementConfigFactory {
+func (p *clusterPodPlacementConfigFactory) WithLogVerbosity(logVerbosity v1alpha1.LogVerbosityLevel) *clusterPodPlacementConfigFactory {
 	p.Spec.LogVerbosity = logVerbosity
 	return p
 }
 
-func (p *podPlacementConfigFactory) Build() *v1alpha1.PodPlacementConfig {
-	return p.PodPlacementConfig
+func (p *clusterPodPlacementConfigFactory) Build() *v1alpha1.ClusterPodPlacementConfig {
+	return p.ClusterPodPlacementConfig
 }

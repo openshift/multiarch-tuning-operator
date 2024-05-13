@@ -1,5 +1,5 @@
 apiVersion: multiarch.openshift.io/v1alpha1
-kind: PodPlacementConfig
+kind: ClusterPodPlacementConfig
 metadata:
   name: cluster
 spec:

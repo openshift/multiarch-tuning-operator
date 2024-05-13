@@ -14,7 +14,7 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-func buildMutatingWebhookConfiguration(podPlacementConfig *v1alpha1.PodPlacementConfig) *admissionv1.MutatingWebhookConfiguration {
+func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1alpha1.ClusterPodPlacementConfig) *admissionv1.MutatingWebhookConfiguration {
 	return &admissionv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: podMutatingWebhookConfigurationName,
@@ -36,7 +36,7 @@ func buildMutatingWebhookConfiguration(podPlacementConfig *v1alpha1.PodPlacement
 						Path:      utils.NewPtr("/add-pod-scheduling-gate"),
 					},
 				},
-				NamespaceSelector: podPlacementConfig.Spec.NamespaceSelector,
+				NamespaceSelector: clusterPodPlacementConfig.Spec.NamespaceSelector,
 				FailurePolicy:     utils.NewPtr(admissionv1.Ignore),
 				SideEffects:       utils.NewPtr(admissionv1.SideEffectClassNone),
 				Name:              podMutatingWebhookName,
@@ -87,7 +87,7 @@ func buildService(name string, controllerName string, port int32, targetPort int
 	}
 }
 
-func buildDeployment(podPlacementConfig *v1alpha1.PodPlacementConfig,
+func buildDeployment(clusterPodPlacementConfig *v1alpha1.ClusterPodPlacementConfig,
 	name string, replicas int32, serviceAccountName string, args ...string) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -152,7 +152,7 @@ func buildDeployment(podPlacementConfig *v1alpha1.PodPlacementConfig,
 								"--health-probe-bind-address=:8081",
 								"--metrics-bind-address=127.0.0.1:8080",
 								fmt.Sprintf("-zap-log-level=%d",
-									podPlacementConfig.Spec.LogVerbosity.ToZapLevelInt()),
+									clusterPodPlacementConfig.Spec.LogVerbosity.ToZapLevelInt()),
 							}, args...),
 							Command: []string{
 								"/manager",

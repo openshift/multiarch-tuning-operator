@@ -2,7 +2,7 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: podplacementconfigs.multiarch.openshift.io
+  name: clusterpodplacementconfigs.multiarch.openshift.io
 spec:
   conversion:
     strategy: Webhook

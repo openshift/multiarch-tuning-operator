@@ -23,7 +23,7 @@ resources:
   controller: true
   domain: openshift.io
   group: multiarch
-  kind: PodPlacementConfig
+  kind: ClusterPodPlacementConfig
   path: multiarch-tuning-operator/apis/multiarch/v1alpha1
   version: v1alpha1
 version: "3"

@@ -1,20 +1,20 @@
-# permissions for end users to view podplacementconfigs.
+# permissions for end users to view clusterpodplacementconfigs.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: clusterrole
-    app.kubernetes.io/instance: podplacementconfig-viewer-role
+    app.kubernetes.io/instance: clusterpodplacementconfig-viewer-role
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: multiarch-tuning-operator
     app.kubernetes.io/part-of: multiarch-tuning-operator
     app.kubernetes.io/managed-by: kustomize
-  name: podplacementconfig-viewer-role
+  name: clusterpodplacementconfig-viewer-role
 rules:
 - apiGroups:
   - multiarch.openshift.io
   resources:
-  - podplacementconfigs
+  - clusterpodplacementconfigs
   verbs:
   - get
   - list
@@ -22,6 +22,6 @@ rules:
 - apiGroups:
   - multiarch.openshift.io
   resources:
-  - podplacementconfigs/status
+  - clusterpodplacementconfigs/status
   verbs:
   - get

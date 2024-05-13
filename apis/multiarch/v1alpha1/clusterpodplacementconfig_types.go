@@ -20,8 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// PodPlacementConfigSpec defines the desired state of PodPlacementConfig
-type PodPlacementConfigSpec struct {
+// ClusterPodPlacementConfigSpec defines the desired state of ClusterPodPlacementConfig
+type ClusterPodPlacementConfigSpec struct {
 	// LogVerbosity is the log level for the pod placement controller.
 	// Valid values are: "Normal", "Debug", "Trace", "TraceAll".
 	// Defaults to "Normal".
@@ -55,35 +55,35 @@ type PodPlacementConfigSpec struct {
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
 }
 
-// PodPlacementConfigStatus defines the observed state of PodPlacementConfig
-type PodPlacementConfigStatus struct {
-	// Conditions represents the latest available observations of a PodPlacementConfig's current state.
+// ClusterPodPlacementConfigStatus defines the observed state of ClusterPodPlacementConfig
+type ClusterPodPlacementConfigStatus struct {
+	// Conditions represents the latest available observations of a ClusterPodPlacementConfig's current state.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// PodPlacementConfig defines the configuration for the PodPlacement operand.
+// ClusterPodPlacementConfig defines the configuration for the PodPlacement operand.
 // It is a singleton resource that can consist of an object named cluster.
 // Creating this object will trigger the deployment of the architecture aware pod placement operand.
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=podplacementconfigs,scope=Cluster
-type PodPlacementConfig struct {
+// +kubebuilder:resource:path=clusterpodplacementconfigs,scope=Cluster
+type ClusterPodPlacementConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PodPlacementConfigSpec   `json:"spec,omitempty"`
-	Status PodPlacementConfigStatus `json:"status,omitempty"`
+	Spec   ClusterPodPlacementConfigSpec   `json:"spec,omitempty"`
+	Status ClusterPodPlacementConfigStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// PodPlacementConfigList contains a list of PodPlacementConfig
-type PodPlacementConfigList struct {
+// ClusterPodPlacementConfigList contains a list of ClusterPodPlacementConfig
+type ClusterPodPlacementConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []PodPlacementConfig `json:"items"`
+	Items           []ClusterPodPlacementConfig `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&PodPlacementConfig{}, &PodPlacementConfigList{})
+	SchemeBuilder.Register(&ClusterPodPlacementConfig{}, &ClusterPodPlacementConfigList{})
 }

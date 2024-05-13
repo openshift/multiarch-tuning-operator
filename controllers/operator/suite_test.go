@@ -132,12 +132,12 @@ func runManager() {
 
 	clientset := kubernetes.NewForConfigOrDie(cfg)
 
-	By("Setting up PodPlacementConfig controller")
+	By("Setting up ClusterPodPlacementConfig controller")
 	ctrlref, err := events.GetControllerReferenceForCurrentPod(context.TODO(), clientset, utils.Namespace(), nil)
 	if err != nil {
 		suiteLog.Error(err, "unable to get controller reference for current pod (falling back to namespace)")
 	}
-	Expect((&PodPlacementConfigReconciler{
+	Expect((&ClusterPodPlacementConfigReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,

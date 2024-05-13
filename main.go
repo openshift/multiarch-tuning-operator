@@ -70,8 +70,8 @@ var (
 	registryCertificatesConfigMapNamespace,
 	registryCertificatesConfigMapName string
 	enableLeaderElection,
-	enablePodPlacementConfigOperandWebHook,
-	enablePodPlacementConfigOperandControllers,
+	enableClusterPodPlacementConfigOperandWebHook,
+	enableClusterPodPlacementConfigOperandControllers,
 	enableOperator bool
 )
 
@@ -94,7 +94,7 @@ func main() {
 	if enableOperator {
 		leaderId = fmt.Sprintf("operator-%s", leaderId)
 	}
-	if enablePodPlacementConfigOperandControllers {
+	if enableClusterPodPlacementConfigOperandControllers {
 		leaderId = fmt.Sprintf("ppc-controllers-%s", leaderId)
 	}
 	webhookServer := webhook.NewServer(webhook.Options{
@@ -132,11 +132,11 @@ func main() {
 	if enableOperator {
 		RunOperator(mgr)
 	}
-	if enablePodPlacementConfigOperandControllers {
-		RunPodPlacementConfigOperandControllers(mgr)
+	if enableClusterPodPlacementConfigOperandControllers {
+		RunClusterPodPlacementConfigOperandControllers(mgr)
 	}
-	if enablePodPlacementConfigOperandWebHook {
-		RunPodPlacementConfigOperandWebHook(mgr)
+	if enableClusterPodPlacementConfigOperandWebHook {
+		RunClusterPodPlacementConfigOperandWebHook(mgr)
 	}
 
 	setupLog.Info("starting manager")
@@ -146,8 +146,8 @@ func main() {
 func RunOperator(mgr ctrl.Manager) {
 	config := ctrl.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
-	gvk, _ := apiutil.GVKForObject(&multiarchv1alpha1.PodPlacementConfig{}, mgr.GetScheme())
-	must((&operator.PodPlacementConfigReconciler{
+	gvk, _ := apiutil.GVKForObject(&multiarchv1alpha1.ClusterPodPlacementConfig{}, mgr.GetScheme())
+	must((&operator.ClusterPodPlacementConfigReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,
@@ -157,10 +157,10 @@ func RunOperator(mgr ctrl.Manager) {
 			Namespace:  utils.Namespace(),
 			APIVersion: gvk.GroupVersion().String(),
 		}),
-	}).SetupWithManager(mgr), unableToCreateController, controllerKey, "PodPlacementConfig")
+	}).SetupWithManager(mgr), unableToCreateController, controllerKey, "ClusterPodPlacementConfig")
 }
 
-func RunPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
+func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
 	config := ctrl.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
 
@@ -189,7 +189,7 @@ func RunPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
 		unableToAddRunnable, runnableKey, "ImageRegistryConfigSyncer")
 }
 
-func RunPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
+func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: &podplacement.PodSchedulingGateMutatingWebHook{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -197,7 +197,7 @@ func RunPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
 }
 
 func validateFlags() error {
-	if !enableOperator && !enablePodPlacementConfigOperandControllers && !enablePodPlacementConfigOperandWebHook {
+	if !enableOperator && !enableClusterPodPlacementConfigOperandControllers && !enableClusterPodPlacementConfigOperandWebHook {
 		return errors.New("at least one of the following flags must be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook")
 	}
 	return nil
@@ -215,8 +215,8 @@ func bindFlags() {
 	flag.StringVar(&globalPullSecretName, "global-pull-secret-name", "pull-secret", "The name of the global pull secret")
 	flag.StringVar(&registryCertificatesConfigMapNamespace, "registry-certificates-configmap-namespace", "openshift-image-registry", "The namespace where the configmap that contains the registry certificates is stored")
 	flag.StringVar(&registryCertificatesConfigMapName, "registry-certificates-configmap-name", "image-registry-certificates", "The name of the configmap that contains the registry certificates")
-	flag.BoolVar(&enablePodPlacementConfigOperandWebHook, "enable-ppc-webhook", false, "Enable the pod placement config operand webhook")
-	flag.BoolVar(&enablePodPlacementConfigOperandControllers, "enable-ppc-controllers", false, "Enable the pod placement config operand controllers")
+	flag.BoolVar(&enableClusterPodPlacementConfigOperandWebHook, "enable-ppc-webhook", false, "Enable the pod placement config operand webhook")
+	flag.BoolVar(&enableClusterPodPlacementConfigOperandControllers, "enable-ppc-controllers", false, "Enable the pod placement config operand controllers")
 	flag.BoolVar(&enableOperator, "enable-operator", false, "Enable the operator")
 	opts := zap.Options{
 		Development: true,

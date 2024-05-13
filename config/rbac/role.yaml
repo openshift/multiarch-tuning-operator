@@ -68,7 +68,7 @@ rules:
 - apiGroups:
   - multiarch.openshift.io
   resources:
-  - podplacementconfigs
+  - clusterpodplacementconfigs
   verbs:
   - create
   - delete
@@ -80,13 +80,13 @@ rules:
 - apiGroups:
   - multiarch.openshift.io
   resources:
-  - podplacementconfigs/finalizers
+  - clusterpodplacementconfigs/finalizers
   verbs:
   - update
 - apiGroups:
   - multiarch.openshift.io
   resources:
-  - podplacementconfigs/status
+  - clusterpodplacementconfigs/status
   verbs:
   - get
   - patch

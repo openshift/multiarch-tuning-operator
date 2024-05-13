@@ -38,8 +38,8 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-// PodPlacementConfigReconciler reconciles a PodPlacementConfig object
-type PodPlacementConfigReconciler struct {
+// ClusterPodPlacementConfigReconciler reconciles a ClusterPodPlacementConfig object
+type ClusterPodPlacementConfigReconciler struct {
 	client.Client
 	Scheme    *runtime.Scheme
 	ClientSet *kubernetes.Clientset
@@ -57,9 +57,9 @@ const (
 	operandName                              = "pod-placement-controller"
 )
 
-//+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=multiarch.openshift.io,resources=podplacementconfigs/finalizers,verbs=update
+//+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs/finalizers,verbs=update
 //+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;update;patch;create;delete;list;watch
 //+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations/status,verbs=get
 
@@ -69,50 +69,49 @@ const (
 //+kubebuilder:rbac:groups=core,resources=services/status,verbs=get
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create
 
-// Reconcile reconciles the PodPlacementConfig object against the actual cluster state, and then
+// Reconcile reconciles the ClusterPodPlacementConfig object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
-func (r *PodPlacementConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
-	log.V(3).Info("Reconciling PodPlacementConfig...")
-	// Lookup the PodPlacementConfig instance for this reconcile request
-	podPlacementConfig := &multiarchv1alpha1.PodPlacementConfig{}
+	log.V(3).Info("Reconciling ClusterPodPlacementConfig...")
+	// Lookup the ClusterPodPlacementConfig instance for this reconcile request
+	clusterPodPlacementConfig := &multiarchv1alpha1.ClusterPodPlacementConfig{}
 	var err error
 
 	if err = r.Get(ctx, client.ObjectKey{
-		Namespace: req.NamespacedName.Namespace,
-		Name:      req.NamespacedName.Name,
-	}, podPlacementConfig); client.IgnoreNotFound(err) != nil {
-		log.Error(err, "Unable to fetch PodPlacementConfig")
+		Name: req.NamespacedName.Name,
+	}, clusterPodPlacementConfig); client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Unable to fetch ClusterPodPlacementConfig")
 		return ctrl.Result{}, err
 	}
 
-	log.V(3).Info("PodPlacementConfig fetched...", "name", podPlacementConfig.Name)
+	log.V(3).Info("ClusterPodPlacementConfig fetched...", "name", clusterPodPlacementConfig.Name)
 	if req.NamespacedName.Name == multiarchv1alpha1.SingletonResourceObjectName {
-		if apierrors.IsNotFound(err) || !podPlacementConfig.DeletionTimestamp.IsZero() {
+		if apierrors.IsNotFound(err) || !clusterPodPlacementConfig.DeletionTimestamp.IsZero() {
 			// Only execute deletion iff the name of the object is 'cluster' and the object is being deleted or not found
 			return ctrl.Result{}, r.handleDelete(ctx)
 		}
-		return ctrl.Result{}, r.reconcile(ctx, podPlacementConfig)
+		return ctrl.Result{}, r.reconcile(ctx, clusterPodPlacementConfig)
 	}
 
-	// If we hit here, the PodPlacementConfig has an invalid name.
-	log.V(3).Info("PodPlacementConfig name is not cluster", "name", podPlacementConfig.Name)
-	if podPlacementConfig.DeletionTimestamp.IsZero() {
+	// If we hit here, the ClusterPodPlacementConfig has an invalid name.
+	log.V(3).Info("ClusterPodPlacementConfig name is not cluster", "name", clusterPodPlacementConfig.Name)
+	if clusterPodPlacementConfig.DeletionTimestamp.IsZero() {
 		// Only execute deletion iff the name of the object is different from 'cluster' and the object is not yet deleted.
-		log.V(3).Info("Deleting PodPlacementConfig", "name", podPlacementConfig.Name)
-		err := r.Delete(ctx, podPlacementConfig)
+		log.V(3).Info("Deleting ClusterPodPlacementConfig", "name", clusterPodPlacementConfig.Name)
+		err := r.Delete(ctx, clusterPodPlacementConfig)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 	}
-	log.Info("The PodPlacementConfig is already pending deletion, nothing to do.", "name", podPlacementConfig.Name)
+	log.Info("The ClusterPodPlacementConfig is already pending deletion, nothing to do.", "name", clusterPodPlacementConfig.Name)
 	return ctrl.Result{}, nil
 }
 
 // handleDelete handles the deletion of the PodPlacement operand's resources.
-func (r *PodPlacementConfigReconciler) handleDelete(ctx context.Context) error {
-	// The PodPlacementConfig is being deleted, cleanup the resources
+func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context) error {
+	// The ClusterPodPlacementConfig is being deleted, cleanup the resources
 	log := ctrllog.FromContext(ctx)
 	log.Info("Deleting the PodPlacement operand's resources")
 
@@ -145,16 +144,16 @@ func (r *PodPlacementConfigReconciler) handleDelete(ctx context.Context) error {
 	return utils.DeleteResources(ctx, objsToDelete)
 }
 
-// reconcile reconciles the PodPlacementConfig operand's resources.
-func (r *PodPlacementConfigReconciler) reconcile(ctx context.Context, podPlacementConfig *multiarchv1alpha1.PodPlacementConfig) error {
+// reconcile reconciles the ClusterPodPlacementConfig operand's resources.
+func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clusterPodPlacementConfig *multiarchv1alpha1.ClusterPodPlacementConfig) error {
 	log := ctrllog.FromContext(ctx)
 	objects := []client.Object{
-		buildDeployment(podPlacementConfig, PodPlacementControllerName, 2,
+		buildDeployment(clusterPodPlacementConfig, PodPlacementControllerName, 2,
 			"multiarch-tuning-operator-podplacement-controller",
 			"--leader-elect",
 			"--enable-ppc-controllers",
 		),
-		buildDeployment(podPlacementConfig, PodPlacementWebhookName, 3,
+		buildDeployment(clusterPodPlacementConfig, PodPlacementWebhookName, 3,
 			"multiarch-tuning-operator-podplacement-webhook",
 			"--enable-ppc-webhook",
 		),
@@ -168,12 +167,12 @@ func (r *PodPlacementConfigReconciler) reconcile(ctx context.Context, podPlaceme
 		buildService(
 			podPlacementWebhookMetricsServiceName, PodPlacementWebhookName,
 			8443, intstr.FromInt32(8443)),
-		buildMutatingWebhookConfiguration(podPlacementConfig),
+		buildMutatingWebhookConfiguration(clusterPodPlacementConfig),
 	}
 
 	errs := make([]error, 0)
 	for _, o := range objects {
-		if err := ctrl.SetControllerReference(podPlacementConfig, o, r.Scheme); err != nil {
+		if err := ctrl.SetControllerReference(clusterPodPlacementConfig, o, r.Scheme); err != nil {
 			log.Error(err, "Unable to set controller reference", "name", o.GetName())
 			errs = append(errs, err)
 		}
@@ -188,16 +187,16 @@ func (r *PodPlacementConfigReconciler) reconcile(ctx context.Context, podPlaceme
 		return err
 	}
 
-	/* TODO: Updates to the PodPlacementConfig's status will probably be considered in the future to address the
+	/* TODO: Updates to the ClusterPodPlacementConfig's status will probably be considered in the future to address the
 	 * ordered un-installation of the operator and operands.
 	 */
 	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *PodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&multiarchv1alpha1.PodPlacementConfig{}).
+		For(&multiarchv1alpha1.ClusterPodPlacementConfig{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&admissionv1.MutatingWebhookConfiguration{}).

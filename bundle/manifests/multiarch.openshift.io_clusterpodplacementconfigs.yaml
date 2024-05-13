@@ -4,20 +4,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.1
   creationTimestamp: null
-  name: podplacementconfigs.multiarch.openshift.io
+  name: clusterpodplacementconfigs.multiarch.openshift.io
 spec:
   group: multiarch.openshift.io
   names:
-    kind: PodPlacementConfig
-    listKind: PodPlacementConfigList
-    plural: podplacementconfigs
-    singular: podplacementconfig
+    kind: ClusterPodPlacementConfig
+    listKind: ClusterPodPlacementConfigList
+    plural: clusterpodplacementconfigs
+    singular: clusterpodplacementconfig
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: PodPlacementConfig defines the configuration for the PodPlacement
+        description: ClusterPodPlacementConfig defines the configuration for the PodPlacement
           operand. It is a singleton resource that can consist of an object named
           cluster. Creating this object will trigger the deployment of the architecture
           aware pod placement operand.
@@ -35,7 +35,8 @@ spec:
           metadata:
             type: object
           spec:
-            description: PodPlacementConfigSpec defines the desired state of PodPlacementConfig
+            description: ClusterPodPlacementConfigSpec defines the desired state of
+              ClusterPodPlacementConfig
             properties:
               logVerbosity:
                 default: Normal
@@ -107,11 +108,12 @@ spec:
                 x-kubernetes-map-type: atomic
             type: object
           status:
-            description: PodPlacementConfigStatus defines the observed state of PodPlacementConfig
+            description: ClusterPodPlacementConfigStatus defines the observed state
+              of ClusterPodPlacementConfig
             properties:
               conditions:
                 description: Conditions represents the latest available observations
-                  of a PodPlacementConfig's current state.
+                  of a ClusterPodPlacementConfig's current state.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct

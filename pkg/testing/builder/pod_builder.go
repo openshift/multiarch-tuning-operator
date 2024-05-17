@@ -128,6 +128,11 @@ func (p *PodBuilder) WithNamespace(namespace string) *PodBuilder {
 	return p
 }
 
+func (p *PodBuilder) WithNodeName(nodeName string) *PodBuilder {
+	p.pod.Spec.NodeName = nodeName
+	return p
+}
+
 func (p *PodBuilder) Build() v1.Pod {
 	return p.pod
 }

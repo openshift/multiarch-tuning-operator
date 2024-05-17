@@ -68,7 +68,8 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 
 	// ignore the openshift-* namespace as those are infra components, and ignore the namespace where the operand is running too
 	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "openshift-") ||
-		strings.HasPrefix(pod.Namespace, "hypershift-") || strings.HasPrefix(pod.Namespace, "kube-") {
+		strings.HasPrefix(pod.Namespace, "hypershift-") || strings.HasPrefix(pod.Namespace, "kube-") ||
+		pod.Spec.NodeName != "" {
 		return a.patchedPodResponse(pod, req)
 	}
 

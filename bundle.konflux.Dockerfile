@@ -1,13 +1,15 @@
-FROM quay.io/operator-framework/operator-sdk:v1.31.0 as osdk
 FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.21 as builder
 ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:2d218b58e1f6006d2d4a04fac9bae1f8303a6a3ef5ed94b30a623553793bb252
-COPY . /code
-COPY --from=osdk /usr/local/bin/operator-sdk /usr/local/bin/
-RUN chmod -R g+rwX /code
+ARG ORIGINAL_IMG=registry.ci.openshift.org/origin/multiarch-tuning-operator:main
 WORKDIR /code
+COPY ./ ./
 
-# VERSION is set in the base image to the golang version. However, we want to default to the one set in the Makefile.
-RUN unset VERSION; test -n "${IMG}" && make bundle IMG="${IMG}"
+# Replace the bundle image in the repository with the one specified by the IMG build argument.
+RUN chmod -R g+rwX ./ && find bundle/ && find bundle -type f -exec sed -i \
+    "s|${ORIGINAL_IMG}|${IMG}|g" {} \+; \
+    grep -rq "${ORIGINAL_IMG}" bundle/ && \
+    { echo "Failed to replace image references"; exit 1; } || echo "Image references replaced" && \
+    grep -r "${IMG}" bundle/
 
 FROM scratch
 # Core bundle labels.

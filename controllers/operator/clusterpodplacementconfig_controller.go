@@ -56,6 +56,7 @@ const (
 	podPlacementWebhookMetricsServiceName    = "pod-placement-web-hook-metrics-service"
 	operandName                              = "pod-placement-controller"
 	priorityClassName                        = "system-cluster-critical"
+	serviceAccountName                       = "multiarch-tuning-operator-controller-manager"
 )
 
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -150,12 +151,10 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 	log := ctrllog.FromContext(ctx)
 	objects := []client.Object{
 		buildDeployment(clusterPodPlacementConfig, PodPlacementControllerName, 2,
-			"multiarch-tuning-operator-podplacement-controller",
 			"--leader-elect",
 			"--enable-ppc-controllers",
 		),
 		buildDeployment(clusterPodPlacementConfig, PodPlacementWebhookName, 3,
-			"multiarch-tuning-operator-podplacement-webhook",
 			"--enable-ppc-webhook",
 		),
 		buildService(PodPlacementControllerName, PodPlacementControllerName,

@@ -88,7 +88,7 @@ func buildService(name string, controllerName string, port int32, targetPort int
 }
 
 func buildDeployment(clusterPodPlacementConfig *v1alpha1.ClusterPodPlacementConfig,
-	name string, replicas int32, serviceAccountName string, args ...string) *appsv1.Deployment {
+	name string, replicas int32, args ...string) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

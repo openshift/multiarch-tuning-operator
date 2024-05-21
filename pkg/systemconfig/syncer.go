@@ -189,10 +189,11 @@ func (s *SystemConfigSyncer) Run(ctx context.Context) error {
 // This rbac rule is added manually.
 //#kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch,resourceNames=image-registry-certificates,namespace="openshift-image-registry"
 
-//#kubebuilder:rbac:groups=config.openshift.io,resources=images,verbs=get;list;watch
-//#kubebuilder:rbac:groups=config.openshift.io,resources=imagedigestmirrorsets,verbs=get;list;watch
-//#kubebuilder:rbac:groups=config.openshift.io,resources=imagetagmirrorsets,verbs=get;list;watch
-//#kubebuilder:rbac:groups=operator.openshift.io,resources=imagecontentsourcepolicies,verbs=get;list;watch
+//+kubebuilder:rbac:groups=config.openshift.io,resources=images,verbs=get;list;watch
+//+kubebuilder:rbac:groups=config.openshift.io,resources=imagedigestmirrorsets,verbs=get;list;watch
+//+kubebuilder:rbac:groups=config.openshift.io,resources=imagetagmirrorsets,verbs=get;list;watch
+
+//+kubebuilder:rbac:groups=operator.openshift.io,resources=imagecontentsourcepolicies,verbs=get;list;watch
 
 // newSystemConfigSyncer creates a new SystemConfigSyncer object
 func newSystemConfigSyncer() IConfigSyncer {

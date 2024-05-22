@@ -119,6 +119,10 @@ func buildDeployment(clusterPodPlacementConfig *v1alpha1.ClusterPodPlacementConf
 						utils.OperandLabelKey:   operandName,
 						utils.ControllerNameKey: name,
 					},
+					Annotations: map[string]string{
+						// See https://github.com/openshift/enhancements/blob/c5b9aea25e/enhancements/workload-partitioning/management-workload-partitioning.md
+						"target.workload.openshift.io/management": "{\"effect\": \"PreferredDuringScheduling\"}",
+					},
 				},
 				Spec: corev1.PodSpec{
 					Affinity: &corev1.Affinity{
@@ -190,10 +194,6 @@ func buildDeployment(clusterPodPlacementConfig *v1alpha1.ClusterPodPlacementConf
 									corev1.ResourceCPU:    resource.MustParse("10m"),
 									corev1.ResourceMemory: resource.MustParse("64Mi"),
 								},
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("100m"),
-									corev1.ResourceMemory: resource.MustParse("128Mi"),
-								},
 							},
 							SecurityContext: &corev1.SecurityContext{
 								AllowPrivilegeEscalation: utils.NewPtr(false),
@@ -242,13 +242,10 @@ func buildDeployment(clusterPodPlacementConfig *v1alpha1.ClusterPodPlacementConf
 									corev1.ResourceCPU:    resource.MustParse("10m"),
 									corev1.ResourceMemory: resource.MustParse("64Mi"),
 								},
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("500m"),
-									corev1.ResourceMemory: resource.MustParse("128Mi"),
-								},
 							},
 						},
 					},
+					PriorityClassName:  priorityClassName,
 					ServiceAccountName: serviceAccountName,
 					Volumes: []corev1.Volume{
 						{

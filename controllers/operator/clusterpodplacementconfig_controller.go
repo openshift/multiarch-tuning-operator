@@ -55,6 +55,7 @@ const (
 	PodPlacementWebhookName                  = "pod-placement-web-hook"
 	podPlacementWebhookMetricsServiceName    = "pod-placement-web-hook-metrics-service"
 	operandName                              = "pod-placement-controller"
+	priorityClassName                        = "system-cluster-critical"
 )
 
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs,verbs=get;list;watch;create;update;patch;delete

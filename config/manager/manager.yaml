@@ -9,6 +9,8 @@ metadata:
     app.kubernetes.io/created-by: multiarch-tuning-operator
     app.kubernetes.io/part-of: multiarch-tuning-operator
     app.kubernetes.io/managed-by: kustomize
+    # See https://github.com/openshift/enhancements/blob/c5b9aea25e/enhancements/workload-partitioning/management-workload-partitioning.md
+    workload.openshift.io/allowed: management
   name: system
 ---
 apiVersion: apps/v1
@@ -33,6 +35,9 @@ spec:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
+        # See https://github.com/openshift/enhancements/blob/c5b9aea25e2a7afd5f460c6a0eca7584b1685ce3/enhancements/workload-partitioning/management-workload-partitioning.md
+        target.workload.openshift.io/management: |
+          {"effect": "PreferredDuringScheduling"}
       labels:
         control-plane: controller-manager
     spec:
@@ -93,11 +98,9 @@ spec:
         # TODO(user): Configure the resources accordingly based on the project requirements.
         # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
         resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
           requests:
             cpu: 10m
             memory: 64Mi
+      priorityClassName: system-cluster-critical
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

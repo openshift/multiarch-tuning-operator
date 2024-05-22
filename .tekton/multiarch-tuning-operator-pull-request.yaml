@@ -98,11 +98,11 @@ spec:
         description: Skip optional checks, set false if you want to run optional checks
         name: skip-optional
         type: string
-      - default: "false"
+      - default: "true"
         description: Execute the build with network isolation
         name: hermetic
         type: string
-      - default: "gomod"
+      - default: '{"packages": [{"type": "gomod"}], "flags": ["gomod-vendor-check"]}'
         description: Build dependencies to be prefetched by Cachi2
         name: prefetch-input
         type: string

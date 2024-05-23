@@ -1,0 +1,6 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: openshift-multiarch-tuning-operator
+  annotations:
+    workload.openshift.io/allowed: management

@@ -5,6 +5,11 @@ resources:
 - bases/multiarch.openshift.io_clusterpodplacementconfigs.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
+patches:
+  - path: patches/validation_injection_in_multiarch_clusterpodplacementconfigs.yaml
+    target:
+      kind: CustomResourceDefinition
+
 patchesStrategicMerge:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD

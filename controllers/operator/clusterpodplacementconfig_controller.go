@@ -89,26 +89,11 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 	}
 
 	log.V(3).Info("ClusterPodPlacementConfig fetched...", "name", clusterPodPlacementConfig.Name)
-	if req.NamespacedName.Name == multiarchv1alpha1.SingletonResourceObjectName {
-		if apierrors.IsNotFound(err) || !clusterPodPlacementConfig.DeletionTimestamp.IsZero() {
-			// Only execute deletion iff the name of the object is 'cluster' and the object is being deleted or not found
-			return ctrl.Result{}, r.handleDelete(ctx)
-		}
-		return ctrl.Result{}, r.reconcile(ctx, clusterPodPlacementConfig)
+	if apierrors.IsNotFound(err) || !clusterPodPlacementConfig.DeletionTimestamp.IsZero() {
+		// Only execute deletion iff the name of the object is 'cluster' and the object is being deleted or not found
+		return ctrl.Result{}, r.handleDelete(ctx)
 	}
-
-	// If we hit here, the ClusterPodPlacementConfig has an invalid name.
-	log.V(3).Info("ClusterPodPlacementConfig name is not cluster", "name", clusterPodPlacementConfig.Name)
-	if clusterPodPlacementConfig.DeletionTimestamp.IsZero() {
-		// Only execute deletion iff the name of the object is different from 'cluster' and the object is not yet deleted.
-		log.V(3).Info("Deleting ClusterPodPlacementConfig", "name", clusterPodPlacementConfig.Name)
-		err := r.Delete(ctx, clusterPodPlacementConfig)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-	log.Info("The ClusterPodPlacementConfig is already pending deletion, nothing to do.", "name", clusterPodPlacementConfig.Name)
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, r.reconcile(ctx, clusterPodPlacementConfig)
 }
 
 // handleDelete handles the deletion of the PodPlacement operand's resources.

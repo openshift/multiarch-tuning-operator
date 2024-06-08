@@ -23,6 +23,14 @@ import (
 	"testing"
 	"time"
 
+	"sigs.k8s.io/kustomize/api/resmap"
+
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/klog/v2"
+
+	"sigs.k8s.io/kustomize/api/krusty"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
+
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -112,6 +120,60 @@ func startTestEnv() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 	//+kubebuilder:scaffold:scheme
+
+	klog.Info("Applying CRDs to the test environment")
+	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
+	resMap, err := kustomizer.Run(filesys.MakeFsOnDisk(), filepath.Join("..", "..", "config", "crd"))
+	Expect(err).NotTo(HaveOccurred())
+	err = applyResources(resMap)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func applyResources(resources resmap.ResMap) error {
+	// Create a universal decoder for deserializing the resources
+	decoder := scheme.Codecs.UniversalDeserializer()
+	for _, res := range resources.Resources() {
+		raw, err := res.AsYAML()
+		Expect(err).NotTo(HaveOccurred())
+
+		if len(raw) == 0 {
+			return nil // Nothing to process
+		}
+
+		// Decode the resource from the buffer
+		obj, _, err := decoder.Decode(raw, nil, nil)
+		if err != nil {
+			return err
+		}
+
+		// Check if the resource already exists
+		existingObj := obj.DeepCopyObject().(client.Object)
+		err = k8sClient.Get(context.TODO(), client.ObjectKey{
+			Name:      existingObj.GetName(),
+			Namespace: existingObj.GetNamespace(),
+		}, existingObj)
+
+		if err != nil && !errors.IsNotFound(err) {
+			// Return error if it's not a "not found" error
+			return err
+		}
+		if err == nil {
+			// Resource exists, update it
+			obj.(client.Object).SetResourceVersion(existingObj.GetResourceVersion())
+			err = k8sClient.Update(ctx, obj.(client.Object))
+			if err != nil {
+				return err
+			}
+		} else {
+			// Resource does not exist, create it
+			err = k8sClient.Create(ctx, obj.(client.Object))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func runManager() {

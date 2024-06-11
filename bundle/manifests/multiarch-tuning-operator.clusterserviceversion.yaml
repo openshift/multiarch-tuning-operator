@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "multiarch.openshift.io/v1alpha1",
+          "apiVersion": "multiarch.openshift.io/v1beta1",
           "kind": "ClusterPodPlacementConfig",
           "metadata": {
             "name": "cluster"
@@ -67,6 +67,12 @@ spec:
       kind: ClusterPodPlacementConfig
       name: clusterpodplacementconfigs.multiarch.openshift.io
       version: v1alpha1
+    - description: ClusterPodPlacementConfig is the Schema for the clusterpodplacementconfigs
+        API
+      displayName: Cluster Pod Placement Config
+      kind: ClusterPodPlacementConfig
+      name: clusterpodplacementconfigs.multiarch.openshift.io
+      version: v1beta1
   description: |
     The Multiarch Tuning Operator enhances the user experience for administrators of
     Openshift clusters with multi-architecture compute nodes or Site Reliability

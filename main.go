@@ -47,6 +47,8 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 
 	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+
 	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -78,6 +80,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(multiarchv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(multiarchv1beta1.AddToScheme(scheme))
 
 	// TODO[OCP specific]
 	utilruntime.Must(ocpv1.Install(scheme))
@@ -146,7 +149,7 @@ func main() {
 func RunOperator(mgr ctrl.Manager) {
 	config := ctrl.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
-	gvk, _ := apiutil.GVKForObject(&multiarchv1alpha1.ClusterPodPlacementConfig{}, mgr.GetScheme())
+	gvk, _ := apiutil.GVKForObject(&multiarchv1beta1.ClusterPodPlacementConfig{}, mgr.GetScheme())
 	must((&operator.ClusterPodPlacementConfigReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),

@@ -40,6 +40,26 @@ func (c *ContainerBuilder) WithVolumeMounts(volumeMounts ...v1.VolumeMount) *Con
 	return c
 }
 
+func (c *ContainerBuilder) WithEnv(values ...v1.EnvVar) *ContainerBuilder {
+	c.container.Env = append(c.container.Env, values...)
+	return c
+}
+
+func (c *ContainerBuilder) WithPorts(values ...v1.ContainerPort) *ContainerBuilder {
+	c.container.Ports = append(c.container.Ports, values...)
+	return c
+}
+
+func (c *ContainerBuilder) WithPortsContainerPort(ports ...int32) *ContainerBuilder {
+	c.container.Ports = make([]v1.ContainerPort, len(ports))
+	for i, port := range ports {
+		c.container.Ports[i] = v1.ContainerPort{
+			ContainerPort: port,
+		}
+	}
+	return c
+}
+
 func (c *ContainerBuilder) Build() v1.Container {
 	return c.container
 }

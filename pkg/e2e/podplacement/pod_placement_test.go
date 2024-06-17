@@ -1,21 +1,28 @@
 package podplacement_test
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+
+	ocpconfigv1 "github.com/openshift/api/config/v1"
+	ocpmachineconfigurationv1 "github.com/openshift/api/machineconfiguration/v1"
 
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/registry"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -40,7 +47,6 @@ var _ = Describe("The Pod Placement Operand", func() {
 		podLabel            = map[string]string{"app": "test"}
 		schedulingGateLabel = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
 	)
-
 	Context("When a deployment is deployed with a single container and a public image", func() {
 		It("should set the node affinity", func() {
 			var err error
@@ -618,7 +624,179 @@ var _ = Describe("The Pod Placement Operand", func() {
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
+	Context("When deploying workloads that registry of image uses a self-signed certificate", Serial, func() {
+		It("should set the node affinity when registry url added to insecureRegistries list", func() {
+			var (
+				registryName string = "insecure-registry"
+				err          error
+			)
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			// Create registry
+			registryConfig, err := registry.NewRegistry(ns, registryName, dns.Spec.BaseDomain, "https://quay.io", auth_user_local, auth_pass_local)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err = registry.RemoveCertificateFiles(registryConfig.KeyPath)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			err = registry.Deploy(ctx, client, registryConfig)
+			Expect(err).NotTo(HaveOccurred())
+			// Update image.config
+			// todo consider a retry mechanism such as exponentialBackOff to make concurrent running cases safe
+			// now we can't make sure timeout for mcp updating when cases running in Parallel
+			image := getImageConfig(ctx, client)
+			imageForRemove := image
+			image.Spec.RegistrySources.InsecureRegistries = append(image.Spec.RegistrySources.InsecureRegistries, registryConfig.RegistryHost)
+			err = client.Update(ctx, &image)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				image := getImageConfig(ctx, client)
+				image.Spec = imageForRemove.Spec
+				err = client.Update(ctx, &image)
+				Expect(err).NotTo(HaveOccurred())
+				waitForMCPComplete()
+			}()
+			waitForMCPComplete()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(
+					NewPodSpec().
+						WithContainersImages(getMirroredImageURI(registryConfig.RegistryHost, helloOpenshiftPrivateMultiarchImageLocal)).
+						Build()).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+		})
+		It("should not set the node affinity when registry certificate is not in the trusted anchors", func() {
+			var (
+				registryName string = "untrusted-registry"
+				err          error
+			)
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			// Create registry
+			registryConfig, err := registry.NewRegistry(ns, registryName, dns.Spec.BaseDomain, "https://quay.io", auth_user_local, auth_pass_local)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err = registry.RemoveCertificateFiles(registryConfig.KeyPath)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+			err = registry.Deploy(ctx, client, registryConfig)
+			Expect(err).NotTo(HaveOccurred())
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(
+					NewPodSpec().
+						WithContainersImages(getMirroredImageURI(registryConfig.RegistryHost, helloOpenshiftPrivateMultiarchImageLocal)).
+						Build()).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			verifyPodNodeAffinity(ns, "app", "test")
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+		})
+		It("should set the node affinity when registry certificate is added in the trusted anchors", func() {
+			var (
+				registryName string = "trusted-registry"
+				err          error
+			)
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			// Create registry
+			registryConfig, err := registry.NewRegistry(ns, registryName, dns.Spec.BaseDomain, "https://quay.io", auth_user_local, auth_pass_local)
+			Expect(err).NotTo(HaveOccurred())
+			// remove Certificate dir
+			defer func() {
+				err = registry.RemoveCertificateFiles(registryConfig.KeyPath)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+			err = registry.Deploy(ctx, client, registryConfig)
+			Expect(err).NotTo(HaveOccurred())
+			// Create configmap for registry Certificate
+			err = registry.AddCertificateToConfigmap(ctx, client, registryConfig)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err = registry.RemoveCertificateFromConfigmap(ctx, client, registryConfig)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+			// Update image.config
+			image := getImageConfig(ctx, client)
+			imageForRemove := image
+			image.Spec.AdditionalTrustedCA = ocpconfigv1.ConfigMapNameReference{
+				Name: "registry-cas",
+			}
+			err = client.Update(ctx, &image)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				image := getImageConfig(ctx, client)
+				image.Spec = imageForRemove.Spec
+				err = client.Update(ctx, &image)
+				Expect(err).NotTo(HaveOccurred())
+				waitForCOComplete()
+			}()
+			waitForCOComplete()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(
+					NewPodSpec().
+						WithContainersImages(getMirroredImageURI(registryConfig.RegistryHost, helloOpenshiftPrivateMultiarchImageLocal)).
+						Build()).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+		})
+	})
 })
+
+func getMirroredImageURI(registryHost, image string) string {
+	newImage := strings.Replace(image, "quay.io", registryHost, 1)
+	Expect(newImage).NotTo(BeEmpty())
+	return newImage
+}
+
+func getImageConfig(ctx context.Context, client runtimeclient.Client) ocpconfigv1.Image {
+	image := ocpconfigv1.Image{}
+	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.Image{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+	}), &image)
+	Expect(err).NotTo(HaveOccurred(), "failed to get image.config cluster", err)
+	return image
+}
 
 func verifyPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue string, nodeSelectorTerms ...corev1.NodeSelectorTerm) {
 	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
@@ -720,4 +898,82 @@ func verifyPodLabels(ns *corev1.Namespace, labelKey string, labelInValue string,
 			}
 		}
 	}, e2e.WaitShort).Should(Succeed())
+}
+
+func waitForMCPComplete() {
+	var err error
+	// wait to mcp start updating
+	Eventually(func(g Gomega) {
+		mcps := ocpmachineconfigurationv1.MachineConfigPoolList{}
+		err = client.List(ctx, &mcps)
+		Expect(err).NotTo(HaveOccurred())
+		g.Expect(mcps.Items).NotTo(BeEmpty())
+		g.Expect(mcps.Items).Should(HaveEach(WithTransform(func(mcp ocpmachineconfigurationv1.MachineConfigPool) corev1.ConditionStatus {
+			status := corev1.ConditionFalse
+			for _, condition := range mcp.Status.Conditions {
+				if condition.Type == "Updating" {
+					status = condition.Status
+					break
+				}
+			}
+			return status
+		}, Equal(corev1.ConditionTrue))))
+	}, e2e.WaitLong, e2e.WaitShort).Should(Succeed())
+	// wait to mcp finish updating
+	Eventually(func(g Gomega) {
+		mcps := ocpmachineconfigurationv1.MachineConfigPoolList{}
+		err = client.List(ctx, &mcps)
+		Expect(err).NotTo(HaveOccurred())
+		g.Expect(mcps.Items).NotTo(BeEmpty())
+		g.Expect(mcps.Items).Should(HaveEach(WithTransform(func(mcp ocpmachineconfigurationv1.MachineConfigPool) corev1.ConditionStatus {
+			status := corev1.ConditionFalse
+			for _, condition := range mcp.Status.Conditions {
+				if condition.Type == "Updated" {
+					status = condition.Status
+					break
+				}
+			}
+			return status
+		}, Equal(corev1.ConditionTrue))))
+	}, e2e.WaitLong, e2e.WaitShort).Should(Succeed())
+}
+
+func waitForCOComplete() {
+	var err error
+	// wait to co openshift-apiserver start updating
+	Eventually(func(g Gomega) {
+		coApiserver := ocpconfigv1.ClusterOperator{}
+		err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "openshift-apiserver",
+			},
+		}), &coApiserver)
+		Expect(err).NotTo(HaveOccurred())
+		progressingStatus := ocpconfigv1.ConditionFalse
+		for _, condition := range coApiserver.Status.Conditions {
+			if condition.Type == "Progressing" {
+				progressingStatus = condition.Status
+				break
+			}
+		}
+		g.Expect(progressingStatus).To(Equal(ocpconfigv1.ConditionTrue))
+	}, e2e.WaitShort).Should(Succeed())
+	// wait to co openshift-apiserver finish updating
+	Eventually(func(g Gomega) {
+		coApiserver := ocpconfigv1.ClusterOperator{}
+		err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "openshift-apiserver",
+			},
+		}), &coApiserver)
+		Expect(err).NotTo(HaveOccurred())
+		progressingStatus := ocpconfigv1.ConditionTrue
+		for _, condition := range coApiserver.Status.Conditions {
+			if condition.Type == "Progressing" {
+				progressingStatus = condition.Status
+				break
+			}
+		}
+		g.Expect(progressingStatus).To(Equal(ocpconfigv1.ConditionFalse))
+	}, e2e.WaitOverMedium, e2e.WaitShort).Should(Succeed())
 }

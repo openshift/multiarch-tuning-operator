@@ -11,12 +11,16 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	ocpappsv1 "github.com/openshift/api/apps/v1"
 	ocpbuildv1 "github.com/openshift/api/build/v1"
+	ocpconfigv1 "github.com/openshift/api/config/v1"
+	ocpmachineconfigurationv1 "github.com/openshift/api/machineconfiguration/v1"
+
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,6 +35,7 @@ var (
 	client    runtimeclient.Client
 	clientset *kubernetes.Clientset
 	ctx       context.Context
+	dns       = ocpconfigv1.DNS{}
 	suiteLog  = ctrl.Log.WithName("setup")
 )
 
@@ -51,6 +56,12 @@ var _ = BeforeSuite(func() {
 	err = ocpbuildv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = ocpconfigv1.Install(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = ocpmachineconfigurationv1.Install(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	err = client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
@@ -60,6 +71,13 @@ var _ = BeforeSuite(func() {
 	Eventually(deploymentsAreRunning).Should(Succeed())
 
 	updateGlobalPullSecret()
+
+	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.DNS{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+	}), &dns)
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {
@@ -70,6 +88,7 @@ var _ = AfterSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(deploymentsAreDeleted).Should(Succeed())
+	deleteCertificatesConfigmap(ctx, client)
 })
 
 func deploymentsAreRunning(g Gomega) {
@@ -127,4 +146,22 @@ func updateGlobalPullSecret() {
 	secret.Data[".dockerconfigjson"] = []byte(newDockerConfigJSONBytes)
 	err = client.Update(ctx, &secret)
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func deleteCertificatesConfigmap(ctx context.Context, client runtimeclient.Client) {
+	configmap := v1.ConfigMap{}
+	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "registry-cas",
+			Namespace: "openshift-config",
+		},
+	}), &configmap)
+	if err != nil && runtimeclient.IgnoreNotFound(err) == nil {
+		return
+	}
+	Expect(err).NotTo(HaveOccurred())
+	if configmap.Data == nil {
+		err = client.Delete(ctx, &configmap)
+		Expect(err).NotTo(HaveOccurred())
+	}
 }

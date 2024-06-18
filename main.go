@@ -162,6 +162,8 @@ func RunOperator(mgr ctrl.Manager) {
 			APIVersion: gvk.GroupVersion().String(),
 		}),
 	}).SetupWithManager(mgr), unableToCreateController, controllerKey, "ClusterPodPlacementConfig")
+	must((&multiarchv1beta1.ClusterPodPlacementConfig{}).SetupWebhookWithManager(mgr), unableToCreateController,
+		controllerKey, "ClusterPodPlacementConfigConversionWebhook")
 }
 
 func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {

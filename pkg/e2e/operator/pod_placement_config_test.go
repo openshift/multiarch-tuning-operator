@@ -10,6 +10,8 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
@@ -26,7 +28,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 		schedulingGateLabel = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
 	)
 	AfterEach(func() {
-		err := client.Delete(ctx, &v1alpha1.ClusterPodPlacementConfig{
+		err := client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "cluster",
 			},
@@ -35,7 +37,20 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 		Eventually(deploymentsAreDeleted).Should(Succeed())
 	})
 	Context("When the operator is running and a pod placement config is created", func() {
-		It("should deploy the operands", func() {
+		It("should deploy the operands with v1beta1 API", func() {
+			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(deploymentsAreRunning).Should(Succeed())
+			By("convert the v1beta1 CR to v1alpha1 should succeed")
+			c := &v1alpha1.ClusterPodPlacementConfig{}
+			err = client.Get(ctx, runtimeclient.ObjectKey{Name: "cluster"}, c)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("should deploy the operands with v1alpha1 API", func() {
 			err := client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
@@ -43,15 +58,19 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(deploymentsAreRunning).Should(Succeed())
+			By("convert the v1alpha1 CR to v1beta1 should succeed")
+			c := &v1beta1.ClusterPodPlacementConfig{}
+			err = client.Get(ctx, runtimeclient.ObjectKey{Name: "cluster"}, c)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 	Context("The webhook should get requests only for pods matching the namespaceSelector in the ClusterPodPlacementConfig CR", func() {
 		BeforeEach(func() {
-			err := client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
+			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
 				},
-				Spec: v1alpha1.ClusterPodPlacementConfigSpec{
+				Spec: v1beta1.ClusterPodPlacementConfigSpec{
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{
@@ -119,11 +138,11 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 	})
 	Context("The operator should respect to an opt-in namespaceSelector in ClusterPodPlacementConfig CR", func() {
 		BeforeEach(func() {
-			err := client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
+			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
 				},
-				Spec: v1alpha1.ClusterPodPlacementConfigSpec{
+				Spec: v1beta1.ClusterPodPlacementConfigSpec{
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{

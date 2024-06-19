@@ -14,13 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1beta1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // ClusterPodPlacementConfigSpec defines the desired state of ClusterPodPlacementConfig
 type ClusterPodPlacementConfigSpec struct {
@@ -63,10 +65,9 @@ type ClusterPodPlacementConfigStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// ClusterPodPlacementConfig defines the configuration for the PodPlacement operand.
-// It is a singleton resource that can consist of an object named cluster.
-// Creating this object will trigger the deployment of the architecture aware pod placement operand.
+// ClusterPodPlacementConfig is the Schema for the clusterpodplacementconfigs API
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=clusterpodplacementconfigs,scope=Cluster
 type ClusterPodPlacementConfig struct {

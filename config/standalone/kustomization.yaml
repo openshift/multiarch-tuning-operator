@@ -1,0 +1,9 @@
+kind: Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+
+resources:
+  - ../default
+
+patchesStrategicMerge:
+  - patches/webhook-service.yaml
+  - patches/crd-inject-ca.yaml

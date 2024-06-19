@@ -10,11 +10,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1alpha1.ClusterPodPlacementConfig) *admissionv1.MutatingWebhookConfiguration {
+func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig) *admissionv1.MutatingWebhookConfiguration {
 	return &admissionv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: podMutatingWebhookConfigurationName,
@@ -87,7 +87,7 @@ func buildService(name string, controllerName string, port int32, targetPort int
 	}
 }
 
-func buildDeployment(clusterPodPlacementConfig *v1alpha1.ClusterPodPlacementConfig,
+func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig,
 	name string, replicas int32, args ...string) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{

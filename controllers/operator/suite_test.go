@@ -53,6 +53,7 @@ import (
 
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
@@ -112,6 +113,8 @@ func startTestEnv() {
 	err = appsv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = v1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = v1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = admissionv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())

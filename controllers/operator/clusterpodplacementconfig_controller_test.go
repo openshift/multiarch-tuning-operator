@@ -30,7 +30,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -298,8 +298,8 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 			})
 			It("should sync the deployments' logLevel arguments", func() {
 				// get the clusterpodplacementconfig
-				ppc2 := &v1alpha1.ClusterPodPlacementConfig{}
-				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.ClusterPodPlacementConfig{
+				ppc2 := &v1beta1.ClusterPodPlacementConfig{}
+				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1beta1.ClusterPodPlacementConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      common.SingletonResourceObjectName,
 						Namespace: utils.Namespace(),
@@ -337,8 +337,8 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 			})
 			It("Should sync the namespace selector", func() {
 				// get the clusterpodplacementconfig
-				ppc := &v1alpha1.ClusterPodPlacementConfig{}
-				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1alpha1.ClusterPodPlacementConfig{
+				ppc := &v1beta1.ClusterPodPlacementConfig{}
+				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1beta1.ClusterPodPlacementConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      common.SingletonResourceObjectName,
 						Namespace: utils.Namespace(),
@@ -369,12 +369,12 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 })
 
 type clusterPodPlacementConfigFactory struct {
-	*v1alpha1.ClusterPodPlacementConfig
+	*v1beta1.ClusterPodPlacementConfig
 }
 
 func newClusterPodPlacementConfig() *clusterPodPlacementConfigFactory {
 	return &clusterPodPlacementConfigFactory{
-		ClusterPodPlacementConfig: &v1alpha1.ClusterPodPlacementConfig{},
+		ClusterPodPlacementConfig: &v1beta1.ClusterPodPlacementConfig{},
 	}
 }
 
@@ -393,6 +393,6 @@ func (p *clusterPodPlacementConfigFactory) WithLogVerbosity(logVerbosity common.
 	return p
 }
 
-func (p *clusterPodPlacementConfigFactory) Build() *v1alpha1.ClusterPodPlacementConfig {
+func (p *clusterPodPlacementConfigFactory) Build() *v1beta1.ClusterPodPlacementConfig {
 	return p.ClusterPodPlacementConfig
 }

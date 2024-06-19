@@ -34,7 +34,7 @@ import (
 
 	"github.com/openshift/library-go/pkg/operator/events"
 
-	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -78,7 +78,7 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 	log := ctrllog.FromContext(ctx)
 	log.V(3).Info("Reconciling ClusterPodPlacementConfig...")
 	// Lookup the ClusterPodPlacementConfig instance for this reconcile request
-	clusterPodPlacementConfig := &multiarchv1alpha1.ClusterPodPlacementConfig{}
+	clusterPodPlacementConfig := &multiarchv1beta1.ClusterPodPlacementConfig{}
 	var err error
 
 	if err = r.Get(ctx, client.ObjectKey{
@@ -132,7 +132,7 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context) 
 }
 
 // reconcile reconciles the ClusterPodPlacementConfig operand's resources.
-func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clusterPodPlacementConfig *multiarchv1alpha1.ClusterPodPlacementConfig) error {
+func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clusterPodPlacementConfig *multiarchv1beta1.ClusterPodPlacementConfig) error {
 	log := ctrllog.FromContext(ctx)
 	objects := []client.Object{
 		buildDeployment(clusterPodPlacementConfig, PodPlacementControllerName, 2,
@@ -181,7 +181,7 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&multiarchv1alpha1.ClusterPodPlacementConfig{}).
+		For(&multiarchv1beta1.ClusterPodPlacementConfig{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&admissionv1.MutatingWebhookConfiguration{}).

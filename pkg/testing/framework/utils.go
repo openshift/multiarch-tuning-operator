@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 )
 
 func DecorateWithWaitGroup(wg *sync.WaitGroup, f func()) {
@@ -77,6 +78,7 @@ func RegisterScheme(s *runtime.Scheme) error {
 	errs = append(errs, corev1.AddToScheme(s))
 	errs = append(errs, appsv1.AddToScheme(s))
 	errs = append(errs, v1alpha1.AddToScheme(s))
+	errs = append(errs, v1beta1.AddToScheme(s))
 	if len(errs) > 0 {
 		return errors.NewAggregate(errs)
 	}

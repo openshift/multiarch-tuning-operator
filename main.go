@@ -49,6 +49,7 @@ import (
 	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
 	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -156,7 +157,7 @@ func RunOperator(mgr ctrl.Manager) {
 		ClientSet: clientset,
 		Recorder: events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, &corev1.ObjectReference{
 			Kind:       gvk.Kind,
-			Name:       multiarchv1alpha1.SingletonResourceObjectName,
+			Name:       common.SingletonResourceObjectName,
 			Namespace:  utils.Namespace(),
 			APIVersion: gvk.GroupVersion().String(),
 		}),

@@ -187,6 +187,9 @@ func AddCertificateToConfigmap(ctx context.Context, client runtimeclient.Client,
 			return err
 		}
 	}
+	if c.Data == nil {
+		c.Data = map[string]string{}
+	}
 	c.Data[r.RegistryHost] = string(caData)
 	err = client.Update(ctx, &c)
 	if err != nil {

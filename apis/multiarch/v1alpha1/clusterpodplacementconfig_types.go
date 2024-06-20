@@ -24,29 +24,32 @@ import (
 
 // ClusterPodPlacementConfigSpec defines the desired state of ClusterPodPlacementConfig
 type ClusterPodPlacementConfigSpec struct {
-	// LogVerbosity is the log level for the pod placement controller.
+	// LogVerbosity is the log level for the pod placement components.
 	// Valid values are: "Normal", "Debug", "Trace", "TraceAll".
 	// Defaults to "Normal".
 	// +optional
 	// +kubebuilder:default=Normal
 	LogVerbosity common.LogVerbosityLevel `json:"logVerbosity,omitempty"`
 
-	// NamespaceSelector filters the namespaces that the architecture aware pod placement can operate.
+	// NamespaceSelector selects the namespaces in which the pod placement operand must process the nodeAffinity
+	// of the pods. All namespaces are considered by default.
 	//
-	// For example, users can configure an opt-out filter to disallow the operand from operating on namespaces with a given
-	// label:
 	//
+	// Example:
 	// {"namespaceSelector":{"matchExpressions":[{"key":"multiarch.openshift.io/exclude-pod-placement","operator":"DoesNotExist"}]}}
 	//
-	// The operand will set the node affinity requirement in all the pods created in namespaces that do not have
-	// the `multiarch.openshift.io/exclude-pod-placement` label.
+	// the "operator" field value is set to "DoesNotExist". Therefore, if the key field value
+	// "multiarch.openshift.io/exclude-pod-placement" is set as a label in a namespace, the operand does not process
+	// the nodeAffinity of the pods in that namespace. Instead, the operand processes the nodeAffinity of the pods in
+	// namespaces that do not contain the label.
 	//
-	// Alternatively, users can configure an opt-in filter to operate only on namespaces with specific labels:
+	// Users that want the operand to process the nodeAffinity of the pods only in specific namespaces, can configure
+	// the namespaceSelector as follows:
 	//
 	// {"namespaceSelector":{"matchExpressions":[{"key":"multiarch.openshift.io/include-pod-placement","operator":"Exists"}]}}
 	//
-	// The operand will set the node affinity requirement in all the pods created in namespace labeled with the key
-	// `multiarch.ioenshift.io/include-pod-placement`.
+	// The operator field value is set to "Exists". Therefore, the operand processes the nodeAffinity of the pods only
+	// in namespaces that contain the multiarch.openshift.io/include-pod-placement label.
 	//
 	// See
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
@@ -64,7 +67,7 @@ type ClusterPodPlacementConfigStatus struct {
 }
 
 // ClusterPodPlacementConfig defines the configuration for the PodPlacement operand.
-// It is a singleton resource that can consist of an object named cluster.
+// It is a singleton resource. Users can deploy one only object named "cluster".
 // Creating this object will trigger the deployment of the architecture aware pod placement operand.
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

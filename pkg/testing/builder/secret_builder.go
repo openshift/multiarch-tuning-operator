@@ -43,6 +43,10 @@ func (s *SecretBuilder) WithDockerConfigJsonType() *SecretBuilder {
 	return s.WithType("kubernetes.io/dockerconfigjson")
 }
 
+func (s *SecretBuilder) WithOpaqueType() *SecretBuilder {
+	return s.WithType("Opaque")
+}
+
 func (s *SecretBuilder) Build() v1.Secret {
 	return s.secret
 }

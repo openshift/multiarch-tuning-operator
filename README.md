@@ -1,28 +1,36 @@
 # Multiarch Tuning Operator
 
-The Multiarch Tuning Operator enhances the user experience for administrators of Openshift clusters with
-multi-architecture compute nodes or Site Reliability Engineers willing to migrate from single-arch to multi-arch
-OpenShift. When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator stands out as a pivotal tool to
+The Multiarch Tuning Operator enhances the operational experience within multi-architecture clusters, and
+single-architecture clusters that are migrating to a multi-architecture compute configuration.
+
+When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator stands out as a pivotal tool to
 enhance efficiency and streamline operations such as architecture-aware scheduling of workloads.
 
-The development work is still ongoing and there is no official, general available, release of it yet.
+The operator is available as part of the redhat-operator catalog in Openshift clusters.
+
+There is no official, general available, upstream release of the operator yet.
 
 ## Operands
 
-- **Architecture aware Pod Placement**: The pod placement operand consists of
-  the `PodPlacementController` and the `PodPlacementWebhook` and is managed through
-  a singleton custom resource - `clusterpodplacementconfigs.multiarch.openshift.io`.
-  Its aim is to automate the set up of strong predicates based on the
-  `kubernetes.io/arch` label in the pod's _nodeAffinity_ by inspecting the container
-  images in each pod and deriving a set of architectures supported by
-  the pod. When a pod is created, the `PodPlacementWebhook` will add the
-  `multiarch.openshift.io/scheduling-gate` scheduling gate.
-  It will prevent the pod from being scheduled until the `PodPlacementController`
-  computes a predicate for the `kubernetes.io/arch` label, adds it as a node affinity
-  requirement to the pod spec, and removes the scheduling gate.
-  This operand is based on the [KEP-3521](https://github.com/kubernetes/enhancements/blob/afad6f270c7ac2ae853f4d1b72c379a6c3c7c042/keps/sig-scheduling/3521-pod-scheduling-readiness/README.md) and
-  [KEP-3838](https://github.com/kubernetes/enhancements/blob/afad6f270c7ac2ae853f4d1b72c379a6c3c7c042/keps/sig-scheduling/3838-pod-mutable-scheduling-directives/README.md), as
-  described in the [Openshift EP](https://github.com/openshift/enhancements/blob/6cebc13f0672c601ebfae669ea4fc8ca632721b5/enhancements/multi-arch/multiarch-manager-operator.md) introducing it.
+### Architecture-aware Pod Placement
+
+The pod placement operand consists of
+the `pod placement controller` and the `pod placement webhook`. It is managed through
+a singleton custom resource: `clusterpodplacementconfigs.multiarch.openshift.io`.
+
+When a pod is created, the operand performs the following actions:
+
+1. Add the `multiarch.openshift.io/scheduling-gate` scheduling gate that prevents the scheduling of the pod.
+2. Compute a scheduling predicate that includes the supported architecture values for the `kubernetes.io/arch`.
+3. Integrate the scheduling predicate as a `nodeAffinity` requirement in the pod specification.
+4. Remove the scheduling gate from the pod.
+
+When the operand removes the scheduling gate, the pod enters the scheduling cycle. 
+The workload is then scheduled on nodes based on the supported architectures.
+
+This operand is based on the [KEP-3521](https://github.com/kubernetes/enhancements/blob/afad6f270c7ac2ae853f4d1b72c379a6c3c7c042/keps/sig-scheduling/3521-pod-scheduling-readiness/README.md) and
+[KEP-3838](https://github.com/kubernetes/enhancements/blob/afad6f270c7ac2ae853f4d1b72c379a6c3c7c042/keps/sig-scheduling/3838-pod-mutable-scheduling-directives/README.md), as
+described in the [Openshift EP](https://github.com/openshift/enhancements/blob/6cebc13f0672c601ebfae669ea4fc8ca632721b5/enhancements/multi-arch/multiarch-manager-operator.md) introducing it.
 
 ## Getting Started
 
@@ -73,8 +81,11 @@ make deploy IMG=<some-registry>/multiarch-tuning-operator:tag
 
 ### Deploy the Pod Placement Operand
 
-After the operator is running, you can deploy the Pod Placement Operand on the cluster through the ClusterPodPlacementConfig CR.
-It is expected to be a singleton, cluster-scoped resource, named `cluster`.
+To enable architecture-aware workload scheduling, you must create the `ClusterPodPlacementConfig` object.
+
+When you create the `ClusterPodPlacementConfig` object, this Operator deploys the pod placement operand.
+
+The `ClusterPodPlacementConfig` is a singleton object: the API allows only one object with name `cluster`.
 
 The following is an example of a ClusterPodPlacementConfig CR that sets the log verbosity level to `Normal` and 
 will watch and setup CPU architecture node affinities on all the pods, except the ones in namespaces labeled with 
@@ -86,7 +97,7 @@ safety reasons.
 ```shell
 # Deploy the pod placement operand on the cluster
 kubectl create -f - <<EOF
-apiVersion: multiarch.openshift.io/v1alpha1
+apiVersion: multiarch.openshift.io/v1beta1
 kind: ClusterPodPlacementConfig
 metadata:
   name: cluster

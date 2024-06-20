@@ -5,7 +5,9 @@ multi-architecture compute nodes or Site Reliability Engineers willing to migrat
 OpenShift. When diverse CPU architectures coexist within a cluster, the Multiarch Tuning Operator stands out as a pivotal tool to
 enhance efficiency and streamline operations such as architecture-aware scheduling of workloads.
 
-The development work is still ongoing and there is no official, general available, release of it yet.
+The operator is available as part of the redhat-operator catalog in Openshift clusters.
+
+There is no official, general available, upstream release of the operator yet.
 
 ## Operands
 
@@ -86,7 +88,7 @@ safety reasons.
 ```shell
 # Deploy the pod placement operand on the cluster
 kubectl create -f - <<EOF
-apiVersion: multiarch.openshift.io/v1alpha1
+apiVersion: multiarch.openshift.io/v1beta1
 kind: ClusterPodPlacementConfig
 metadata:
   name: cluster

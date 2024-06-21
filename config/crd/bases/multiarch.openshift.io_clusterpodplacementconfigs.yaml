@@ -18,10 +18,9 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterPodPlacementConfig defines the configuration for the PodPlacement
-          operand. It is a singleton resource. Users can deploy one only object named
-          "cluster". Creating this object will trigger the deployment of the architecture
-          aware pod placement operand.
+        description: ClusterPodPlacementConfig defines the configuration for the architecture
+          aware pod placement operand. Users can only deploy a single object named
+          "cluster". Creating the object enables the operand.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -51,23 +50,11 @@ spec:
                 - TraceAll
                 type: string
               namespaceSelector:
-                description: "NamespaceSelector selects the namespaces in which the
-                  pod placement operand must process the nodeAffinity of the pods.
-                  All namespaces are considered by default. \n Example: {\"namespaceSelector\":{\"matchExpressions\":[{\"key\":\"multiarch.openshift.io/exclude-pod-placement\",\"operator\":\"DoesNotExist\"}]}}
-                  \n the \"operator\" field value is set to \"DoesNotExist\". Therefore,
-                  if the key field value \"multiarch.openshift.io/exclude-pod-placement\"
-                  is set as a label in a namespace, the operand does not process the
-                  nodeAffinity of the pods in that namespace. Instead, the operand
-                  processes the nodeAffinity of the pods in namespaces that do not
-                  contain the label. \n Users that want the operand to process the
-                  nodeAffinity of the pods only in specific namespaces, can configure
-                  the namespaceSelector as follows: \n {\"namespaceSelector\":{\"matchExpressions\":[{\"key\":\"multiarch.openshift.io/include-pod-placement\",\"operator\":\"Exists\"}]}}
-                  \n The operator field value is set to \"Exists\". Therefore, the
-                  operand processes the nodeAffinity of the pods only in namespaces
-                  that contain the multiarch.openshift.io/include-pod-placement label.
-                  \n See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-                  for more examples of label selectors. \n Default to the empty LabelSelector,
-                  which matches everything. Selectors are ANDed."
+                description: NamespaceSelector selects the namespaces where the pod
+                  placement operand can process the nodeAffinity of the pods. If left
+                  empty, all the namespaces are considered. The default sample allows
+                  to exclude all the namespaces where the label "multiarch.openshift.io/exclude-pod-placement"
+                  exists.
                 properties:
                   matchExpressions:
                     description: matchExpressions is a list of label selector requirements.
@@ -195,10 +182,9 @@ spec:
   - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: ClusterPodPlacementConfig defines the configuration for the PodPlacement
-          operand. It is a singleton resource. Users can deploy one only object named
-          "cluster". Creating this object will trigger the deployment of the architecture
-          aware pod placement operand.
+        description: ClusterPodPlacementConfig defines the configuration for the architecture
+          aware pod placement operand. Users can only deploy a single object named
+          "cluster". Creating the object enables the operand.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -228,23 +214,11 @@ spec:
                 - TraceAll
                 type: string
               namespaceSelector:
-                description: "NamespaceSelector selects the namespaces in which the
-                  pod placement operand must process the nodeAffinity of the pods.
-                  All namespaces are considered by default. \n Example: {\"namespaceSelector\":{\"matchExpressions\":[{\"key\":\"multiarch.openshift.io/exclude-pod-placement\",\"operator\":\"DoesNotExist\"}]}}
-                  \n the \"operator\" field value is set to \"DoesNotExist\". Therefore,
-                  if the key field value \"multiarch.openshift.io/exclude-pod-placement\"
-                  is set as a label in a namespace, the operand does not process the
-                  nodeAffinity of the pods in that namespace. Instead, the operand
-                  processes the nodeAffinity of the pods in namespaces that do not
-                  contain the label. \n Users that want the operand to process the
-                  nodeAffinity of the pods only in specific namespaces, can configure
-                  the namespaceSelector as follows: \n {\"namespaceSelector\":{\"matchExpressions\":[{\"key\":\"multiarch.openshift.io/include-pod-placement\",\"operator\":\"Exists\"}]}}
-                  \n The operator field value is set to \"Exists\". Therefore, the
-                  operand processes the nodeAffinity of the pods only in namespaces
-                  that contain the multiarch.openshift.io/include-pod-placement label.
-                  \n See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-                  for more examples of label selectors. \n Default to the empty LabelSelector,
-                  which matches everything. Selectors are ANDed."
+                description: NamespaceSelector selects the namespaces where the pod
+                  placement operand can process the nodeAffinity of the pods. If left
+                  empty, all the namespaces are considered. The default sample allows
+                  to exclude all the namespaces where the label "multiarch.openshift.io/exclude-pod-placement"
+                  exists.
                 properties:
                   matchExpressions:
                     description: matchExpressions is a list of label selector requirements.

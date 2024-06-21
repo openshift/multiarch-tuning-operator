@@ -778,6 +778,129 @@ var _ = Describe("The Pod Placement Operand", func() {
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
+		It("should set the node affinity when registry certificate added in the trusted anchors and registry url added to allowed list", func() {
+			var (
+				registryName string = "allowed-registry"
+				err          error
+			)
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			// Create registry
+			registryConfig, err := registry.NewRegistry(ns, registryName, dns.Spec.BaseDomain, "https://quay.io", auth_user_local, auth_pass_local)
+			Expect(err).NotTo(HaveOccurred())
+			// remove Certificate dir
+			defer func() {
+				err = registry.RemoveCertificateFiles(registryConfig.KeyPath)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+			err = registry.Deploy(ctx, client, registryConfig)
+			Expect(err).NotTo(HaveOccurred())
+			// Create configmap for registry Certificate
+			err = registry.AddCertificateToConfigmap(ctx, client, registryConfig)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				err = registry.RemoveCertificateFromConfigmap(ctx, client, registryConfig)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+			// Update image.config
+			// Add registry-cas configmap and registry urls to image.config
+			image := getImageConfig(ctx, client)
+			imageForRemove := image
+			image.Spec.AdditionalTrustedCA = ocpconfigv1.ConfigMapNameReference{
+				Name: "registry-cas",
+			}
+			image.Spec.RegistrySources.AllowedRegistries = append(image.Spec.RegistrySources.AllowedRegistries, registryConfig.RegistryHost, "quay.io",
+				"registry.redhat.io", "image-registry.openshift-image-registry.svc:5000", "registry.build10.ci.openshift.org")
+			err = client.Update(ctx, &image)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				image := getImageConfig(ctx, client)
+				image.Spec = imageForRemove.Spec
+				err = client.Update(ctx, &image)
+				Expect(err).NotTo(HaveOccurred())
+				waitForMCPComplete()
+			}()
+			waitForMCPComplete()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(
+					NewPodSpec().
+						WithContainersImages(getMirroredImageURI(registryConfig.RegistryHost, helloOpenshiftPrivateMultiarchImageLocal)).
+						Build()).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+		})
+		It("should not set the node affinity when registry url added to blockedRegistries list", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			// Update image.config
+			image := getImageConfig(ctx, client)
+			imageForRemove := image
+			blockedRegistry := "gcr.io"
+			image.Spec.RegistrySources.BlockedRegistries = append(image.Spec.RegistrySources.BlockedRegistries, blockedRegistry)
+			err = client.Update(ctx, &image)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				image := getImageConfig(ctx, client)
+				image.Spec = imageForRemove.Spec
+				err = client.Update(ctx, &image)
+				Expect(err).NotTo(HaveOccurred())
+				waitForMCPComplete()
+			}()
+			waitForMCPComplete()
+			// Check ppo will block image from registry in blocked registry list
+			d := NewDeployment().
+				WithSelectorAndPodLabels(map[string]string{"app": "test-block"}).
+				WithPodSpec(
+					NewPodSpec().
+						WithContainersImages("gcr.io/google_containers/pause:3.2").
+						Build()).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment-blocked").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			verifyPodNodeAffinity(ns, "app", "test-block")
+			verifyPodLabels(ns, "app", "test-block", e2e.Present, schedulingGateLabel)
+			// Check ppo will allow image from registry not in blocked registry list
+			d = NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(NewPodSpec().
+					WithContainersImages(helloOpenshiftPublicMultiarchImage).
+					Build()).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+		})
 	})
 })
 

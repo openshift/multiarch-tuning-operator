@@ -30,31 +30,10 @@ type ClusterPodPlacementConfigSpec struct {
 	// +kubebuilder:default=Normal
 	LogVerbosity common.LogVerbosityLevel `json:"logVerbosity,omitempty"`
 
-	// NamespaceSelector selects the namespaces in which the pod placement operand must process the nodeAffinity
-	// of the pods. All namespaces are considered by default.
-	//
-	//
-	// Example:
-	// {"namespaceSelector":{"matchExpressions":[{"key":"multiarch.openshift.io/exclude-pod-placement","operator":"DoesNotExist"}]}}
-	//
-	// the "operator" field value is set to "DoesNotExist". Therefore, if the key field value
-	// "multiarch.openshift.io/exclude-pod-placement" is set as a label in a namespace, the operand does not process
-	// the nodeAffinity of the pods in that namespace. Instead, the operand processes the nodeAffinity of the pods in
-	// namespaces that do not contain the label.
-	//
-	// Users that want the operand to process the nodeAffinity of the pods only in specific namespaces, can configure
-	// the namespaceSelector as follows:
-	//
-	// {"namespaceSelector":{"matchExpressions":[{"key":"multiarch.openshift.io/include-pod-placement","operator":"Exists"}]}}
-	//
-	// The operator field value is set to "Exists". Therefore, the operand processes the nodeAffinity of the pods only
-	// in namespaces that contain the multiarch.openshift.io/include-pod-placement label.
-	//
-	// See
-	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-	// for more examples of label selectors.
-	//
-	// Default to the empty LabelSelector, which matches everything. Selectors are ANDed.
+	// NamespaceSelector selects the namespaces where the pod placement operand can process the nodeAffinity
+	// of the pods. If left empty, all the namespaces are considered.
+	// The default sample allows to exclude all the namespaces where the
+	// label "multiarch.openshift.io/exclude-pod-placement" exists.
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
 }
@@ -65,9 +44,9 @@ type ClusterPodPlacementConfigStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// ClusterPodPlacementConfig defines the configuration for the PodPlacement operand.
-// It is a singleton resource. Users can deploy one only object named "cluster".
-// Creating this object will trigger the deployment of the architecture aware pod placement operand.
+// ClusterPodPlacementConfig defines the configuration for the architecture aware pod placement operand.
+// Users can only deploy a single object named "cluster".
+// Creating the object enables the operand.
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status

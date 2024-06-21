@@ -26,7 +26,8 @@ metadata:
     capabilities: Seamless Upgrades
     categories: OpenShift Optional, Other
     console.openshift.io/disable-operand-delete: "true"
-    createdAt: "2024-06-20T12:43:35Z"
+    containerImage: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
+    createdAt: "2024-06-21T16:16:42Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -59,18 +60,16 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: ClusterPodPlacementConfig defines the configuration for the PodPlacement
-        operand. It is a singleton resource. Users can deploy one only object named
-        "cluster". Creating this object will trigger the deployment of the architecture
-        aware pod placement operand.
+    - description: ClusterPodPlacementConfig defines the configuration for the architecture
+        aware pod placement operand. Users can only deploy a single object named "cluster".
+        Creating the object enables the operand.
       displayName: Cluster Pod Placement Config
       kind: ClusterPodPlacementConfig
       name: clusterpodplacementconfigs.multiarch.openshift.io
       version: v1alpha1
-    - description: ClusterPodPlacementConfig defines the configuration for the PodPlacement
-        operand. It is a singleton resource. Users can deploy one only object named
-        "cluster". Creating this object will trigger the deployment of the architecture
-        aware pod placement operand.
+    - description: ClusterPodPlacementConfig defines the configuration for the architecture
+        aware pod placement operand. Users can only deploy a single object named "cluster".
+        Creating the object enables the operand.
       displayName: Cluster Pod Placement Config
       kind: ClusterPodPlacementConfig
       name: clusterpodplacementconfigs.multiarch.openshift.io
@@ -460,7 +459,10 @@ spec:
   links:
   - name: Multiarch Tuning Operator Documentation
     url: https://docs.openshift.com/container-platform/4.16/post_installation_configuration/configuring-multi-arch-compute-machines/multiarch-tuning-operator.html
-  maturity: alpha
+  maintainers:
+  - email: support@redhat.com
+    name: Red Hat
+  maturity: beta
   minKubeVersion: 1.27.0
   provider:
     name: Red Hat

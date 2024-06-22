@@ -1,0 +1,16 @@
+kind: Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+
+resources:
+  - ../../base/
+
+patches:
+  - target:
+      group: operators.coreos.com
+      version: v1alpha1
+      kind: CatalogSource
+      name: multiarch-tuning-operator-catalog
+    patch: |-
+      - op: replace
+        path: /spec/image
+        value: quay.io/multi-arch/multiarch-tuning-operator:catalog

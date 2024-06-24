@@ -13,6 +13,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 
 	ocpconfigv1 "github.com/openshift/api/config/v1"
 	ocpmachineconfigurationv1 "github.com/openshift/api/machineconfiguration/v1"
@@ -253,6 +254,37 @@ var _ = Describe("The Pod Placement Operand", func() {
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test")
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+		})
+		It("should not set the node affinity when nodeName exist", func() {
+			var err error
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Get the name of a random worker node")
+			workerNodeName, err := framework.GetRandomNodeName(ctx, client, "node-role.kubernetes.io/worker", "")
+			Expect(workerNodeName).NotTo(BeEmpty())
+			Expect(err).NotTo(HaveOccurred())
+			By("Create a deployment using the container with nodeName existing")
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				WithNodeName(workerNodeName).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			By("Check PPO should not add schedulingGate label on pod and pod can be created and running")
+			verifyPodsAreRunning(ns, "app", "test")
+			verifyPodNodeAffinity(ns, "app", "test")
+			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
 		})
 	})
 	Context("When a statefulset is deployed with single vs multi container images", func() {
@@ -1020,6 +1052,24 @@ func verifyPodLabels(ns *corev1.Namespace, labelKey string, labelInValue string,
 				}, Not(HaveKey(k)))))
 			}
 		}
+	}, e2e.WaitShort).Should(Succeed())
+}
+
+func verifyPodsAreRunning(ns *corev1.Namespace, labelKey string, labelInValue string) {
+	r, err := labels.NewRequirement(labelKey, selection.In, []string{labelInValue})
+	labelSelector := labels.NewSelector().Add(*r)
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(func(g Gomega) {
+		pods := &corev1.PodList{}
+		err := client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) corev1.PodPhase {
+			return p.Status.Phase
+		}, Equal(corev1.PodRunning))))
 	}, e2e.WaitShort).Should(Succeed())
 }
 

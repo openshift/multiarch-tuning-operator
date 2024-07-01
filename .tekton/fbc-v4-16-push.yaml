@@ -335,7 +335,7 @@ spec:
         - name: name
           value: fbc-related-image-check
         - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-fbc-related-image-check:0.1@sha256:ef5085c98669ecf8af56b90b9a52355f3039562e99fd4039ca3161b9818cb0f4
+          value: quay.io/redhat-appstudio-tekton-catalog/task-fbc-related-image-check:0.1@sha256:90cda62ce74690096311ce664549e6d65c0b0fd35b589900c71a4db48ed7ca5d
         - name: kind
           value: task
         resolver: bundles

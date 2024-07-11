@@ -4,16 +4,17 @@ metadata:
   annotations:
     build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "fbc-4.16"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
+      == "fbc-4.17"
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: fbc-v4-16
-    appstudio.openshift.io/component: fbc-v4-16
+    appstudio.openshift.io/application: fbc-v4-17
+    appstudio.openshift.io/component: fbc-v4-17
     pipelines.appstudio.openshift.io/type: build
-  name: fbc-v4-16-on-push
+  name: fbc-v4-17-on-pull-request
   namespace: multiarch-tuning-ope-tenant
 spec:
   params:
@@ -21,8 +22,10 @@ spec:
     value: Dockerfile
   - name: git-url
     value: '{{source_url}}'
+  - name: image-expires-after
+    value: 5d
   - name: output-image
-    value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/fbc-v4-16/fbc-v4-16:{{revision}}
+    value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/fbc-v4-17/fbc-v4-17:on-pr-{{revision}}
   - name: path-context
     value: .
   - name: revision
@@ -250,31 +253,6 @@ spec:
         operator: in
         values:
         - "false"
-    - name: build-source-image
-      params:
-        - name: BINARY_IMAGE
-          value: $(params.output-image)
-        - name: BASE_IMAGES
-          value: $(tasks.build-container.results.BASE_IMAGES_DIGESTS)
-      runAfter:
-        - build-container
-      taskRef:
-        params:
-          - name: name
-            value: source-build
-          - name: bundle
-            value: quay.io/redhat-appstudio-tekton-catalog/task-source-build:0.1@sha256:83ee909cb8f7d659fac380a2521fb60f30c309e5ecb91f3aad2433936e690d98
-          - name: kind
-            value: task
-        resolver: bundles
-      when:
-        - input: $(tasks.init.results.build)
-          operator: in
-          values:
-            - "true"
-      workspaces:
-        - name: workspace
-          workspace: workspace
     - name: inspect-image
       params:
       - name: IMAGE_URL
@@ -300,6 +278,31 @@ spec:
       workspaces:
       - name: source
         workspace: workspace
+    - name: build-source-image
+      params:
+        - name: BINARY_IMAGE
+          value: $(params.output-image)
+        - name: BASE_IMAGES
+          value: $(tasks.build-container.results.BASE_IMAGES_DIGESTS)
+      runAfter:
+        - build-container
+      taskRef:
+        params:
+          - name: name
+            value: source-build
+          - name: bundle
+            value: quay.io/redhat-appstudio-tekton-catalog/task-source-build:0.1@sha256:83ee909cb8f7d659fac380a2521fb60f30c309e5ecb91f3aad2433936e690d98
+          - name: kind
+            value: task
+        resolver: bundles
+      when:
+        - input: $(tasks.init.results.build)
+          operator: in
+          values:
+            - "true"
+      workspaces:
+        - name: workspace
+          workspace: workspace
     - name: fbc-validate
       params:
       - name: IMAGE_URL

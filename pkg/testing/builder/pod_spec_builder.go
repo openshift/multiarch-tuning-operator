@@ -75,6 +75,11 @@ func (ps *PodSpecBuilder) WithInitContainersImages(images ...string) *PodSpecBui
 	return ps
 }
 
+func (ps *PodSpecBuilder) WithNodeName(nodeName string) *PodSpecBuilder {
+	ps.podspec.NodeName = nodeName
+	return ps
+}
+
 func (ps *PodSpecBuilder) WithVolumes(volumes ...v1.Volume) *PodSpecBuilder {
 	ps.podspec.Volumes = volumes
 	return ps

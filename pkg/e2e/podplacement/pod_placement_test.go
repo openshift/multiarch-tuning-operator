@@ -254,6 +254,41 @@ var _ = Describe("The Pod Placement Operand", func() {
 			verifyPodNodeAffinity(ns, "app", "test")
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
+		It("should not set the node affinity when nodeName exist", func() {
+			var err error
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Get the name of a random worker node")
+			workerNodeName, err := framework.GetRandomNodeName(ctx, client, "node-role.kubernetes.io/worker", "")
+			Expect(workerNodeName).NotTo(BeEmpty())
+			Expect(err).NotTo(HaveOccurred())
+			By("Create a deployment using the container with a preset nodeName")
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				WithNodeName(workerNodeName).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			By("The pod should not have been processed by the webhook and the scheduling gate label should not be added")
+			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
+			By("The pod should keep the same node affinity provided by the users. No node affinity is added by the controller.")
+			verifyPodNodeAffinity(ns, "app", "test")
+			By("The pod should be running and not gated")
+			Eventually(func(g Gomega) {
+				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
+			}, e2e.WaitShort).Should(Succeed())
+		})
 	})
 	Context("When a statefulset is deployed with single vs multi container images", func() {
 		It("should set the node affinity when with a single container and a singlearch image", func() {

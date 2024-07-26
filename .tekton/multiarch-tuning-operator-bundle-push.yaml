@@ -6,13 +6,13 @@ metadata:
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main" && ("bundle/***".pathChanged() || ".tekton/multiarch-tuning-operator-bundle-push.yaml".pathChanged() || "bundle.konflux.Dockerfile".pathChanged() || "trigger-konflux-builds.txt".pathChanged() )
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "v0.9" && ("bundle/***".pathChanged() || ".tekton/multiarch-tuning-operator-bundle-push.yaml".pathChanged() || "bundle.konflux.Dockerfile".pathChanged() || "trigger-konflux-builds.txt".pathChanged() )
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: multiarch-tuning-operator
-    appstudio.openshift.io/component: multiarch-tuning-operator-bundle
+    appstudio.openshift.io/application: multiarch-tuning-operator-0-9
+    appstudio.openshift.io/component: multiarch-tuning-operator-bundle-0-9
     pipelines.appstudio.openshift.io/type: build
-  name: multiarch-tuning-operator-bundle-on-push
+  name: multiarch-tuning-operator-bundle-0-9-on-push
   namespace: multiarch-tuning-ope-tenant
 spec:
   params:
@@ -21,7 +21,7 @@ spec:
     - name: git-url
       value: '{{source_url}}'
     - name: output-image
-      value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/multiarch-tuning-operator/multiarch-tuning-operator-bundle:{{revision}}
+      value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/multiarch-tuning-operator-0-9/multiarch-tuning-operator-bundle-0-9:{{revision}}
     - name: path-context
       value: .
     - name: revision

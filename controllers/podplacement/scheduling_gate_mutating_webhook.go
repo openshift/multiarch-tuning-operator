@@ -66,11 +66,18 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// ignore the openshift-* namespace as those are infra components, and ignore the namespace where the operand is running too
-	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "openshift-") ||
-		strings.HasPrefix(pod.Namespace, "hypershift-") || strings.HasPrefix(pod.Namespace, "kube-") ||
-		pod.Spec.NodeName != "" {
+	// ignore the kube-* and hypershift-* namespace as those are infra components, and ignore the namespace where the operand is running too
+	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "hypershift-") ||
+		strings.HasPrefix(pod.Namespace, "kube-") || pod.Spec.NodeName != "" ||
+		pod.Spec.NodeSelector != nil && utils.HasControlPlaneNodeSelector(pod.Spec.NodeSelector) {
 		return a.patchedPodResponse(pod, req)
+	}
+
+	// ignore any pods which have been scheduled on the control plane
+	if pod.Spec.NodeSelector != nil {
+		if utils.HasControlPlaneNodeSelector(pod.Spec.NodeSelector) {
+			return a.patchedPodResponse(pod, req)
+		}
 	}
 
 	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3521-pod-scheduling-readiness

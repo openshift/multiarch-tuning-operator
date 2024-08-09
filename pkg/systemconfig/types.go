@@ -175,23 +175,15 @@ type registryConf struct {
 type Mirror struct {
 	Location       string   `toml:"location"`
 	PullFromMirror PullType `toml:"pull-from-mirror"`
-	// insecure *bool  `toml:"insecure"`
+	Insecure       *bool    `toml:"insecure"`
 }
 
-func mirrorFor(location string, pullType PullType) Mirror {
+func mirrorFor(location string, pullType PullType, insecure *bool) Mirror {
 	return Mirror{
 		Location:       location,
 		PullFromMirror: pullType,
-		// insecure: insecure,
+		Insecure:       insecure,
 	}
-}
-
-func mirrorsFor(locations []string, pullType PullType) []Mirror {
-	var mirrors []Mirror
-	for _, location := range locations {
-		mirrors = append(mirrors, mirrorFor(location, pullType))
-	}
-	return mirrors
 }
 
 // defaultRegistriesConf returns a default registriesConf object

@@ -320,7 +320,7 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 					}), &d)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get deployment "+PodPlacementControllerName, err)
 					g.Expect(d.Spec.Template.Spec.Containers[0].Args).To(ContainElement(
-						fmt.Sprintf("-zap-log-level=%d", common.LogVerbosityLevelTraceAll.ToZapLevelInt())))
+						fmt.Sprintf("--initial-log-level=%d", common.LogVerbosityLevelTraceAll.ToZapLevelInt())))
 				}).Should(Succeed(), "the deployment "+PodPlacementControllerName+" should be updated")
 				Eventually(func(g Gomega) {
 					d := appsv1.Deployment{}

@@ -34,6 +34,8 @@ import (
 
 	"github.com/openshift/library-go/pkg/operator/events"
 
+	"go.uber.org/zap/zapcore"
+
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
@@ -134,6 +136,11 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context) 
 // reconcile reconciles the ClusterPodPlacementConfig operand's resources.
 func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clusterPodPlacementConfig *multiarchv1beta1.ClusterPodPlacementConfig) error {
 	log := ctrllog.FromContext(ctx)
+	if int8(utils.AtomicLevel.Level()) != int8(clusterPodPlacementConfig.Spec.LogVerbosity.ToZapLevelInt()) {
+		log.Info("Setting log level", "level", -clusterPodPlacementConfig.Spec.LogVerbosity.ToZapLevelInt())
+		utils.AtomicLevel.SetLevel(zapcore.Level(-clusterPodPlacementConfig.Spec.LogVerbosity.ToZapLevelInt()))
+	}
+
 	objects := []client.Object{
 		buildDeployment(clusterPodPlacementConfig, PodPlacementControllerName, 2,
 			"--leader-elect",

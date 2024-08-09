@@ -1,9 +1,14 @@
 package utils
 
-import "os"
+import (
+	"os"
+
+	"go.uber.org/zap"
+)
 
 var namespace string
 var image string
+var AtomicLevel zap.AtomicLevel = zap.NewAtomicLevelAt(-5)
 
 func init() {
 	// Get the namespace from the env variable

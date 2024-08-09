@@ -155,7 +155,7 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 							Args: append([]string{
 								"--health-probe-bind-address=:8081",
 								"--metrics-bind-address=127.0.0.1:8080",
-								fmt.Sprintf("-zap-log-level=%d",
+								fmt.Sprintf("--initial-log-level=%d",
 									clusterPodPlacementConfig.Spec.LogVerbosity.ToZapLevelInt()),
 							}, args...),
 							Command: []string{

@@ -23,3 +23,8 @@ const (
 	SchedulingGateLabelValueGated   = "gated"
 	SchedulingGateLabelValueRemoved = "removed"
 )
+
+const (
+	// SchedulingGateName is the name of the Scheduling Gate
+	SchedulingGateName = "multiarch.openshift.io/scheduling-gate"
+)

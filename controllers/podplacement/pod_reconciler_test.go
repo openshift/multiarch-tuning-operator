@@ -40,7 +40,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
 					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
-						Name: schedulingGateName,
+						Name: utils.SchedulingGateName,
 					}), "scheduling gate not removed")
 					g.Expect(pod.Labels).To(HaveKeyWithValue(utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved),
 						"scheduling gate annotation not found")

@@ -55,7 +55,7 @@ type PodReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
-// Reconcile has to watch the pod object if it has the scheduling gate with name schedulingGateName,
+// Reconcile has to watch the pod object if it has the scheduling gate with name SchedulingGateName,
 // inspect the images in the pod spec, update the nodeAffinity accordingly and remove the scheduling gate.
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)

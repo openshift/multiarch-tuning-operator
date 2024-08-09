@@ -75,7 +75,7 @@ func TestPod_HasSchedulingGate(t *testing.T) {
 		},
 		{
 			name: "pod with the multiarch-tuning-operator scheduling gate",
-			pod:  NewPod().WithSchedulingGates(schedulingGateName).Build(),
+			pod:  NewPod().WithSchedulingGates(utils.SchedulingGateName).Build(),
 			want: true,
 		},
 		{
@@ -86,7 +86,7 @@ func TestPod_HasSchedulingGate(t *testing.T) {
 		{
 			name: "pod with scheduling gates and the multiarch-tuning-operator scheduling gate",
 			pod: NewPod().WithSchedulingGates(
-				"some-other-scheduling-gate-bar", schedulingGateName, "some-other-scheduling-gate-foo").Build(),
+				"some-other-scheduling-gate-bar", utils.SchedulingGateName, "some-other-scheduling-gate-foo").Build(),
 			want: true,
 		},
 	}
@@ -120,7 +120,7 @@ func TestPod_RemoveSchedulingGate(t *testing.T) {
 		},
 		{
 			name: "pod with the multiarch-tuning-operator scheduling gate",
-			pod:  NewPod().WithSchedulingGates(schedulingGateName).Build(),
+			pod:  NewPod().WithSchedulingGates(utils.SchedulingGateName).Build(),
 			want: []v1.PodSchedulingGate{},
 		},
 		{
@@ -135,7 +135,7 @@ func TestPod_RemoveSchedulingGate(t *testing.T) {
 		{
 			name: "pod with scheduling gates and the multiarch-tuning-operator scheduling gate",
 			pod: NewPod().WithSchedulingGates(
-				"some-other-scheduling-gate-bar", schedulingGateName,
+				"some-other-scheduling-gate-bar", utils.SchedulingGateName,
 				"some-other-scheduling-gate-foo").Build(),
 			want: []v1.PodSchedulingGate{
 				{

@@ -78,10 +78,7 @@ func ApplyResources(ctx context.Context, clientSet *kubernetes.Clientset, record
 // DeleteResource deletes the given object from the cluster. It returns an error if any.
 // TODO[integration-tests]: integration tests for this function in a suite dedicated to this package
 func DeleteResource(ctx context.Context, namespacedTypedClient DeleterInterface, objName string) error {
-	if err := namespacedTypedClient.Delete(ctx, objName, metav1.DeleteOptions{}); err != nil && client.IgnoreNotFound(err) != nil {
-		return err
-	}
-	return nil
+	return client.IgnoreNotFound(namespacedTypedClient.Delete(ctx, objName, metav1.DeleteOptions{}))
 }
 
 // DeleteResources deletes the given objects from the cluster. It returns an error if any.

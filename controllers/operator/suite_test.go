@@ -54,6 +54,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
@@ -84,6 +85,7 @@ var _ = BeforeSuite(func() {
 	SetDefaultEventuallyPollingInterval(5 * time.Millisecond)
 	SetDefaultEventuallyTimeout(5 * time.Second)
 	startTestEnv()
+	testingutils.EnsureNamespaces(ctx, k8sClient, "test-namespace")
 	runManager()
 })
 

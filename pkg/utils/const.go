@@ -22,6 +22,7 @@ const (
 	SchedulingGateLabel             = "multiarch.openshift.io/scheduling-gate"
 	SchedulingGateLabelValueGated   = "gated"
 	SchedulingGateLabelValueRemoved = "removed"
+	PodPlacementFinalizerName       = "finalizers.multiarch.openshift.io/pod-placement"
 )
 
 const (

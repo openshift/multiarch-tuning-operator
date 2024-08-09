@@ -88,7 +88,11 @@ func buildService(name string, controllerName string, port int32, targetPort int
 }
 
 func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig,
-	name string, replicas int32, args ...string) *appsv1.Deployment {
+	name string, replicas int32, finalizer string, args ...string) *appsv1.Deployment {
+	finalizers := make([]string, 0)
+	if finalizer != "" {
+		finalizers = append(finalizers, finalizer)
+	}
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -97,6 +101,7 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 				utils.OperandLabelKey:   operandName,
 				utils.ControllerNameKey: name,
 			},
+			Finalizers: finalizers,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: utils.NewPtr(replicas),

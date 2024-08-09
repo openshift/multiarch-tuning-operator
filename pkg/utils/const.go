@@ -22,4 +22,6 @@ const (
 	SchedulingGateLabel             = "multiarch.openshift.io/scheduling-gate"
 	SchedulingGateLabelValueGated   = "gated"
 	SchedulingGateLabelValueRemoved = "removed"
+	MasterNodeSelectorLabel         = "node-role.kubernetes.io/master"
+	ControlPlaneNodeSelectorLabel   = "node-role.kubernetes.io/control-plane"
 )

@@ -227,12 +227,15 @@ func runManager() {
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,
+		Recorder:  mgr.GetEventRecorderFor(utils.OperatorName),
 	}).SetupWithManager(mgr)).NotTo(HaveOccurred())
 
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{
 		Handler: &PodSchedulingGateMutatingWebHook{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
+			Client:    mgr.GetClient(),
+			ClientSet: clientset,
+			Scheme:    mgr.GetScheme(),
+			Recorder:  mgr.GetEventRecorderFor(utils.OperatorName),
 		}})
 	By("Setting up System Config Syncer")
 	err = mgr.Add(NewConfigSyncerRunnable())

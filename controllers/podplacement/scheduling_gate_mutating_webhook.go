@@ -18,13 +18,22 @@ package podplacement
 
 import (
 	"context"
-	"net/http"
 	"strings"
+	"time"
+
+	"net/http"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -43,9 +52,11 @@ var schedulingGate = corev1.PodSchedulingGate{
 
 // PodSchedulingGateMutatingWebHook annotates Pods
 type PodSchedulingGateMutatingWebHook struct {
-	Client  client.Client
-	decoder *admission.Decoder
-	Scheme  *runtime.Scheme
+	Client    client.Client
+	ClientSet *kubernetes.Clientset
+	decoder   *admission.Decoder
+	Scheme    *runtime.Scheme
+	Recorder  record.EventRecorder
 }
 
 func (a *PodSchedulingGateMutatingWebHook) patchedPodResponse(pod *corev1.Pod, req admission.Request) admission.Response {
@@ -65,11 +76,13 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
+	log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name)
 
 	// ignore the openshift-* namespace as those are infra components, and ignore the namespace where the operand is running too
 	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "openshift-") ||
 		strings.HasPrefix(pod.Namespace, "hypershift-") || strings.HasPrefix(pod.Namespace, "kube-") ||
 		pod.Spec.NodeName != "" {
+		log.V(5).Info("Ignoring the pod")
 		return a.patchedPodResponse(pod, req)
 	}
 
@@ -96,5 +109,50 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	// waiting for processing, for example when the operator is being uninstalled.
 	pod.Labels[utils.SchedulingGateLabel] = utils.SchedulingGateLabelValueGated
 	pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueNotSet
+	// we don't care about this goroutine, it's informational,
+	// we know it will finish eventually by design, and we don't need to block the response as we
+	// are right in the admission pipeline, before the pod is persisted.
+	log.V(5).Info("Scheduling gate added to the pod, launching the event creation goroutine")
+	go a.delayedSchedulingGatedEvent(pod)()
+	log.V(4).Info("Accepting pod")
 	return a.patchedPodResponse(pod, req)
+}
+
+func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(pod *corev1.Pod) func() {
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name,
+			"function", "delayedSchedulingGatedEvent")
+		// We try to get the pod from the API with exponential backoff until we find it or a timeout is reached
+		err := wait.ExponentialBackoff(wait.Backoff{
+			// The maximum time, excluding the time for the execution of the request,
+			// is the sum of a geometric series with factor != 1.
+			// maxTime = duration * (factor^steps - 1) / (factor - 1)
+			// maxTime = 2e-3s * (2^15 - 1) = 65.534s
+			Duration: 2 * time.Millisecond,
+			Factor:   2,
+			Steps:    15,
+		}, func() (bool, error) {
+			createdPod, err := a.ClientSet.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+			if err == nil {
+				log.V(4).Info("Pod was found", "namespace", pod.Namespace, "name", pod.Name)
+				a.Recorder.Event(createdPod, corev1.EventTypeNormal, ArchitectureAwareSchedulingGateAdded, SchedulingGateAddedMsg)
+				// Pod was found, return true to stop retrying
+				return true, nil
+			}
+			if apierrors.IsNotFound(err) {
+				log.V(5).Info("Pod not found yet", "namespace", pod.Namespace, "name", pod.Name)
+				// Pod not found yet, continue retrying
+				return false, nil
+			}
+			// Stop retrying
+			log.V(5).Info("Failed to get pod", "error", err)
+			return false, err
+		})
+		if err != nil {
+			log.V(4).Info("Failed to get a scheduling gated Pod after retries",
+				"error", err)
+		}
+	}
 }

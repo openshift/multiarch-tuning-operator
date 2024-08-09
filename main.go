@@ -174,6 +174,7 @@ func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,
+		Recorder:  mgr.GetEventRecorderFor(utils.OperatorName),
 	}).SetupWithManager(mgr),
 		unableToCreateController, controllerKey, "PodReconciler")
 
@@ -196,9 +197,13 @@ func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
 }
 
 func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
+	config := ctrl.GetConfigOrDie()
+	clientset := kubernetes.NewForConfigOrDie(config)
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: &podplacement.PodSchedulingGateMutatingWebHook{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		ClientSet: clientset,
+		Scheme:    mgr.GetScheme(),
+		Recorder:  mgr.GetEventRecorderFor(utils.OperatorName),
 	}})
 }
 

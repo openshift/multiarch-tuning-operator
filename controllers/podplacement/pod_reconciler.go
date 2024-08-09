@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -35,6 +36,7 @@ type PodReconciler struct {
 	client.Client
 	Scheme    *runtime.Scheme
 	ClientSet *kubernetes.Clientset
+	Recorder  record.EventRecorder
 }
 
 // RBACs for the operands' controllers are added manually because kubebuilder can't handle multiple service accounts
@@ -84,7 +86,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			"The nodeAffinity for this pod will not be set.")
 		// we still need to remove the scheduling gate. Therefore, we do not return here.
 	} else {
-		pod.SetNodeAffinityArchRequirement(psdl)
+		pod.SetNodeAffinityArchRequirement(psdl, r.Recorder)
 	}
 
 	// Remove the scheduling gate
@@ -94,8 +96,10 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	err = r.Client.Update(ctx, &pod.Pod)
 	if err != nil {
 		log.Error(err, "Unable to update the pod")
+		r.Recorder.Event(&pod.Pod, corev1.EventTypeWarning, ArchitectureAwareSchedulingGateRemovalFailure, SchedulingGateRemovalFailureMsg)
 		return ctrl.Result{}, err
 	}
+	r.Recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitectureAwareSchedulingGateRemovalSuccess, SchedulingGateRemovalSuccessMsg)
 
 	return ctrl.Result{}, nil
 }

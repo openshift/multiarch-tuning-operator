@@ -19,9 +19,11 @@ package podplacement
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/record"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/image"
@@ -89,7 +91,7 @@ func (pod *Pod) RemoveSchedulingGate() {
 // It verifies first that no nodeSelector field is set for the kubernetes.io/arch label.
 // Then, it computes the intersection of the architectures supported by the images used by the pod via pod.getArchitecturePredicate.
 // Finally, it initializes the nodeAffinity for the pod and set it to the computed requirement via the pod.setArchNodeAffinity method.
-func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
+func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte, recorder record.EventRecorder) {
 	log := ctrllog.FromContext(pod.ctx)
 
 	if pod.Spec.NodeSelector != nil {
@@ -101,6 +103,10 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 				// The same behavior is implemented below within each
 				// nodeSelectorTerm's MatchExpressions field.
 				log.V(3).Info("The pod has the nodeSelector field set for the kubernetes.io/arch label. Ignoring the pod...")
+				if recorder != nil {
+					recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitecturePredicatesConflict,
+						ArchitecturePredicatesConflictMsg)
+				}
 				return
 			}
 		}
@@ -108,6 +114,9 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 
 	requirement, err := pod.getArchitecturePredicate(pullSecretDataList)
 	if err != nil {
+		if recorder != nil {
+			recorder.Event(&pod.Pod, corev1.EventTypeWarning, ImageArchitectureInspectionError, ImageArchitectureInspectionErrorMsg+err.Error())
+		}
 		log.Error(err, "Error getting the architecture predicate. The pod will not have the nodeAffinity set.")
 		return
 	}
@@ -124,12 +133,23 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 		pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
 	}
 
-	pod.setArchNodeAffinity(requirement)
+	patched := pod.setArchNodeAffinity(requirement)
+	if patched {
+		if recorder != nil {
+			recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
+				ArchitecturePredicateSetupMsg+fmt.Sprintf("{%s}", strings.Join(requirement.Values, ", ")))
+		}
+	} else {
+		if recorder != nil {
+			recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicateSetupMsg)
+		}
+	}
+
 }
 
 // setArchNodeAffinity sets the node affinity for the pod to the given requirement based on the rules in
 // the sig-scheduling's KEP-3838: https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3838-pod-mutable-scheduling-directives.
-func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) {
+func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) bool {
 	// the .requiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms are ORed
 	if len(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) == 0 {
 		// We create a new array of NodeSelectorTerm of length 1 so that we can always iterate it in the next.
@@ -170,6 +190,7 @@ func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) 
 		}
 		pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueSet
 	}
+	return patched
 }
 
 func (pod *Pod) getArchitecturePredicate(pullSecretDataList [][]byte) (corev1.NodeSelectorRequirement, error) {

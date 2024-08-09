@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	ocpconfigv1 "github.com/openshift/api/config/v1"
-	ocpmachineconfigurationv1 "github.com/openshift/api/machineconfiguration/v1"
 
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -937,6 +936,43 @@ var _ = Describe("The Pod Placement Operand", func() {
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
+	Context("When deploying workloads that image has a multiple image mirrors", Serial, func() {
+		It("should set the node affinity when image set mirror source in ImageTagMirrorSet", func() {
+			var err error
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Create a deployment using the container with the image from the fake registry")
+			ps := NewPodSpec().
+				WithContainersImages(getMirroredImageURI(fakeITMSRegistry, helloOpenshiftPublicMultiarchImage)).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			By("The pod should get node affinity of arch info that is added by the controller.")
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			By("The pod should be running")
+			Eventually(func(g Gomega) {
+				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
+			}, e2e.WaitShort).Should(Succeed())
+		})
+	})
 })
 
 func getMirroredImageURI(registryHost, image string) string {
@@ -1056,44 +1092,6 @@ func verifyPodLabels(ns *corev1.Namespace, labelKey string, labelInValue string,
 			}
 		}
 	}, e2e.WaitShort).Should(Succeed())
-}
-
-func waitForMCPComplete() {
-	var err error
-	// wait to mcp start updating
-	Eventually(func(g Gomega) {
-		mcps := ocpmachineconfigurationv1.MachineConfigPoolList{}
-		err = client.List(ctx, &mcps)
-		Expect(err).NotTo(HaveOccurred())
-		g.Expect(mcps.Items).NotTo(BeEmpty())
-		g.Expect(mcps.Items).Should(HaveEach(WithTransform(func(mcp ocpmachineconfigurationv1.MachineConfigPool) corev1.ConditionStatus {
-			status := corev1.ConditionFalse
-			for _, condition := range mcp.Status.Conditions {
-				if condition.Type == "Updating" {
-					status = condition.Status
-					break
-				}
-			}
-			return status
-		}, Equal(corev1.ConditionTrue))))
-	}, e2e.WaitLong, e2e.WaitShort).Should(Succeed())
-	// wait to mcp finish updating
-	Eventually(func(g Gomega) {
-		mcps := ocpmachineconfigurationv1.MachineConfigPoolList{}
-		err = client.List(ctx, &mcps)
-		Expect(err).NotTo(HaveOccurred())
-		g.Expect(mcps.Items).NotTo(BeEmpty())
-		g.Expect(mcps.Items).Should(HaveEach(WithTransform(func(mcp ocpmachineconfigurationv1.MachineConfigPool) corev1.ConditionStatus {
-			status := corev1.ConditionFalse
-			for _, condition := range mcp.Status.Conditions {
-				if condition.Type == "Updated" {
-					status = condition.Status
-					break
-				}
-			}
-			return status
-		}, Equal(corev1.ConditionTrue))))
-	}, e2e.WaitLong, e2e.WaitShort).Should(Succeed())
 }
 
 func waitForCOComplete() {

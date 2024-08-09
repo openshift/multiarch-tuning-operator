@@ -28,15 +28,21 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
+	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 var (
-	client    runtimeclient.Client
-	clientset *kubernetes.Clientset
-	ctx       context.Context
-	dns       = ocpconfigv1.DNS{}
-	suiteLog  = ctrl.Log.WithName("setup")
+	client           runtimeclient.Client
+	clientset        *kubernetes.Clientset
+	ctx              context.Context
+	dns              = ocpconfigv1.DNS{}
+	suiteLog         = ctrl.Log.WithName("setup")
+	fakeITMSRegistry = "my-fake-itms-registry.io"
+	quayRegistry     = "quay.io"
+	repository       = "openshifttest"
+	itmsName         = "test-itms"
 )
 
 func init() {
@@ -78,6 +84,19 @@ var _ = BeforeSuite(func() {
 		},
 	}), &dns)
 	Expect(err).NotTo(HaveOccurred())
+
+	By("Create ITMS for a fake registry")
+	itms := NewImageTagMirrorSet().
+		WithImageTagMirrors(
+			NewImageTagMirrors().
+				WithMirrors(ocpconfigv1.ImageMirror(fmt.Sprintf("%s/%s", quayRegistry, repository))).
+				WithSource(fmt.Sprintf("%s/%s", fakeITMSRegistry, repository)).
+				Build()).
+		WithName(itmsName).
+		Build()
+	err = client.Create(ctx, &itms)
+	Expect(err).NotTo(HaveOccurred())
+	waitForMCPComplete()
 })
 
 var _ = AfterSuite(func() {
@@ -89,6 +108,11 @@ var _ = AfterSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(deploymentsAreDeleted).Should(Succeed())
 	deleteCertificatesConfigmap(ctx, client)
+
+	itms := NewImageTagMirrorSet().WithName(itmsName).Build()
+	err = client.Delete(ctx, &itms)
+	Expect(err).NotTo(HaveOccurred())
+	waitForMCPComplete()
 })
 
 func deploymentsAreRunning(g Gomega) {
@@ -164,4 +188,13 @@ func deleteCertificatesConfigmap(ctx context.Context, client runtimeclient.Clien
 		err = client.Delete(ctx, &configmap)
 		Expect(err).NotTo(HaveOccurred())
 	}
+}
+
+func waitForMCPComplete() {
+	Eventually(func(g Gomega) {
+		framework.VerifyMCPsAreUpdating(g, ctx, client)
+	}, e2e.WaitLong, e2e.WaitShort).Should(Succeed())
+	Eventually(func(g Gomega) {
+		framework.VerifyMCPsAreUpdated(g, ctx, client)
+	}, e2e.WaitLong, e2e.WaitShort).Should(Succeed())
 }

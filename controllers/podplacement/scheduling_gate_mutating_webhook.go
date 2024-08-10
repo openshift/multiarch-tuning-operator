@@ -36,6 +36,8 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"github.com/panjf2000/ants/v2"
+
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -52,11 +54,12 @@ var schedulingGate = corev1.PodSchedulingGate{
 
 // PodSchedulingGateMutatingWebHook annotates Pods
 type PodSchedulingGateMutatingWebHook struct {
-	Client    client.Client
-	ClientSet *kubernetes.Clientset
-	decoder   *admission.Decoder
-	Scheme    *runtime.Scheme
-	Recorder  record.EventRecorder
+	Client     client.Client
+	ClientSet  *kubernetes.Clientset
+	decoder    *admission.Decoder
+	Scheme     *runtime.Scheme
+	Recorder   record.EventRecorder
+	WorkerPool *ants.MultiPool
 }
 
 func (a *PodSchedulingGateMutatingWebHook) patchedPodResponse(pod *corev1.Pod, req admission.Request) admission.Response {
@@ -113,13 +116,13 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	// we know it will finish eventually by design, and we don't need to block the response as we
 	// are right in the admission pipeline, before the pod is persisted.
 	log.V(5).Info("Scheduling gate added to the pod, launching the event creation goroutine")
-	go a.delayedSchedulingGatedEvent(pod)()
+	a.delayedSchedulingGatedEvent(ctx, pod)
 	log.V(4).Info("Accepting pod")
 	return a.patchedPodResponse(pod, req)
 }
 
-func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(pod *corev1.Pod) func() {
-	return func() {
+func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(ctx context.Context, pod *corev1.Pod) {
+	err := a.WorkerPool.Submit(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name,
@@ -154,5 +157,9 @@ func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(pod *core
 			log.V(4).Info("Failed to get a scheduling gated Pod after retries",
 				"error", err)
 		}
+	})
+	if err != nil {
+		ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name,
+			"function", "delayedSchedulingGatedEvent").Error(err, "Failed to submit the delayedSchedulingGatedEvent job")
 	}
 }

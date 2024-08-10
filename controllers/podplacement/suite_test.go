@@ -49,6 +49,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/panjf2000/ants/v2"
+
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake/registry"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -229,13 +231,16 @@ func runManager() {
 		ClientSet: clientset,
 		Recorder:  mgr.GetEventRecorderFor(utils.OperatorName),
 	}).SetupWithManager(mgr)).NotTo(HaveOccurred())
-
+	pool, err := ants.NewMultiPool(10, 10, ants.LeastTasks, ants.WithPreAlloc(true),
+		ants.WithNonblocking(true))
+	Expect(err).NotTo(HaveOccurred())
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{
 		Handler: &PodSchedulingGateMutatingWebHook{
-			Client:    mgr.GetClient(),
-			ClientSet: clientset,
-			Scheme:    mgr.GetScheme(),
-			Recorder:  mgr.GetEventRecorderFor(utils.OperatorName),
+			Client:     mgr.GetClient(),
+			ClientSet:  clientset,
+			Scheme:     mgr.GetScheme(),
+			Recorder:   mgr.GetEventRecorderFor(utils.OperatorName),
+			WorkerPool: pool,
 		}})
 	By("Setting up System Config Syncer")
 	err = mgr.Add(NewConfigSyncerRunnable())

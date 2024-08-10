@@ -63,7 +63,10 @@ const (
 	serviceAccountName                       = "multiarch-tuning-operator-controller-manager"
 )
 
-const waitingForUngatingPodsError = "waiting for pods with the scheduling gate to be ungated"
+const (
+	waitingForUngatingPodsError         = "waiting for pods with the scheduling gate to be ungated"
+	waitingForWebhookSInterruptionError = "re-queueing to ensure the webhook objects deletion interrupt pods gating before checking the pods gating status"
+)
 
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs/status,verbs=get;update;patch
@@ -114,12 +117,8 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 	log := ctrllog.FromContext(ctx).WithValues("operation", "handleDelete")
 	objsToDelete := []utils.ToDeleteRef{
 		{
-			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
-			ObjName:               PodPlacementControllerName,
-		},
-		{
-			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
-			ObjName:               PodPlacementWebhookName,
+			NamespacedTypedClient: r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations(),
+			ObjName:               podMutatingWebhookConfigurationName,
 		},
 		{
 			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
@@ -134,17 +133,29 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 			ObjName:               podPlacementWebhookMetricsServiceName,
 		},
 		{
-			NamespacedTypedClient: r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations(),
-			ObjName:               podMutatingWebhookConfigurationName,
+			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
+			ObjName:               PodPlacementWebhookName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
+			ObjName:               PodPlacementControllerName,
 		},
 	}
-	log.Info("Deleting the PodPlacement operand's resources")
-	err := utils.DeleteResources(ctx, objsToDelete)
+	log.Info("Deleting the pod placement operand's resources")
 	// NOTE: err aggregates non-nil errors, excluding NotFound errors
-	if err != nil {
+	if err := utils.DeleteResources(ctx, objsToDelete); err != nil {
 		log.Error(err, "Unable to delete resources")
 		return err
 	}
+	_, err := r.ClientSet.CoreV1().Services(utils.Namespace()).Get(ctx, PodPlacementWebhookName, metav1.GetOptions{})
+	// We look for the webhook service to ensure that the webhook has stopped communicating with the API server.
+	// If the error is nil, the service was found. If the error is not nil and the error is not NotFound, some other error occurred.
+	// In both the cases we return an error, to requeue the request and ensure no race conditions between the verification of the
+	// pods gating status and the webhook stopping to communicate with the API server.
+	if err == nil || client.IgnoreNotFound(err) != nil {
+		return errors.New(waitingForWebhookSInterruptionError)
+	}
+
 	log.Info("Looking for pods with the scheduling gate")
 	// get pending pods as we cannot query for the scheduling gate
 	pods, err := r.ClientSet.CoreV1().Pods("").List(ctx, metav1.ListOptions{

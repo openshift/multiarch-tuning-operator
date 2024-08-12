@@ -16,6 +16,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/openshift/api v0.0.0-20240425081546-8203151f085f
 	github.com/openshift/library-go v0.0.0-20240425161310-f9d4805a7c60
+	github.com/panjf2000/ants/v2 v2.10.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.23.0
 	golang.org/x/sys v0.20.0

@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -45,6 +46,8 @@ import (
 	ocpv1 "github.com/openshift/api/config/v1"
 	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/events"
+
+	"github.com/panjf2000/ants/v2"
 
 	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
@@ -76,6 +79,7 @@ var (
 	enableClusterPodPlacementConfigOperandWebHook,
 	enableClusterPodPlacementConfigOperandControllers,
 	enableOperator bool
+	postFuncs []func()
 )
 
 func init() {
@@ -145,6 +149,12 @@ func main() {
 
 	setupLog.Info("starting manager")
 	must(mgr.Start(ctrl.SetupSignalHandler()), "unable to start the manager")
+	setupLog.Info("the manager has stopped")
+	setupLog.Info("running post functions")
+	for _, f := range postFuncs {
+		f()
+	}
+	setupLog.Info("exiting")
 }
 
 func RunOperator(mgr ctrl.Manager) {
@@ -174,6 +184,7 @@ func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,
+		Recorder:  mgr.GetEventRecorderFor(utils.OperatorName),
 	}).SetupWithManager(mgr),
 		unableToCreateController, controllerKey, "PodReconciler")
 
@@ -196,10 +207,26 @@ func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
 }
 
 func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
-	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: &podplacement.PodSchedulingGateMutatingWebHook{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}})
+	config := ctrl.GetConfigOrDie()
+	clientset := kubernetes.NewForConfigOrDie(config)
+	pool, err := ants.NewMultiPool(16, 16, ants.LeastTasks,
+		ants.WithPreAlloc(true))
+	must(err, "unable to create multi pool for the webhook's event messages")
+	postFuncs = append(postFuncs, func() {
+		err = pool.ReleaseTimeout(30 * time.Second)
+		if err != nil {
+			setupLog.Error(err, "failed to release the worker pool")
+		}
+		ants.Release()
+	})
+	handler := &podplacement.PodSchedulingGateMutatingWebHook{
+		Client:     mgr.GetClient(),
+		ClientSet:  clientset,
+		Scheme:     mgr.GetScheme(),
+		Recorder:   mgr.GetEventRecorderFor(utils.OperatorName),
+		WorkerPool: pool,
+	}
+	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: handler})
 }
 
 func validateFlags() error {

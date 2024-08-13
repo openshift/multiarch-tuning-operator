@@ -25,9 +25,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -62,14 +63,23 @@ var _ = BeforeSuite(func() {
 	err = ocpmachineconfigurationv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
+	err = client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(deploymentsAreRunning).Should(Succeed())
-
+	Eventually(framework.VerifyConditions(
+		ctx, client,
+		framework.NewConditionTypeStatusTuple(v1beta1.AvailableType, corev1.ConditionTrue),
+		framework.NewConditionTypeStatusTuple(v1beta1.ProgressingType, corev1.ConditionFalse),
+		framework.NewConditionTypeStatusTuple(v1beta1.DegradedType, corev1.ConditionFalse),
+		framework.NewConditionTypeStatusTuple(v1beta1.PodPlacementControllerNotRolledOutType, corev1.ConditionFalse),
+		framework.NewConditionTypeStatusTuple(v1beta1.PodPlacementWebhookNotRolledOutType, corev1.ConditionFalse),
+		framework.NewConditionTypeStatusTuple(v1beta1.MutatingWebhookConfigurationNotAvailable, corev1.ConditionFalse),
+		framework.NewConditionTypeStatusTuple(v1beta1.DeprovisioningType, corev1.ConditionFalse),
+	))
 	updateGlobalPullSecret()
 
 	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.DNS{
@@ -81,7 +91,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	err := client.Delete(ctx, &v1alpha1.ClusterPodPlacementConfig{
+	err := client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},

@@ -76,10 +76,11 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	}
 	log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name)
 
-	// ignore the openshift-* namespace as those are infra components, and ignore the namespace where the operand is running too
-	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "openshift-") ||
-		strings.HasPrefix(pod.Namespace, "hypershift-") || strings.HasPrefix(pod.Namespace, "kube-") ||
-		pod.Spec.NodeName != "" {
+	// ignore the kube-* and hypershift-* namespace as those are infra components, and ignore the namespace where the operand is running too
+	// Also ignore any pods which are deployed on control plane nodes
+	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "hypershift-") ||
+		strings.HasPrefix(pod.Namespace, "kube-") || pod.Spec.NodeName != "" ||
+		pod.Spec.NodeSelector != nil && utils.HasControlPlaneNodeSelector(pod.Spec.NodeSelector) {
 		log.V(5).Info("Ignoring the pod")
 		return a.patchedPodResponse(pod, req)
 	}

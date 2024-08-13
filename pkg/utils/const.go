@@ -27,5 +27,7 @@ const (
 
 const (
 	// SchedulingGateName is the name of the Scheduling Gate
-	SchedulingGateName = "multiarch.openshift.io/scheduling-gate"
+	SchedulingGateName            = "multiarch.openshift.io/scheduling-gate"
+	MasterNodeSelectorLabel       = "node-role.kubernetes.io/master"
+	ControlPlaneNodeSelectorLabel = "node-role.kubernetes.io/control-plane"
 )

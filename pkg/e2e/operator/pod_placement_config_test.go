@@ -208,6 +208,52 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
+	Context("The webhook should not gate pods with node selectors that pin them to the control plane", func() {
+		BeforeEach(func() {
+			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1beta1.ClusterPodPlacementConfigSpec{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      "multiarch.openshift.io/exclude-pod-placement",
+								Operator: "DoesNotExist",
+							},
+						}}}})
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(deploymentsAreRunning).Should(Succeed())
+		})
+		DescribeTable("should not gate pods to schedule in control plane nodes", func(selector string) {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			var nodeSelectors = map[string]string{selector: ""}
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				WithNodeSelectors(nodeSelectors).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, &d)
+			Expect(err).NotTo(HaveOccurred())
+			//should exclude the namespace
+			verifyPodNodeAffinity(ns, "app", "test")
+			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
+		},
+			Entry(utils.ControlPlaneNodeSelectorLabel, utils.ControlPlaneNodeSelectorLabel),
+			Entry(utils.MasterNodeSelectorLabel, utils.MasterNodeSelectorLabel),
+		)
+	})
 })
 
 func verifyPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue string, nodeSelectorTerms ...corev1.NodeSelectorTerm) {

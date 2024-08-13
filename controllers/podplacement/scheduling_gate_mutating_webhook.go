@@ -41,13 +41,8 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-const (
-	// SchedulingGateName is the name of the Scheduling Gate
-	schedulingGateName = "multiarch.openshift.io/scheduling-gate"
-)
-
 var schedulingGate = corev1.PodSchedulingGate{
-	Name: schedulingGateName,
+	Name: utils.SchedulingGateName,
 }
 
 // [disabled:operator]kubebuilder:webhook:path=/add-pod-scheduling-gate,mutating=true,sideEffects=None,admissionReviewVersions=v1,failurePolicy=ignore,groups="",resources=pods,verbs=create,versions=v1,name=pod-placement-scheduling-gate.multiarch.openshift.io
@@ -96,7 +91,7 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 
 	// if the gate is already present, do not try to patch (it would fail)
 	for _, schedulingGate := range pod.Spec.SchedulingGates {
-		if schedulingGate.Name == schedulingGateName {
+		if schedulingGate.Name == utils.SchedulingGateName {
 			return a.patchedPodResponse(pod, req)
 		}
 	}

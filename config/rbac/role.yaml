@@ -38,6 +38,12 @@ rules:
 - apiGroups:
   - apps
   resources:
+  - deployments/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - apps
+  resources:
   - deployments/status
   verbs:
   - get

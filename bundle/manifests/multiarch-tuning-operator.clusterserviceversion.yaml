@@ -133,6 +133,12 @@ spec:
         - apiGroups:
           - apps
           resources:
+          - deployments/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - apps
+          resources:
           - deployments/status
           verbs:
           - get
@@ -318,7 +324,6 @@ spec:
                 - --health-probe-bind-address=:8081
                 - --metrics-bind-address=127.0.0.1:8080
                 - --leader-elect
-                - -zap-log-level=3
                 - --enable-operator
                 command:
                 - /manager

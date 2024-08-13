@@ -58,7 +58,7 @@ func (pod *Pod) HasSchedulingGate() bool {
 		return false
 	}
 	for _, condition := range pod.Spec.SchedulingGates {
-		if condition.Name == schedulingGateName {
+		if condition.Name == utils.SchedulingGateName {
 			return true
 		}
 	}
@@ -73,7 +73,7 @@ func (pod *Pod) RemoveSchedulingGate() {
 	}
 	filtered := make([]corev1.PodSchedulingGate, 0, len(pod.Spec.SchedulingGates))
 	for _, schedulingGate := range pod.Spec.SchedulingGates {
-		if schedulingGate.Name != schedulingGateName {
+		if schedulingGate.Name != utils.SchedulingGateName {
 			filtered = append(filtered, schedulingGate)
 		}
 	}

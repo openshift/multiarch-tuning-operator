@@ -37,6 +37,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -48,6 +49,8 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 
 	"github.com/panjf2000/ants/v2"
+	zapuber "go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
@@ -79,7 +82,8 @@ var (
 	enableClusterPodPlacementConfigOperandWebHook,
 	enableClusterPodPlacementConfigOperandControllers,
 	enableOperator bool
-	postFuncs []func()
+	initialLogLevel int
+	postFuncs       []func()
 )
 
 func init() {
@@ -251,16 +255,17 @@ func bindFlags() {
 	flag.BoolVar(&enableClusterPodPlacementConfigOperandWebHook, "enable-ppc-webhook", false, "Enable the pod placement config operand webhook")
 	flag.BoolVar(&enableClusterPodPlacementConfigOperandControllers, "enable-ppc-controllers", false, "Enable the pod placement config operand controllers")
 	flag.BoolVar(&enableOperator, "enable-operator", false, "Enable the operator")
-	opts := zap.Options{
-		Development: true,
-	}
+	// This may be deprecated in the future. It is used to support the current way of setting the log level for operands
+	// If operands will start to support a controller that watches the ClusterPodPlacementConfig, this flag may be removed
+	// and the log level will be set in the ClusterPodPlacementConfig at runtime (with no need for reconciliation)
+	flag.IntVar(&initialLogLevel, "initial-log-level", common.LogVerbosityLevelNormal.ToZapLevelInt(), "Initial log level. Converted to zap")
 	klog.InitFlags(nil)
 	_ = flag.Set("alsologtostderr", "true")
-
-	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
-
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	// Set the Log Level as AtomicLevel to allow runtime changes
+	utils.AtomicLevel = zapuber.NewAtomicLevelAt(zapcore.Level(-initialLogLevel))
+	zapLogger := zap.New(zap.Level(utils.AtomicLevel), zap.UseDevMode(false))
+	ctrllog.SetLogger(zapLogger)
 }
 
 func must(err error, msg string, keysAndValues ...interface{}) {

@@ -6,12 +6,28 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
+)
+
+const (
+	CREATE = "create"
+	UPDATE = "update"
+	PATCH  = "patch"
+	LIST   = "list"
+	WATCH  = "watch"
+	GET    = "get"
+	USE    = "use"
+	DELETE = "delete"
+
+	serviceAccountKind = "ServiceAccount"
+	roleKind           = "Role"
+	clusterRoleKind    = "ClusterRole"
 )
 
 func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig) *admissionv1.MutatingWebhookConfiguration {
@@ -88,7 +104,7 @@ func buildService(name string, controllerName string, port int32, targetPort int
 }
 
 func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig,
-	name string, replicas int32, finalizer string, args ...string) *appsv1.Deployment {
+	name string, replicas int32, serviceAccount string, finalizer string, args ...string) *appsv1.Deployment {
 	finalizers := make([]string, 0)
 	if finalizer != "" {
 		finalizers = append(finalizers, finalizer)
@@ -257,7 +273,7 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 						},
 					},
 					PriorityClassName:  priorityClassName,
-					ServiceAccountName: serviceAccountName,
+					ServiceAccountName: serviceAccount,
 					Volumes: []corev1.Volume{
 						{
 							Name: "webhook-server-cert",
@@ -307,6 +323,147 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func buildClusterRole(name string, rules []rbacv1.PolicyRule) *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				utils.OperandLabelKey:   operandName,
+				utils.ControllerNameKey: name,
+			},
+		},
+		Rules: rules,
+	}
+}
+
+func buildClusterRoleBinding(name string, roleRef rbacv1.RoleRef, subjects []rbacv1.Subject) *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				utils.OperandLabelKey:   operandName,
+				utils.ControllerNameKey: name,
+			},
+		},
+		RoleRef:  roleRef,
+		Subjects: subjects,
+	}
+}
+
+func buildRoleBinding(name string, roleRef rbacv1.RoleRef, subjects []rbacv1.Subject) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: utils.Namespace(),
+			Labels: map[string]string{
+				utils.OperandLabelKey:   operandName,
+				utils.ControllerNameKey: name,
+			},
+		},
+		RoleRef:  roleRef,
+		Subjects: subjects,
+	}
+}
+
+func buildServiceAccount(name string) *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: utils.Namespace(),
+			Labels: map[string]string{
+				utils.OperandLabelKey:   operandName,
+				utils.ControllerNameKey: name,
+			},
+		},
+	}
+}
+
+func buildClusterRoleWebhook() *rbacv1.ClusterRole {
+	return buildClusterRole(utils.PodPlacementWebhookName, []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{""},
+			Resources: []string{"events"},
+			Verbs:     []string{CREATE, PATCH},
+		},
+		{
+			APIGroups: []string{v1beta1.GroupVersion.Group},
+			Resources: []string{v1beta1.ClusterPodPlacementConfigResource},
+			Verbs:     []string{LIST, WATCH, GET},
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"pods"},
+			Verbs:     []string{LIST, WATCH, GET},
+		},
+	})
+}
+
+func buildClusterRoleController() *rbacv1.ClusterRole {
+	return buildClusterRole(utils.PodPlacementControllerName, []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"security.openshift.io"},
+			Resources: []string{"securitycontextconstraints"},
+			Verbs:     []string{USE},
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"pods"},
+			Verbs:     []string{LIST, WATCH, GET, UPDATE},
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"events"},
+			Verbs:     []string{CREATE, PATCH},
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"pods/status"},
+			Verbs:     []string{UPDATE},
+		},
+		{
+			APIGroups: []string{v1beta1.GroupVersion.Group},
+			Resources: []string{v1beta1.ClusterPodPlacementConfigResource},
+			Verbs:     []string{LIST, WATCH, GET},
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"configmaps", "secrets"},
+			Verbs:     []string{LIST, WATCH, GET},
+		},
+		{
+			APIGroups: []string{"operator.openshift.io"},
+			Resources: []string{"imagecontentsourcepolicies"},
+			Verbs:     []string{LIST, WATCH, GET},
+		},
+		{
+			APIGroups: []string{"config.openshift.io"},
+			Resources: []string{"imagetagmirrorsets", "imagedigestmirrorsets", "images"},
+			Verbs:     []string{LIST, WATCH, GET},
+		},
+	})
+}
+
+func buildRoleController() *rbacv1.Role {
+	return &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.PodPlacementControllerName,
+			Namespace: utils.Namespace(),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"configmaps"},
+				Verbs:     []string{LIST, WATCH, GET, UPDATE, PATCH, CREATE, DELETE},
+			},
+			{
+				APIGroups: []string{"coordination.k8s.io"},
+				Resources: []string{"leases"},
+				Verbs:     []string{LIST, WATCH, GET, UPDATE, PATCH, CREATE, DELETE},
 			},
 		},
 	}

@@ -33,10 +33,10 @@ const (
 )
 
 const (
-	PodMutatingWebhookName                   = "pod-placement-scheduling-gate.multiarch.openshift.io"
 	PodMutatingWebhookConfigurationName      = "pod-placement-mutating-webhook-configuration"
-	PodPlacementControllerName               = "pod-placement-controller"
-	PodPlacementControllerMetricsServiceName = "pod-placement-controller-metrics-service"
-	PodPlacementWebhookName                  = "pod-placement-web-hook"
 	PodPlacementWebhookMetricsServiceName    = "pod-placement-web-hook-metrics-service"
+	PodMutatingWebhookName                   = "pod-placement-scheduling-gate.multiarch.openshift.io"
+	PodPlacementControllerMetricsServiceName = "pod-placement-controller-metrics-service"
+	PodPlacementControllerName               = "pod-placement-controller"
+	PodPlacementWebhookName                  = "pod-placement-web-hook"
 )

@@ -118,6 +118,18 @@ func (r *ClusterPodPlacementConfigReconciler) dependentsStatusToClusterPodPlacem
 		log.Error(err, "Unable to get the PodPlacement controller deployment")
 		return err
 	}
+
+	if config.DeletionTimestamp.IsZero() && !podPlacementController.DeletionTimestamp.IsZero() {
+		// remove the finalizer in case the pod placement controller is deleted and we should reconcile it
+		log.Info("Removing the finalizer from the pod-placement-controller to allow reconciliation")
+		if controllerutil.RemoveFinalizer(podPlacementController, utils.PodPlacementFinalizerName) {
+			if err = r.Update(ctx, podPlacementController); err != nil {
+				log.Error(err, "Unable to remove the finalizer from the pod-placement-controller")
+				return err
+			}
+		}
+	}
+
 	podPlacementWebhook, err := r.ClientSet.AppsV1().Deployments(utils.Namespace()).Get(ctx, utils.PodPlacementWebhookName, metav1.GetOptions{})
 	if client.IgnoreNotFound(err) != nil {
 		log.Error(err, "Unable to get the PodPlacement webhook deployment")

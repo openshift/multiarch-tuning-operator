@@ -104,8 +104,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
-			verifyPodNodeAffinity(ns, "app", "test")
 			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
+			verifyPodNodeAffinity(ns, "app", "test")
 		})
 		It("should handle namespaces that do not have the opt-out label", func() {
 			var err error
@@ -132,8 +132,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			//should handle the namespace
-			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 	})
 	Context("The operator should respect to an opt-in namespaceSelector in ClusterPodPlacementConfig CR", func() {
@@ -173,8 +173,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
-			verifyPodNodeAffinity(ns, "app", "test")
 			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
+			verifyPodNodeAffinity(ns, "app", "test")
 		})
 		It("should handle namespaces that match the opt-in configuration", func() {
 			var err error
@@ -204,8 +204,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			//should handle the namespace
-			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 	})
 	Context("The webhook should not gate pods with node selectors that pin them to the control plane", func() {
@@ -247,8 +247,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
-			verifyPodNodeAffinity(ns, "app", "test")
 			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
+			verifyPodNodeAffinity(ns, "app", "test")
 		},
 			Entry(utils.ControlPlaneNodeSelectorLabel, utils.ControlPlaneNodeSelectorLabel),
 			Entry(utils.MasterNodeSelectorLabel, utils.MasterNodeSelectorLabel),

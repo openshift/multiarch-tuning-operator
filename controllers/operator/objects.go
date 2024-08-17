@@ -17,10 +17,10 @@ import (
 func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig) *admissionv1.MutatingWebhookConfiguration {
 	return &admissionv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: podMutatingWebhookConfigurationName,
+			Name: utils.PodMutatingWebhookConfigurationName,
 			Labels: map[string]string{
 				utils.OperandLabelKey:   operandName,
-				utils.ControllerNameKey: PodPlacementWebhookName,
+				utils.ControllerNameKey: utils.PodPlacementWebhookName,
 			},
 			Annotations: map[string]string{
 				"service.beta.openshift.io/inject-cabundle": "true",
@@ -31,7 +31,7 @@ func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1beta1.Cluste
 				AdmissionReviewVersions: []string{"v1"},
 				ClientConfig: admissionv1.WebhookClientConfig{
 					Service: &admissionv1.ServiceReference{
-						Name:      PodPlacementWebhookName,
+						Name:      utils.PodPlacementWebhookName,
 						Namespace: utils.Namespace(),
 						Path:      utils.NewPtr("/add-pod-scheduling-gate"),
 					},
@@ -39,7 +39,7 @@ func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1beta1.Cluste
 				NamespaceSelector: clusterPodPlacementConfig.Spec.NamespaceSelector,
 				FailurePolicy:     utils.NewPtr(admissionv1.Ignore),
 				SideEffects:       utils.NewPtr(admissionv1.SideEffectClassNone),
-				Name:              podMutatingWebhookName,
+				Name:              utils.PodMutatingWebhookName,
 				Rules: []admissionv1.RuleWithOperations{
 					{
 						Operations: []admissionv1.OperationType{

@@ -31,3 +31,12 @@ const (
 	MasterNodeSelectorLabel       = "node-role.kubernetes.io/master"
 	ControlPlaneNodeSelectorLabel = "node-role.kubernetes.io/control-plane"
 )
+
+const (
+	PodMutatingWebhookName                   = "pod-placement-scheduling-gate.multiarch.openshift.io"
+	PodMutatingWebhookConfigurationName      = "pod-placement-mutating-webhook-configuration"
+	PodPlacementControllerName               = "pod-placement-controller"
+	PodPlacementControllerMetricsServiceName = "pod-placement-controller-metrics-service"
+	PodPlacementWebhookName                  = "pod-placement-web-hook"
+	PodPlacementWebhookMetricsServiceName    = "pod-placement-web-hook-metrics-service"
+)

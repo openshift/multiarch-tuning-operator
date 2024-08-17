@@ -26,7 +26,6 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
-	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -102,12 +101,12 @@ var _ = AfterSuite(func() {
 })
 
 func deploymentsAreRunning(g Gomega) {
-	d, err := clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, operator.PodPlacementControllerName,
+	d, err := clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, utils.PodPlacementControllerName,
 		metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(d.Status.AvailableReplicas).To(Equal(*d.Spec.Replicas),
 		"at least one pod placement controller replicas is not available yet")
-	d, err = clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, operator.PodPlacementWebhookName,
+	d, err = clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, utils.PodPlacementWebhookName,
 		metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(d.Status.AvailableReplicas).To(Equal(*d.Spec.Replicas),
@@ -115,11 +114,11 @@ func deploymentsAreRunning(g Gomega) {
 }
 
 func deploymentsAreDeleted(g Gomega) {
-	_, err := clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, operator.PodPlacementControllerName,
+	_, err := clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, utils.PodPlacementControllerName,
 		metav1.GetOptions{})
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	_, err = clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, operator.PodPlacementWebhookName,
+	_, err = clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, utils.PodPlacementWebhookName,
 		metav1.GetOptions{})
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())

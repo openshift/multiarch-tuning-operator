@@ -101,7 +101,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
 			verifyPodNodeAffinity(ns, "app", "test")
@@ -124,7 +124,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -170,7 +170,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
 			verifyPodNodeAffinity(ns, "app", "test")
@@ -196,7 +196,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -244,7 +244,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
 			verifyPodNodeAffinity(ns, "app", "test")

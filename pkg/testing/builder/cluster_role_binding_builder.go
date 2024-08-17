@@ -6,13 +6,13 @@ import (
 
 // ClusterRoleBindingBuilder is a builder for v1.ClusterRoleBinding objects to be used only in unit tests.
 type ClusterRoleBindingBuilder struct {
-	clusterRoleBinding v1.ClusterRoleBinding
+	clusterRoleBinding *v1.ClusterRoleBinding
 }
 
 // NewClusterRoleBinding returns a new ClusterRoleBindingBuilder to build v1.ClusterRoleBinding objects. It is meant to be used only in unit tests.
 func NewClusterRoleBinding() *ClusterRoleBindingBuilder {
 	return &ClusterRoleBindingBuilder{
-		clusterRoleBinding: v1.ClusterRoleBinding{},
+		clusterRoleBinding: &v1.ClusterRoleBinding{},
 	}
 }
 
@@ -35,6 +35,6 @@ func (c *ClusterRoleBindingBuilder) WithSubjects(subjects ...v1.Subject) *Cluste
 	return c
 }
 
-func (c *ClusterRoleBindingBuilder) Build() v1.ClusterRoleBinding {
+func (c *ClusterRoleBindingBuilder) Build() *v1.ClusterRoleBinding {
 	return c.clusterRoleBinding
 }

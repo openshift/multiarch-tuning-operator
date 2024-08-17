@@ -4,13 +4,13 @@ import v1 "k8s.io/api/core/v1"
 
 // ServiceBuilder is a builder for v1.Service objects to be used only in unit tests.
 type ServiceBuilder struct {
-	service v1.Service
+	service *v1.Service
 }
 
 // Newservice returns a new ServiceBuilder to build v1.Service objects. It is meant to be used only in unit tests.
 func NewService() *ServiceBuilder {
 	return &ServiceBuilder{
-		service: v1.Service{},
+		service: &v1.Service{},
 	}
 }
 
@@ -39,6 +39,6 @@ func (s *ServiceBuilder) WithSelector(entries map[string]string) *ServiceBuilder
 	return s
 }
 
-func (s *ServiceBuilder) Build() v1.Service {
+func (s *ServiceBuilder) Build() *v1.Service {
 	return s.service
 }

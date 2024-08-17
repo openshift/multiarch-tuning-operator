@@ -73,7 +73,7 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 				Build()).
 		WithSelector(registryLabel).
 		Build()
-	err := client.Create(ctx, &service)
+	err := client.Create(ctx, service)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 		WithName(r.Name).
 		WithNamespace(r.Namespace.Name).
 		Build()
-	err = client.Create(ctx, &registryD)
+	err = client.Create(ctx, registryD)
 	if err != nil {
 		return err
 	}

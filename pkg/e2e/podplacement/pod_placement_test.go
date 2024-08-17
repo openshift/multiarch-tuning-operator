@@ -65,7 +65,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -97,10 +97,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithSubjects(s).
 				WithName(ephemeralCRBName).
 				Build()
-			err = client.Create(ctx, &crb)
+			err = client.Create(ctx, crb)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
-			defer client.Delete(ctx, &crb)
+			defer client.Delete(ctx, crb)
 			sc := NewSecurityContext().WithPrivileged(utils.NewPtr(true)).
 				WithRunAsGroup(utils.NewPtr(int64(0))).
 				WithRunAsUSer(utils.NewPtr(int64(0))).
@@ -124,7 +124,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			// TODO: verify the pod has some scc label
 			sccAnnotation := map[string]string{"openshift.io/scc": "privileged"}
@@ -159,7 +159,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -190,7 +190,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test", archLabelNSTs)
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
@@ -220,7 +220,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			expectedArchLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -249,7 +249,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test")
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
@@ -278,7 +278,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			By("The pod should not have been processed by the webhook and the scheduling gate label should not be added")
 			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
@@ -545,7 +545,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test")
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
@@ -567,7 +567,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64, utils.ArchitecturePpc64le).
@@ -607,7 +607,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -649,7 +649,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
@@ -706,7 +706,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -745,7 +745,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test")
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
@@ -803,7 +803,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -869,7 +869,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
@@ -912,7 +912,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment-blocked").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			verifyPodNodeAffinity(ns, "app", "test-block")
 			verifyPodLabels(ns, "app", "test-block", e2e.Present, schedulingGateLabel)
@@ -926,7 +926,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithName("test-deployment").
 				WithNamespace(ns.Name).
 				Build()
-			err = client.Create(ctx, &d)
+			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,

@@ -47,6 +47,16 @@ var _ = Describe("The Pod Placement Operand", func() {
 		podLabel            = map[string]string{"app": "test"}
 		schedulingGateLabel = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
 	)
+	BeforeEach(func() {
+		By("Verifying the operand is ready")
+		Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed(), "operand not ready before the test case execution")
+		By("Operand ready. Executing the case")
+	})
+	AfterEach(func() {
+		By("Verify the operand is ready after the case ran")
+		Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed(), "operand not ready after the test case execution")
+		By("Operand ready after the case execution. Continuing")
+	})
 	Context("When a deployment is deployed with a single container and a public image", func() {
 		It("should set the node affinity", func() {
 			var err error

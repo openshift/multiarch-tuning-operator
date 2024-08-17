@@ -34,7 +34,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			},
 		})
 		Expect(err).NotTo(HaveOccurred())
-		Eventually(deploymentsAreDeleted).Should(Succeed())
+		Eventually(framework.ValidateDeletion(client, ctx)).Should(Succeed())
 	})
 	Context("When the operator is running and a pod placement config is created", func() {
 		It("should deploy the operands with v1beta1 API", func() {
@@ -44,7 +44,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(deploymentsAreRunning).Should(Succeed())
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 			By("convert the v1beta1 CR to v1alpha1 should succeed")
 			c := &v1alpha1.ClusterPodPlacementConfig{}
 			err = client.Get(ctx, runtimeclient.ObjectKey{Name: "cluster"}, c)
@@ -57,7 +57,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(deploymentsAreRunning).Should(Succeed())
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 			By("convert the v1alpha1 CR to v1beta1 should succeed")
 			c := &v1beta1.ClusterPodPlacementConfig{}
 			err = client.Get(ctx, runtimeclient.ObjectKey{Name: "cluster"}, c)
@@ -79,7 +79,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 							},
 						}}}})
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(deploymentsAreRunning).Should(Succeed())
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 		})
 		It("should exclude namespaces that have the opt-out label", func() {
 			var err error
@@ -151,7 +151,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 							},
 						}}}})
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(deploymentsAreRunning).Should(Succeed())
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 		})
 		It("should exclude namespaces that do not match the opt-in configuration", func() {
 			var err error
@@ -223,7 +223,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 							},
 						}}}})
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(deploymentsAreRunning).Should(Succeed())
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 		})
 		DescribeTable("should not gate pods to schedule in control plane nodes", func(selector string) {
 			var err error

@@ -92,7 +92,7 @@ GOGCFLAGS ?= -gcflags=all="-N -l"
 endif
 
 # TODO: We'd need an upstream builder image that includes gpgme-devel (libgpgme-dev)
-BUILD_IMAGE ?= registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-builder-multi-openshift-4.16
+BUILD_IMAGE ?= registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-builder-multi-openshift-4.17
 RUNTIME_IMAGE ?= quay.io/centos/centos:stream9-minimal
 
 NO_DOCKER ?= 0

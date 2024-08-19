@@ -12,7 +12,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -25,10 +24,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
-	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
-	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 )
 
 var (
@@ -62,14 +60,13 @@ var _ = BeforeSuite(func() {
 	err = ocpmachineconfigurationv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
+	err = client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())
-	Eventually(deploymentsAreRunning).Should(Succeed())
-
+	Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 	updateGlobalPullSecret()
 
 	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.DNS{
@@ -81,39 +78,15 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	err := client.Delete(ctx, &v1alpha1.ClusterPodPlacementConfig{
+	err := client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())
-	Eventually(deploymentsAreDeleted).Should(Succeed())
+	Eventually(framework.ValidateDeletion(client, ctx)).Should(Succeed())
 	deleteCertificatesConfigmap(ctx, client)
 })
-
-func deploymentsAreRunning(g Gomega) {
-	d, err := clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, operator.PodPlacementControllerName,
-		metav1.GetOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(d.Status.AvailableReplicas).To(Equal(*d.Spec.Replicas),
-		"at least one pod placement controller replicas is not available yet")
-	d, err = clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, operator.PodPlacementWebhookName,
-		metav1.GetOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(d.Status.AvailableReplicas).To(Equal(*d.Spec.Replicas),
-		"at least one pod placement webhook replicas is not available yet")
-}
-
-func deploymentsAreDeleted(g Gomega) {
-	_, err := clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, operator.PodPlacementControllerName,
-		metav1.GetOptions{})
-	g.Expect(err).To(HaveOccurred())
-	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	_, err = clientset.AppsV1().Deployments(utils.Namespace()).Get(ctx, operator.PodPlacementWebhookName,
-		metav1.GetOptions{})
-	g.Expect(err).To(HaveOccurred())
-	g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
-}
 
 // updateGlobalPullSecret patches the global pull secret to onboard the
 // read-only credentials of the quay.io org. for testing images stored

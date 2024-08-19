@@ -51,21 +51,15 @@ type ClusterPodPlacementConfigReconciler struct {
 }
 
 const (
-	podMutatingWebhookName              = "pod-placement-scheduling-gate.multiarch.openshift.io"
-	podMutatingWebhookConfigurationName = "pod-placement-mutating-webhook-configuration"
-
-	PodPlacementControllerName               = "pod-placement-controller"
-	podPlacementControllerMetricsServiceName = "pod-placement-controller-metrics-service"
-	PodPlacementWebhookName                  = "pod-placement-web-hook"
-	podPlacementWebhookMetricsServiceName    = "pod-placement-web-hook-metrics-service"
-	operandName                              = "pod-placement-controller"
-	priorityClassName                        = "system-cluster-critical"
-	serviceAccountName                       = "multiarch-tuning-operator-controller-manager"
+	operandName        = "pod-placement-controller"
+	priorityClassName  = "system-cluster-critical"
+	serviceAccountName = "multiarch-tuning-operator-controller-manager"
 )
 
 const (
 	waitingForUngatingPodsError         = "waiting for pods with the scheduling gate to be ungated"
 	waitingForWebhookSInterruptionError = "re-queueing to ensure the webhook objects deletion interrupt pods gating before checking the pods gating status"
+	clusterPodPlacementConfigNotReady   = "cluster pod placement config is not ready yet. re-queueing"
 )
 
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -86,7 +80,7 @@ const (
 // the user.
 func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
-	log.V(3).Info("Reconciling ClusterPodPlacementConfig...")
+	log.V(3).Info("+++++++++++++++++++ Reconciling ClusterPodPlacementConfig +++++++++++++++++++")
 	// Lookup the ClusterPodPlacementConfig instance for this reconcile request
 	clusterPodPlacementConfig := &multiarchv1beta1.ClusterPodPlacementConfig{}
 	var err error
@@ -97,8 +91,12 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 		log.Error(err, "Unable to fetch ClusterPodPlacementConfig")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
 	log.V(3).Info("ClusterPodPlacementConfig fetched...", "name", clusterPodPlacementConfig.Name)
+	err = r.dependentsStatusToClusterPodPlacementConfig(ctx, clusterPodPlacementConfig)
+	if err != nil {
+		log.Error(err, "Unable to retrieve the status of the PodPlacementConfig dependencies")
+		return ctrl.Result{}, err
+	}
 	switch {
 	case !clusterPodPlacementConfig.DeletionTimestamp.IsZero() && !controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.PodPlacementFinalizerName):
 		log.V(4).Info("the ClusterPodPlacementConfig object is being deleted, and the finalizer has already been removed successfully.")
@@ -110,35 +108,79 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 	return ctrl.Result{}, r.reconcile(ctx, clusterPodPlacementConfig)
 }
 
+// dependentsStatusToClusterPodPlacementConfig gathers the status of the dependents of the ClusterPodPlacementConfig object.
+// The status is propagated to the ClusterPodPlacementConfig object.
+func (r *ClusterPodPlacementConfigReconciler) dependentsStatusToClusterPodPlacementConfig(ctx context.Context, config *multiarchv1beta1.ClusterPodPlacementConfig) error {
+	log := ctrllog.FromContext(ctx).WithValues("ClusterPodPlacementConfig", config.Name,
+		"function", "updateStatus")
+	podPlacementController, err := r.ClientSet.AppsV1().Deployments(utils.Namespace()).Get(ctx, utils.PodPlacementControllerName, metav1.GetOptions{})
+	if client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Unable to get the PodPlacement controller deployment")
+		return err
+	}
+
+	if config.DeletionTimestamp.IsZero() && !podPlacementController.DeletionTimestamp.IsZero() {
+		// remove the finalizer in case the pod placement controller is deleted and we should reconcile it
+		log.Info("Removing the finalizer from the pod-placement-controller to allow reconciliation")
+		if controllerutil.RemoveFinalizer(podPlacementController, utils.PodPlacementFinalizerName) {
+			if err = r.Update(ctx, podPlacementController); err != nil {
+				log.Error(err, "Unable to remove the finalizer from the pod-placement-controller")
+				return err
+			}
+		}
+	}
+
+	podPlacementWebhook, err := r.ClientSet.AppsV1().Deployments(utils.Namespace()).Get(ctx, utils.PodPlacementWebhookName, metav1.GetOptions{})
+	if client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Unable to get the PodPlacement webhook deployment")
+		return err
+	}
+	_, err = r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.PodMutatingWebhookConfigurationName, metav1.GetOptions{})
+	if client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Unable to get the mutating webhook configuration")
+		return err
+	}
+	config.Status.Build(
+		isDeploymentAvailable(podPlacementController), isDeploymentAvailable(podPlacementWebhook),
+		isDeploymentUpToDate(podPlacementController), isDeploymentUpToDate(podPlacementWebhook),
+		// err == nil means the MutatingWebhookConfiguration is available
+		err == nil, !config.DeletionTimestamp.IsZero())
+	return nil
+}
+
 // handleDelete handles the deletion of the PodPlacement operand's resources.
 func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 	clusterPodPlacementConfig *multiarchv1beta1.ClusterPodPlacementConfig) error {
 	// The ClusterPodPlacementConfig is being deleted, cleanup the resources
 	log := ctrllog.FromContext(ctx).WithValues("operation", "handleDelete")
+	// The error by the updateStatus function, if any, is ignored, as the deletion should always proceed.
+	// We execute the update here because this function returns multiple times before the whole deletion process is completed.
+	// Executing it here ensures that the conditions are updated throughout the deletion process.
+	_ = r.updateStatus(ctx, clusterPodPlacementConfig)
 	objsToDelete := []utils.ToDeleteRef{
 		{
 			NamespacedTypedClient: r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations(),
-			ObjName:               podMutatingWebhookConfigurationName,
+			ObjName:               utils.PodMutatingWebhookConfigurationName,
 		},
 		{
 			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
-			ObjName:               PodPlacementWebhookName,
+			ObjName:               utils.PodPlacementWebhookName,
 		},
 		{
 			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
-			ObjName:               podPlacementControllerMetricsServiceName,
+			ObjName:               utils.PodPlacementControllerMetricsServiceName,
 		},
 		{
 			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
-			ObjName:               podPlacementWebhookMetricsServiceName,
+			ObjName:               utils.PodPlacementWebhookMetricsServiceName,
 		},
 		{
 			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
-			ObjName:               PodPlacementWebhookName,
+			ObjName:               utils.PodPlacementWebhookName,
 		},
 		{
 			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
-			ObjName:               PodPlacementControllerName,
+			ObjName:               utils.PodPlacementControllerName,
 		},
 	}
 	log.Info("Deleting the pod placement operand's resources")
@@ -147,7 +189,7 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 		log.Error(err, "Unable to delete resources")
 		return err
 	}
-	_, err := r.ClientSet.CoreV1().Services(utils.Namespace()).Get(ctx, PodPlacementWebhookName, metav1.GetOptions{})
+	_, err := r.ClientSet.CoreV1().Services(utils.Namespace()).Get(ctx, utils.PodPlacementWebhookName, metav1.GetOptions{})
 	// We look for the webhook service to ensure that the webhook has stopped communicating with the API server.
 	// If the error is nil, the service was found. If the error is not nil and the error is not NotFound, some other error occurred.
 	// In both the cases we return an error, to requeue the request and ensure no race conditions between the verification of the
@@ -185,12 +227,12 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 	// The pods have been ungated and no other errors occurred, so we can remove the finalizer
 	log.Info("Pods have been ungated")
 	log = log.WithValues("finalizer", utils.PodPlacementFinalizerName)
-	dlog := log.WithValues("deployment", PodPlacementControllerName)
+	dlog := log.WithValues("deployment", utils.PodPlacementControllerName)
 	dlog.Info("Removing the finalizer from the deployment")
-	dlog.V(4).Info("Fetching the deployment", "Deployment", PodPlacementControllerName)
+	dlog.V(4).Info("Fetching the deployment", "Deployment", utils.PodPlacementControllerName)
 	ppcDeployment := &appsv1.Deployment{}
 	err = r.Get(ctx, client.ObjectKey{
-		Name:      PodPlacementControllerName,
+		Name:      utils.PodPlacementControllerName,
 		Namespace: utils.Namespace(),
 	}, ppcDeployment)
 	if client.IgnoreNotFound(err) != nil {
@@ -225,24 +267,33 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 	objects := []client.Object{
 		// The finalizer will not affect the reconciliation of ReplicaSets and Pods
 		// when updates to the ClusterPodPlacementConfig are made.
-		buildDeployment(clusterPodPlacementConfig, PodPlacementControllerName, 2,
+		buildDeployment(clusterPodPlacementConfig, utils.PodPlacementControllerName, 2,
 			utils.PodPlacementFinalizerName, "--leader-elect",
 			"--enable-ppc-controllers",
 		),
-		buildDeployment(clusterPodPlacementConfig, PodPlacementWebhookName, 3, "",
+		buildDeployment(clusterPodPlacementConfig, utils.PodPlacementWebhookName, 3, "",
 			"--enable-ppc-webhook",
 		),
-		buildService(PodPlacementControllerName, PodPlacementControllerName,
+		buildService(utils.PodPlacementControllerName, utils.PodPlacementControllerName,
 			443, intstr.FromInt32(9443)),
-		buildService(PodPlacementWebhookName, PodPlacementWebhookName,
+		buildService(utils.PodPlacementWebhookName, utils.PodPlacementWebhookName,
 			443, intstr.FromInt32(9443)),
 		buildService(
-			podPlacementControllerMetricsServiceName, PodPlacementControllerName,
+			utils.PodPlacementControllerMetricsServiceName, utils.PodPlacementControllerName,
 			8443, intstr.FromInt32(8443)),
 		buildService(
-			podPlacementWebhookMetricsServiceName, PodPlacementWebhookName,
+			utils.PodPlacementWebhookMetricsServiceName, utils.PodPlacementWebhookName,
 			8443, intstr.FromInt32(8443)),
-		buildMutatingWebhookConfiguration(clusterPodPlacementConfig),
+	}
+	// We ensure the MutatingWebHookConfiguration is created and present only if the operand is ready to serve the admission request and add/remove the scheduling gate.
+	shouldEnsureMWC := clusterPodPlacementConfig.Status.CanDeployMutatingWebhook()
+	shouldDeleteMWC := !shouldEnsureMWC && !clusterPodPlacementConfig.Status.IsMutatingWebhookConfigurationNotAvailable()
+	if shouldEnsureMWC {
+		objects = append(objects, buildMutatingWebhookConfiguration(clusterPodPlacementConfig))
+	}
+	if shouldDeleteMWC {
+		log.Info("Deleting the mutating webhook configuration as the operand is not ready to serve the admission request or remove the scheduling gate")
+		_ = r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(ctx, utils.PodMutatingWebhookConfigurationName, metav1.DeleteOptions{})
 	}
 
 	errs := make([]error, 0)
@@ -271,7 +322,57 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 			return err
 		}
 	}
-	return nil
+	return r.updateStatus(ctx, clusterPodPlacementConfig)
+}
+
+// updateStatus updates the status of the ClusterPodPlacementConfig object.
+// It returns an error if the object is progressing or the status update fails. Otherwise, it returns nil.
+// When it returns an error, the caller should requeue the request, unless the Reconciler is handling the deletion of the object.
+func (r *ClusterPodPlacementConfigReconciler) updateStatus(ctx context.Context, config *multiarchv1beta1.ClusterPodPlacementConfig) error {
+	log := ctrllog.FromContext(ctx).WithValues("ClusterPodPlacementConfig", config.Name,
+		"function", "updateStatus")
+	log.V(4).Info("----------------- ClusterPodPlacementConfig status report ------------------",
+		"ready", config.Status.IsReady(),
+		"progressing", config.Status.IsProgressing(),
+		"degraded", config.Status.IsDegraded(),
+		"deprovisioning", config.Status.IsDeprovisioning(),
+		"podPlacementControllerNotReady", config.Status.IsPodPlacementControllerNotReady(),
+		"podPlacementWebhookNotReady", config.Status.IsPodPlacementWebhookNotReady(),
+		"mutatingWebhookConfigurationNotAvailable", config.Status.IsMutatingWebhookConfigurationNotAvailable())
+
+	progressing := config.Status.IsProgressing()
+	if err := r.Status().Update(ctx, config); err != nil {
+		log.Error(err, "Unable to update conditions in the ClusterPodPlacementConfig")
+		return err
+	}
+	var err error = nil
+	if progressing {
+		err = errors.New(clusterPodPlacementConfigNotReady)
+	}
+	return err
+}
+
+func isDeploymentAvailable(deployment *appsv1.Deployment) bool {
+	if deployment == nil {
+		return false
+	}
+	return deployment.Status.AvailableReplicas > 0
+}
+
+func isDeploymentUpToDate(deployment *appsv1.Deployment) bool {
+	if deployment == nil {
+		return false
+	}
+	expectedReplicas := int32(-1)
+	if deployment.Spec.Replicas != nil {
+		expectedReplicas = *deployment.Spec.Replicas
+	}
+	return deployment.Status.UpdatedReplicas == expectedReplicas &&
+		deployment.Status.Replicas == expectedReplicas &&
+		deployment.Status.AvailableReplicas == expectedReplicas &&
+		deployment.Status.ReadyReplicas == expectedReplicas &&
+		deployment.Status.UnavailableReplicas == 0 &&
+		deployment.Status.ObservedGeneration == deployment.Generation
 }
 
 // SetupWithManager sets up the controller with the Manager.

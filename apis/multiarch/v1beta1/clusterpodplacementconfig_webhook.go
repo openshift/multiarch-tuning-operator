@@ -20,8 +20,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func (r *ClusterPodPlacementConfig) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (c *ClusterPodPlacementConfig) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+		For(c).
 		Complete()
 }

@@ -8,13 +8,13 @@ import (
 
 // DeploymentBuilder is a builder for appsv1.Deployment objects to be used only in unit tests.
 type DeploymentBuilder struct {
-	deployment appsv1.Deployment
+	deployment *appsv1.Deployment
 }
 
 // NewDeployment returns a new DeploymentBuilder to build appsv1.Deployment objects. It is meant to be used only in unit tests.
 func NewDeployment() *DeploymentBuilder {
 	return &DeploymentBuilder{
-		deployment: appsv1.Deployment{},
+		deployment: &appsv1.Deployment{},
 	}
 }
 
@@ -55,6 +55,6 @@ func (d *DeploymentBuilder) WithNamespace(namespace string) *DeploymentBuilder {
 	return d
 }
 
-func (d *DeploymentBuilder) Build() appsv1.Deployment {
+func (d *DeploymentBuilder) Build() *appsv1.Deployment {
 	return d.deployment
 }

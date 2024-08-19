@@ -51,7 +51,7 @@ var schedulingGate = corev1.PodSchedulingGate{
 type PodSchedulingGateMutatingWebHook struct {
 	Client     client.Client
 	ClientSet  *kubernetes.Clientset
-	decoder    *admission.Decoder
+	decoder    admission.Decoder
 	Scheme     *runtime.Scheme
 	Recorder   record.EventRecorder
 	WorkerPool *ants.MultiPool

@@ -67,8 +67,25 @@ endif
 
 # Image URL to use all building/pushing image targets
 IMG ?= registry.ci.openshift.org/origin/multiarch-tuning-operator:main
+
+#### Tool Versions ####
+### TODO: NOTE: Update these values to match the versions of the K8S API when pivoting to a new version of K8S.
+# https://github.com/kubernetes-sigs/kustomize/releases
+KUSTOMIZE_VERSION ?= v5.4.3
+# https://github.com/kubernetes-sigs/controller-tools/releases
+CONTROLLER_TOOLS_VERSION ?= v0.16.1
+# https://github.com/kubernetes-sigs/controller-runtime/branches
+SETUP_ENVTEST_VERSION ?= release-0.18
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.28.3
+ENVTEST_K8S_VERSION = 1.29.3
+# https://github.com/golangci/golangci-lint/releases
+GOLINT_VERSION = v1.60.1
+
+# TODO: We'd need an upstream builder image that includes gpgme-devel (libgpgme-dev)
+BUILD_IMAGE ?= registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-builder-multi-openshift-4.17
+RUNTIME_IMAGE ?= quay.io/centos/centos:stream9-minimal
+
+NO_DOCKER ?= 0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -91,12 +108,6 @@ ifeq ($(DBG),1)
 GOGCFLAGS ?= -gcflags=all="-N -l"
 endif
 
-# TODO: We'd need an upstream builder image that includes gpgme-devel (libgpgme-dev)
-BUILD_IMAGE ?= registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-builder-multi-openshift-4.17
-RUNTIME_IMAGE ?= quay.io/centos/centos:stream9-minimal
-
-NO_DOCKER ?= 0
-
 ifeq ($(shell command -v podman > /dev/null 2>&1 ; echo $$? ), 0)
 	ENGINE=podman
 else ifeq ($(shell command -v docker > /dev/null 2>&1 ; echo $$? ), 0)
@@ -114,7 +125,7 @@ ifeq ($(NO_DOCKER), 1)
   DOCKER_CMD =
   IMAGE_BUILD_CMD = imagebuilder
 else
-  DOCKER_CMD := $(ENGINE) run --env GO111MODULE=$(GO111MODULE) --env GOFLAGS=$(GOFLAGS) --rm -v "$(PWD)":/go/src/github.com/openshift/multiarch-tuning-operator:Z -w /go/src/github.com/openshift/multiarch-tuning-operator $(BUILD_IMAGE)
+  DOCKER_CMD := $(ENGINE) run --env GO111MODULE=$(GO111MODULE) --env GOFLAGS=$(GOFLAGS) --env GOLINT_VERSION=$(GOLINT_VERSION) --rm -v "$(PWD)":/go/src/github.com/openshift/multiarch-tuning-operator:Z -w /go/src/github.com/openshift/multiarch-tuning-operator $(BUILD_IMAGE)
   IMAGE_BUILD_CMD = $(ENGINE) build
 endif
 
@@ -160,7 +171,7 @@ vet: ## Run go vet against code.
 
 .PHONY: lint
 lint:
-	$(DOCKER_CMD) hack/golangci-lint.sh ./...
+	GOLINT_VERSION=$(GOLINT_VERSION) $(DOCKER_CMD) hack/golangci-lint.sh ./...
 
 .PHONY: goimports
 goimports: ## Goimports against code
@@ -257,11 +268,6 @@ $(LOCALBIN):
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
-
-## Tool Versions
-KUSTOMIZE_VERSION ?= v4.5.7
-CONTROLLER_TOOLS_VERSION ?= v0.11.1
-SETUP_ENVTEST_VERSION ?= release-0.17
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize

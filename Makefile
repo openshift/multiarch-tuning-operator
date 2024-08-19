@@ -401,3 +401,6 @@ e2e: manifests generate envtest
 clean:
 	rm -rf ${ARTIFACT_DIR}
 	rm -rf ${LOCALBIN}
+
+version:
+	VERSION=$(VERSION) ./hack/bump-version.sh

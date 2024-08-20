@@ -274,6 +274,20 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 					},
 					PriorityClassName:  priorityClassName,
 					ServiceAccountName: serviceAccount,
+					TopologySpreadConstraints: []corev1.TopologySpreadConstraint{
+						{
+							MaxSkew:           1,
+							TopologyKey:       "kubernetes.io/hostname",
+							WhenUnsatisfiable: corev1.ScheduleAnyway,
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									utils.OperandLabelKey:   operandName,
+									utils.ControllerNameKey: name,
+								},
+							},
+							MatchLabelKeys: []string{"pod-template-hash"},
+						},
+					},
 					Volumes: []corev1.Volume{
 						{
 							Name: "webhook-server-cert",

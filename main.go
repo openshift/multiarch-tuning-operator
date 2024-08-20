@@ -44,8 +44,6 @@ import (
 
 	//+kubebuilder:scaffold:imports
 
-	ocpv1 "github.com/openshift/api/config/v1"
-	ocpv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/library-go/pkg/operator/events"
 
 	"github.com/panjf2000/ants/v2"
@@ -90,12 +88,6 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(multiarchv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(multiarchv1beta1.AddToScheme(scheme))
-
-	// TODO[OCP specific]
-	utilruntime.Must(ocpv1.Install(scheme))
-	utilruntime.Must(ocpv1alpha1.Install(scheme))
-
-	//+kubebuilder:scaffold:scheme
 }
 
 func main() {
@@ -192,22 +184,8 @@ func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
 	}).SetupWithManager(mgr),
 		unableToCreateController, controllerKey, "PodReconciler")
 
-	must(mgr.Add(podplacement.NewConfigSyncerRunnable()), unableToAddRunnable, runnableKey, "ConfigSyncerRunnable")
-	must(mgr.Add(podplacement.NewRegistryCertificatesSyncer(clientset, registryCertificatesConfigMapNamespace,
-		registryCertificatesConfigMapName)),
-		unableToAddRunnable, runnableKey, "RegistryCertificatesSyncer")
 	must(mgr.Add(podplacement.NewGlobalPullSecretSyncer(clientset, globalPullSecretNamespace, globalPullSecretName)),
 		unableToAddRunnable, runnableKey, "GlobalPullSecretSyncer")
-
-	// TODO[OCP specific]
-	must(mgr.Add(podplacement.NewICSPSyncer(mgr)),
-		unableToAddRunnable, runnableKey, "ICSPSyncer")
-	must(mgr.Add(podplacement.NewIDMSSyncer(mgr)),
-		unableToAddRunnable, runnableKey, "IDMSSyncer")
-	must(mgr.Add(podplacement.NewITMSSyncer(mgr)),
-		unableToAddRunnable, runnableKey, "ITMSSyncer")
-	must(mgr.Add(podplacement.NewImageRegistryConfigSyncer(mgr)),
-		unableToAddRunnable, runnableKey, "ImageRegistryConfigSyncer")
 }
 
 func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {

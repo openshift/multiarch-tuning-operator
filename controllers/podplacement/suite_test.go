@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -68,6 +69,7 @@ var (
 	stopMgr         context.CancelFunc
 	testEnv         *envtest.Environment
 
+	dir      string
 	suiteLog = ctrl.Log.WithName("setup")
 )
 
@@ -91,6 +93,20 @@ var _ = BeforeSuite(func() {
 	testingutils.DecorateWithWaitGroup(wg, seedRegistry)
 	testingutils.DecorateWithWaitGroup(wg, seedK8S)
 	wg.Wait()
+
+	var err error
+	dir, err = os.MkdirTemp("", "multiarch-tuning-operator")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(dir).NotTo(BeEmpty())
+	err = os.Setenv("DOCKER_CERTS_DIR", filepath.Join(dir, "docker/certs.d"))
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("REGISTRIES_CERTS_DIR", filepath.Join(dir, "containers/registries.d"))
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("REGISTRIES_CONF_PATH", filepath.Join("containers/registries.conf"))
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("POLICY_CONF_PATH", filepath.Join("containers/policy.json"))
+	Expect(err).NotTo(HaveOccurred())
+
 	// TODO: should we continue running the manager in the BeforeSuite node?
 	runManager()
 })

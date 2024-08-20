@@ -53,28 +53,28 @@ var (
 
 func DockerCertsDir() string {
 	if dockerCertsDir == "" {
-		dockerCertsDir = lookupEnvOr("DOCKER_CERTS_DIR", "/tmp/docker/certs.d")
+		dockerCertsDir = lookupEnvOr("DOCKER_CERTS_DIR", "/etc/docker/certs.d")
 	}
 	return dockerCertsDir
 }
 
 func RegistryCertsDir() string {
 	if registriesCertsDir == "" {
-		registriesCertsDir = lookupEnvOr("REGISTRIES_CERTS_DIR", "/tmp/containers/registries.d")
+		registriesCertsDir = lookupEnvOr("REGISTRIES_CERTS_DIR", "/etc/containers/registries.d")
 	}
 	return registriesCertsDir
 }
 
 func RegistriesConfPath() string {
 	if registriesConfPath == "" {
-		registriesConfPath = lookupEnvOr("REGISTRIES_CONF_PATH", "/tmp/containers/registries.conf")
+		registriesConfPath = lookupEnvOr("REGISTRIES_CONF_PATH", "/etc/containers/registries.conf")
 	}
 	return registriesConfPath
 }
 
 func PolicyConfPath() string {
 	if policyConfPath == "" {
-		policyConfPath = lookupEnvOr("POLICY_CONF_PATH", "/tmp/containers/policy.json")
+		policyConfPath = lookupEnvOr("POLICY_CONF_PATH", "/etc/containers/policy.json")
 	}
 	return policyConfPath
 }

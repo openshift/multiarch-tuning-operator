@@ -7,6 +7,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -51,6 +52,16 @@ func ApplyResource(ctx context.Context, clientSet *kubernetes.Clientset, recorde
 	case *admissionv1.MutatingWebhookConfiguration:
 		return resourceapply.ApplyMutatingWebhookConfigurationImproved(ctx, clientSet.AdmissionregistrationV1(),
 			recorder, t, resourceCache)
+	case *rbacv1.Role:
+		return resourceapply.ApplyRole(ctx, clientSet.RbacV1(), recorder, t)
+	case *rbacv1.RoleBinding:
+		return resourceapply.ApplyRoleBinding(ctx, clientSet.RbacV1(), recorder, t)
+	case *corev1.ServiceAccount:
+		return resourceapply.ApplyServiceAccount(ctx, clientSet.CoreV1(), recorder, t)
+	case *rbacv1.ClusterRole:
+		return resourceapply.ApplyClusterRole(ctx, clientSet.RbacV1(), recorder, t)
+	case *rbacv1.ClusterRoleBinding:
+		return resourceapply.ApplyClusterRoleBinding(ctx, clientSet.RbacV1(), recorder, t)
 	default:
 		return nil, false, fmt.Errorf("unhandled type %T", obj)
 	}

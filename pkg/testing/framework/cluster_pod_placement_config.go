@@ -55,6 +55,14 @@ func getObjects() []client.Object {
 		builder.NewService().WithName(utils.PodPlacementControllerMetricsServiceName).WithNamespace(utils.Namespace()).Build(),
 		builder.NewService().WithName(utils.PodPlacementWebhookMetricsServiceName).WithNamespace(utils.Namespace()).Build(),
 		builder.NewMutatingWebhookConfiguration().WithName(utils.PodMutatingWebhookConfigurationName).Build(),
+		builder.NewClusterRole().WithName(utils.PodPlacementControllerName).Build(),
+		builder.NewClusterRole().WithName(utils.PodPlacementWebhookName).Build(),
+		builder.NewClusterRoleBinding().WithName(utils.PodPlacementControllerName).Build(),
+		builder.NewClusterRoleBinding().WithName(utils.PodPlacementWebhookName).Build(),
+		builder.NewRole().WithName(utils.PodPlacementControllerName).WithNamespace(utils.Namespace()).Build(),
+		builder.NewRoleBinding().WithName(utils.PodPlacementControllerName).WithNamespace(utils.Namespace()).Build(),
+		builder.NewServiceAccount().WithName(utils.PodPlacementControllerName).WithNamespace(utils.Namespace()).Build(),
+		builder.NewServiceAccount().WithName(utils.PodPlacementWebhookName).WithNamespace(utils.Namespace()).Build(),
 		builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName),
 	}
 }

@@ -23,6 +23,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
@@ -51,9 +52,8 @@ type ClusterPodPlacementConfigReconciler struct {
 }
 
 const (
-	operandName        = "pod-placement-controller"
-	priorityClassName  = "system-cluster-critical"
-	serviceAccountName = "multiarch-tuning-operator-controller-manager"
+	operandName       = "pod-placement-controller"
+	priorityClassName = "system-cluster-critical"
 )
 
 const (
@@ -73,7 +73,23 @@ const (
 //+kubebuilder:rbac:groups=apps,resources=deployments/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch;create;delete
 //+kubebuilder:rbac:groups=core,resources=services/status,verbs=get
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts/status,verbs=get
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts/finalizers,verbs=update
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles/status,verbs=get
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles/finalizers,verbs=update
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings/status,verbs=get
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings/finalizers,verbs=update
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles/status,verbs=get
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles/finalizers,verbs=update
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings/status,verbs=get
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings/finalizers,verbs=update
 
 // Reconcile reconciles the ClusterPodPlacementConfig object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
@@ -179,8 +195,16 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 			ObjName:               utils.PodPlacementWebhookName,
 		},
 		{
-			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
-			ObjName:               utils.PodPlacementControllerName,
+			NamespacedTypedClient: r.ClientSet.RbacV1().ClusterRoles(),
+			ObjName:               utils.PodPlacementWebhookName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.RbacV1().ClusterRoleBindings(),
+			ObjName:               utils.PodPlacementWebhookName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.CoreV1().ServiceAccounts(utils.Namespace()),
+			ObjName:               utils.PodPlacementWebhookName,
 		},
 	}
 	log.Info("Deleting the pod placement operand's resources")
@@ -227,30 +251,61 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 	// The pods have been ungated and no other errors occurred, so we can remove the finalizer
 	log.Info("Pods have been ungated")
 	log = log.WithValues("finalizer", utils.PodPlacementFinalizerName)
-	dlog := log.WithValues("deployment", utils.PodPlacementControllerName)
-	dlog.Info("Removing the finalizer from the deployment")
-	dlog.V(4).Info("Fetching the deployment", "Deployment", utils.PodPlacementControllerName)
 	ppcDeployment := &appsv1.Deployment{}
 	err = r.Get(ctx, client.ObjectKey{
 		Name:      utils.PodPlacementControllerName,
 		Namespace: utils.Namespace(),
 	}, ppcDeployment)
 	if client.IgnoreNotFound(err) != nil {
-		dlog.Error(err, "Unable to fetch the deployment")
+		log.Error(err, "Unable to fetch the deployment")
 		return err
 	}
-	controllerutil.RemoveFinalizer(ppcDeployment, utils.PodPlacementFinalizerName)
-	dlog.V(4).Info("Updating the deployment")
-	if err = r.Update(ctx, ppcDeployment); err != nil {
-		dlog.Error(err, "Unable to remove the finalizer")
-		return err
+	if err == nil && controllerutil.RemoveFinalizer(ppcDeployment, utils.PodPlacementFinalizerName) {
+		log.V(4).Info("Updating the deployment")
+		if err = r.Update(ctx, ppcDeployment); err != nil {
+			log.Error(err, "Unable to remove the finalizer")
+			return err
+		}
 	}
 	// we can remove the finalizer in the ClusterPodPlacementConfig object now
 	log.Info("Removing the finalizer from the ClusterPodPlacementConfig")
-	controllerutil.RemoveFinalizer(clusterPodPlacementConfig, utils.PodPlacementFinalizerName)
-	if err = r.Update(ctx, clusterPodPlacementConfig); err != nil {
-		log.Error(err, "Unable to remove finalizers.",
-			clusterPodPlacementConfig.Kind, clusterPodPlacementConfig.Name)
+	if controllerutil.RemoveFinalizer(clusterPodPlacementConfig, utils.PodPlacementFinalizerName) {
+		if err = r.Update(ctx, clusterPodPlacementConfig); err != nil {
+			log.Error(err, "Unable to remove finalizers.",
+				clusterPodPlacementConfig.Kind, clusterPodPlacementConfig.Name)
+			return err
+		}
+	}
+	objsToDelete = []utils.ToDeleteRef{
+		{
+			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
+			ObjName:               utils.PodPlacementControllerName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.RbacV1().ClusterRoles(),
+			ObjName:               utils.PodPlacementControllerName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.RbacV1().ClusterRoleBindings(),
+			ObjName:               utils.PodPlacementControllerName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.RbacV1().Roles(utils.Namespace()),
+			ObjName:               utils.PodPlacementControllerName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.RbacV1().RoleBindings(utils.Namespace()),
+			ObjName:               utils.PodPlacementControllerName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.CoreV1().ServiceAccounts(utils.Namespace()),
+			ObjName:               utils.PodPlacementControllerName,
+		},
+	}
+	log.Info("Deleting the remaining resources after cleanup")
+	// NOTE: err aggregates non-nil errors, excluding NotFound errors
+	if err := utils.DeleteResources(ctx, objsToDelete); err != nil {
+		log.Error(err, "Unable to delete resources")
 		return err
 	}
 	return err
@@ -267,13 +322,6 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 	objects := []client.Object{
 		// The finalizer will not affect the reconciliation of ReplicaSets and Pods
 		// when updates to the ClusterPodPlacementConfig are made.
-		buildDeployment(clusterPodPlacementConfig, utils.PodPlacementControllerName, 2,
-			utils.PodPlacementFinalizerName, "--leader-elect",
-			"--enable-ppc-controllers",
-		),
-		buildDeployment(clusterPodPlacementConfig, utils.PodPlacementWebhookName, 3, "",
-			"--enable-ppc-webhook",
-		),
 		buildService(utils.PodPlacementControllerName, utils.PodPlacementControllerName,
 			443, intstr.FromInt32(9443)),
 		buildService(utils.PodPlacementWebhookName, utils.PodPlacementWebhookName,
@@ -283,7 +331,57 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 			8443, intstr.FromInt32(8443)),
 		buildService(
 			utils.PodPlacementWebhookMetricsServiceName, utils.PodPlacementWebhookName,
+			8443, intstr.FromInt32(8443)), buildService(utils.PodPlacementControllerName, utils.PodPlacementControllerName,
+			443, intstr.FromInt32(9443)),
+		buildService(utils.PodPlacementWebhookName, utils.PodPlacementWebhookName,
+			443, intstr.FromInt32(9443)),
+		buildService(
+			utils.PodPlacementControllerMetricsServiceName, utils.PodPlacementControllerName,
 			8443, intstr.FromInt32(8443)),
+		buildService(
+			utils.PodPlacementWebhookMetricsServiceName, utils.PodPlacementWebhookName,
+			8443, intstr.FromInt32(8443)),
+		buildClusterRoleController(), buildClusterRoleWebhook(), buildRoleController(),
+		buildServiceAccount(utils.PodPlacementWebhookName), buildServiceAccount(utils.PodPlacementControllerName),
+		buildClusterRoleBinding(utils.PodPlacementControllerName, rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     clusterRoleKind,
+			Name:     utils.PodPlacementControllerName,
+		}, []rbacv1.Subject{
+			{
+				Kind:      serviceAccountKind,
+				Name:      utils.PodPlacementControllerName,
+				Namespace: utils.Namespace(),
+			},
+		}),
+		buildRoleBinding(utils.PodPlacementControllerName, rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     roleKind,
+			Name:     utils.PodPlacementControllerName,
+		}, []rbacv1.Subject{
+			{
+				Kind: serviceAccountKind,
+				Name: utils.PodPlacementControllerName,
+			},
+		}),
+		buildClusterRoleBinding(utils.PodPlacementWebhookName, rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     clusterRoleKind,
+			Name:     utils.PodPlacementWebhookName,
+		}, []rbacv1.Subject{
+			{
+				Kind:      serviceAccountKind,
+				Name:      utils.PodPlacementWebhookName,
+				Namespace: utils.Namespace(),
+			},
+		}),
+		buildDeployment(clusterPodPlacementConfig, utils.PodPlacementControllerName, 2, utils.PodPlacementControllerName,
+			utils.PodPlacementFinalizerName, "--leader-elect",
+			"--enable-ppc-controllers",
+		),
+		buildDeployment(clusterPodPlacementConfig, utils.PodPlacementWebhookName, 3, utils.PodPlacementWebhookName, "",
+			"--enable-ppc-webhook",
+		),
 	}
 	// We ensure the MutatingWebHookConfiguration is created and present only if the operand is ready to serve the admission request and add/remove the scheduling gate.
 	shouldEnsureMWC := clusterPodPlacementConfig.Status.CanDeployMutatingWebhook()
@@ -381,6 +479,11 @@ func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager)
 		For(&multiarchv1beta1.ClusterPodPlacementConfig{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
+		Owns(&rbacv1.ClusterRole{}).
+		Owns(&rbacv1.ClusterRoleBinding{}).
+		Owns(&rbacv1.Role{}).
+		Owns(&rbacv1.RoleBinding{}).
+		Owns(&corev1.ServiceAccount{}).
 		Owns(&admissionv1.MutatingWebhookConfiguration{}).
 		Complete(r)
 }

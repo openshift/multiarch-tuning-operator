@@ -155,6 +155,25 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get service "+utils.PodPlacementWebhookName, err)
 				}).Should(Succeed(), "the service "+utils.PodPlacementWebhookName+" should be recreated")
 			})
+			DescribeTable("should reconcile if deleted", func(object crclient.Object) {
+				name := object.GetName()
+				By("Deleting " + name)
+				err := k8sClient.Delete(ctx, object)
+				Expect(err).NotTo(HaveOccurred(), "failed to delete "+name, err)
+
+				By("Looking for the object to be recreated")
+				Eventually(func(g Gomega) {
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(object), object)
+					g.Expect(err).NotTo(HaveOccurred(), "failed to get "+name, err)
+					g.Expect(object.GetDeletionTimestamp().IsZero()).To(BeTrue(), "the "+name+" is still pending deletion")
+				}).Should(Succeed(), "the "+name+" should be recreated")
+			},
+				Entry("ClusterRole", builder.NewClusterRole().WithName(utils.PodPlacementWebhookName).Build()),
+				Entry("ClusterRoleBinding", builder.NewClusterRoleBinding().WithName(utils.PodPlacementWebhookName).Build()),
+				Entry("Role", builder.NewRole().WithName(utils.PodPlacementControllerName).WithNamespace(utils.Namespace()).Build()),
+				Entry("RoleBinding", builder.NewRoleBinding().WithName(utils.PodPlacementControllerName).WithNamespace(utils.Namespace()).Build()),
+				Entry("ServiceAccount", builder.NewServiceAccount().WithName(utils.PodPlacementWebhookName).WithNamespace(utils.Namespace()).Build()),
+			)
 			It("should reconcile a service if changed", func() {
 				s := &corev1.Service{}
 				err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&corev1.Service{

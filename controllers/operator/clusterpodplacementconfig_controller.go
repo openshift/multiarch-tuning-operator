@@ -375,13 +375,8 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 				Namespace: utils.Namespace(),
 			},
 		}),
-		buildDeployment(clusterPodPlacementConfig, utils.PodPlacementControllerName, 2, utils.PodPlacementControllerName,
-			utils.PodPlacementFinalizerName, "--leader-elect",
-			"--enable-ppc-controllers",
-		),
-		buildDeployment(clusterPodPlacementConfig, utils.PodPlacementWebhookName, 3, utils.PodPlacementWebhookName, "",
-			"--enable-ppc-webhook",
-		),
+		buildControllerDeployment(clusterPodPlacementConfig),
+		buildWebhookDeployment(clusterPodPlacementConfig),
 	}
 	// We ensure the MutatingWebHookConfiguration is created and present only if the operand is ready to serve the admission request and add/remove the scheduling gate.
 	shouldEnsureMWC := clusterPodPlacementConfig.Status.CanDeployMutatingWebhook()

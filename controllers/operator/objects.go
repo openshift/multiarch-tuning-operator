@@ -103,6 +103,52 @@ func buildService(name string, controllerName string, port int32, targetPort int
 	}
 }
 
+func buildWebhookDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig) *appsv1.Deployment {
+	return buildDeployment(clusterPodPlacementConfig, utils.PodPlacementWebhookName, 3, utils.PodPlacementWebhookName, "",
+		"--enable-ppc-webhook",
+	)
+
+}
+
+func buildControllerDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig) *appsv1.Deployment {
+	d := buildDeployment(clusterPodPlacementConfig, utils.PodPlacementControllerName, 2, utils.PodPlacementControllerName,
+		utils.PodPlacementFinalizerName, "--leader-elect", "--enable-ppc-controllers",
+	)
+	d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes,
+		corev1.Volume{
+			Name: "docker-conf",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/etc/docker/",
+					Type: utils.NewPtr(corev1.HostPathDirectoryOrCreate),
+				},
+			},
+		},
+		corev1.Volume{
+			Name: "containers-conf",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/etc/containers/",
+					Type: utils.NewPtr(corev1.HostPathDirectoryOrCreate),
+				},
+			},
+		},
+	)
+	d.Spec.Template.Spec.Containers[0].VolumeMounts = append(d.Spec.Template.Spec.Containers[0].VolumeMounts,
+		corev1.VolumeMount{
+			Name:      "docker-conf",
+			MountPath: "/etc/docker/",
+			ReadOnly:  true,
+		},
+		corev1.VolumeMount{
+			Name:      "containers-conf",
+			MountPath: "/etc/containers/",
+			ReadOnly:  true,
+		},
+	)
+	return d
+}
+
 func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig,
 	name string, replicas int32, serviceAccount string, finalizer string, args ...string) *appsv1.Deployment {
 	finalizers := make([]string, 0)

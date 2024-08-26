@@ -27,7 +27,7 @@ metadata:
     categories: OpenShift Optional, Other
     console.openshift.io/disable-operand-delete: "false"
     containerImage: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
-    createdAt: "2024-08-16T17:21:28Z"
+    createdAt: "2024-08-21T22:04:13Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -146,21 +146,7 @@ spec:
           - config.openshift.io
           resources:
           - imagedigestmirrorsets
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - config.openshift.io
-          resources:
           - images
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - config.openshift.io
-          resources:
           - imagetagmirrorsets
           verbs:
           - get
@@ -170,6 +156,7 @@ spec:
           - ""
           resources:
           - configmaps
+          - secrets
           verbs:
           - get
           - list
@@ -202,15 +189,8 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - secrets
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - ""
-          resources:
           - serviceaccounts
+          - services
           verbs:
           - create
           - delete
@@ -229,23 +209,6 @@ spec:
           - ""
           resources:
           - serviceaccounts/status
-          verbs:
-          - get
-        - apiGroups:
-          - ""
-          resources:
-          - services
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - ""
-          resources:
           - services/status
           verbs:
           - get
@@ -287,77 +250,8 @@ spec:
           - rbac.authorization.k8s.io
           resources:
           - clusterrolebindings
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterrolebindings/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterrolebindings/status
-          verbs:
-          - get
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
           - clusterroles
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterroles/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterroles/status
-          verbs:
-          - get
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
           - rolebindings
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - rolebindings/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - rolebindings/status
-          verbs:
-          - get
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
           - roles
           verbs:
           - create
@@ -370,12 +264,18 @@ spec:
         - apiGroups:
           - rbac.authorization.k8s.io
           resources:
+          - clusterrolebindings/finalizers
+          - clusterroles/finalizers
+          - rolebindings/finalizers
           - roles/finalizers
           verbs:
           - update
         - apiGroups:
           - rbac.authorization.k8s.io
           resources:
+          - clusterrolebindings/status
+          - clusterroles/status
+          - rolebindings/status
           - roles/status
           verbs:
           - get

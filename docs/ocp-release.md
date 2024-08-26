@@ -117,3 +117,61 @@ The issues will have to be remediated according to the timelines set in the stan
 
 If malware is detected, contact prodsec@redhat.com immediately.
 
+## Pin to a new Golang and K8S API version
+
+1. Update the Dockerfiles to use a base image with the desired Golang version (it should be the one used by k8s.io/api or openshift/api)
+2. Update the Makefile to use the new Golang version base image (BUILD_IMAGE variable)
+3. Commit the changes to the Golang version
+4. Update the k8s libraries in the go.mod file to the desired version
+5. Update the dependencies with `go get -u`, and ensure no new version of the k8s API is used
+```shell
+go mod download
+go mod tidy
+go mod verify 
+```
+6. Commit the changes to go.mod and go.sum
+7. Update the vendor/ folder
+```shell
+rm -rf vendor/
+go mod vendor
+```
+8. Commit the changes to the vendor/ folder
+9. Update the tools in the Makefile to the desired version:
+```makefile
+# https://github.com/kubernetes-sigs/kustomize/releases
+KUSTOMIZE_VERSION ?= v5.4.3
+# https://github.com/kubernetes-sigs/controller-tools/releases
+CONTROLLER_TOOLS_VERSION ?= v0.16.1
+# https://github.com/kubernetes-sigs/controller-runtime/branches
+SETUP_ENVTEST_VERSION ?= release-0.18
+# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
+ENVTEST_K8S_VERSION = 1.29.3
+# https://github.com/golangci/golangci-lint/releases
+GOLINT_VERSION = v1.60.1
+```
+10. Commit the changes to the Makefile
+11. Run the tests and ensure everything is building and working as expected. Look for deprecation warnings PRs in the controller-runtime repository.
+```shell
+make docker-build
+make build
+make bundle
+make test
+```
+12. Commit any other changes to the code, if any
+13. Create a PR with the changes.
+
+Example log:
+```
+02eb25dd (HEAD -> update-go) Add info in the ocp-release.md doc about k8s and golang upgrade
+8e2d3389 Add info in the ocp-release.md doc about k8s and golang upgrade
+46e7b338 Update code after Golang, pivot to k8s 1.30.4 and dependencies upgrade
+787dfb2a Update tools in Makefile
+289ebaa2 go mod vendor
+cda73fe1 pin K8S API to v0.30.4 and set go minimum version to 1.22.5
+e511fdce Update go version in base images to 1.22
+```
+
+Example PR: https://github.com/openshift/multiarch-tuning-operator/pull/225
+
+The PR in the repo may need to be paired with one in the Prow config:
+see https://github.com/openshift/release/pull/55728/commits/707fa080a66d8006c4a69e452a4621ed54f67cf6 as an example

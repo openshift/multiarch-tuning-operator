@@ -68,6 +68,7 @@ const (
 //+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;update;patch;create;delete;list;watch
 //+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations/status,verbs=get
 
+//+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;update
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch;create;delete
 //+kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=deployments/finalizers,verbs=update
@@ -122,6 +123,32 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 		return ctrl.Result{}, r.handleDelete(ctx, clusterPodPlacementConfig)
 	}
 	return ctrl.Result{}, r.reconcile(ctx, clusterPodPlacementConfig)
+}
+
+func (r *ClusterPodPlacementConfigReconciler) ensureNamespaceLabels(ctx context.Context) error {
+	// https://kubernetes.io/docs/concepts/security/pod-security-standards/
+	// https://kubernetes.io/docs/concepts/security/pod-security-admission/
+	// https://kubernetes.io/docs/tasks/configure-pod-container/enforce-standards-namespace-labels/
+	log := ctrllog.FromContext(ctx)
+	log.V(3).Info("Ensuring namespace labels", "namespace", utils.Namespace())
+
+	ns, err := r.ClientSet.CoreV1().Namespaces().Get(ctx, utils.Namespace(), metav1.GetOptions{})
+	if err != nil {
+		log.Error(err, "Unable to get the namespace")
+		return err
+	}
+	if ns.Labels == nil {
+		ns.Labels = make(map[string]string)
+	}
+	ns.Labels["pod-security.kubernetes.io/audit"] = "privileged"
+	ns.Labels["pod-security.kubernetes.io/audit-version"] = "v1.29"
+	ns.Labels["pod-security.kubernetes.io/enforce"] = "privileged"
+	ns.Labels["pod-security.kubernetes.io/enforce-version"] = "v1.29"
+	ns.Labels["pod-security.kubernetes.io/warn"] = "privileged"
+	ns.Labels["pod-security.kubernetes.io/warn-version"] = "v1.29"
+	log.V(4).Info("Updating the namespace labels", "labels", ns.Labels)
+	_, err = r.ClientSet.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
+	return err
 }
 
 // dependentsStatusToClusterPodPlacementConfig gathers the status of the dependents of the ClusterPodPlacementConfig object.
@@ -318,7 +345,10 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		log.Info("Setting log level", "level", -clusterPodPlacementConfig.Spec.LogVerbosity.ToZapLevelInt())
 		utils.AtomicLevel.SetLevel(zapcore.Level(-clusterPodPlacementConfig.Spec.LogVerbosity.ToZapLevelInt()))
 	}
-
+	if err := r.ensureNamespaceLabels(ctx); err != nil {
+		log.Error(err, "Unable to ensure namespace labels")
+		return errorutils.NewAggregate([]error{err, r.updateStatus(ctx, clusterPodPlacementConfig)})
+	}
 	objects := []client.Object{
 		// The finalizer will not affect the reconciliation of ReplicaSets and Pods
 		// when updates to the ClusterPodPlacementConfig are made.

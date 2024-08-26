@@ -146,6 +146,8 @@ func (r *ClusterPodPlacementConfigReconciler) ensureNamespaceLabels(ctx context.
 	ns.Labels["pod-security.kubernetes.io/enforce-version"] = "v1.29"
 	ns.Labels["pod-security.kubernetes.io/warn"] = "privileged"
 	ns.Labels["pod-security.kubernetes.io/warn-version"] = "v1.29"
+	// See https://github.com/openshift/enhancements/blob/c5b9aea25e/enhancements/workload-partitioning/management-workload-partitioning.md
+	ns.Labels["workload.openshift.io/allowed"] = "management"
 	log.V(4).Info("Updating the namespace labels", "labels", ns.Labels)
 	_, err = r.ClientSet.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
 	return err
@@ -428,12 +430,12 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 	}
 
 	if len(errs) > 0 {
-		return errorutils.NewAggregate(errs)
+		return errorutils.NewAggregate(append(errs, r.updateStatus(ctx, clusterPodPlacementConfig)))
 	}
 
 	if err := utils.ApplyResources(ctx, r.ClientSet, r.Recorder, objects); err != nil {
 		log.Error(err, "Unable to apply resources")
-		return err
+		return errorutils.NewAggregate([]error{err, r.updateStatus(ctx, clusterPodPlacementConfig)})
 	}
 
 	if !controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.PodPlacementFinalizerName) {
@@ -442,7 +444,7 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		controllerutil.AddFinalizer(clusterPodPlacementConfig, utils.PodPlacementFinalizerName)
 		if err := r.Update(ctx, clusterPodPlacementConfig); err != nil {
 			log.Error(err, "Unable to update finalizers in the ClusterPodPlacementConfig")
-			return err
+			return errorutils.NewAggregate([]error{err, r.updateStatus(ctx, clusterPodPlacementConfig)})
 		}
 	}
 	return r.updateStatus(ctx, clusterPodPlacementConfig)

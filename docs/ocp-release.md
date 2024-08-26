@@ -175,3 +175,13 @@ Example PR: https://github.com/openshift/multiarch-tuning-operator/pull/225
 
 The PR in the repo may need to be paired with one in the Prow config:
 see https://github.com/openshift/release/pull/55728/commits/707fa080a66d8006c4a69e452a4621ed54f67cf6 as an example
+
+# Bumping the operator version
+
+To bump the operator version, run the following command:
+```shell
+make version VERSION=1.0.1
+```
+
+Also verify that no other references to the previous versions are present in the codebase.
+If so, update hack/bump-version.sh to include any further patches required to update the version.

@@ -36,8 +36,8 @@ COPY --from=builder /code/bundle/tests/scorecard /tests/scorecard/
 LABEL com.redhat.component="Multiarch Tuning Operator"
 LABEL distribution-scope="public"
 LABEL name="multiarch-tuning-operator-bundle"
-LABEL release="0.9.0"
-LABEL version="0.9.0"
+LABEL release="1.0.0"
+LABEL version="1.0.0"
 LABEL url="https://github.com/openshift/multiarch-tuning-operator"
 LABEL vendor="Red Hat, Inc."
 LABEL description="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \
@@ -51,4 +51,3 @@ LABEL summary="The Multiarch Tuning Operator enhances the user experience for ad
                    migrate from single-arch to multi-arch OpenShift"
 LABEL io.k8s.display-name="Multiarch Tuning Operator"
 LABEL io.openshift.tags="openshift,operator,multiarch,scheduling"
-

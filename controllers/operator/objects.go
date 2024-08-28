@@ -2,6 +2,7 @@ package operator
 
 import (
 	"fmt"
+	"os"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -223,6 +224,18 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 								{
 									Name:  "NAMESPACE",
 									Value: utils.Namespace(),
+								},
+								{
+									Name:  "HTTP_PROXY",
+									Value: os.Getenv("HTTP_PROXY"),
+								},
+								{
+									Name:  "HTTPS_PROXY",
+									Value: os.Getenv("HTTPS_PROXY"),
+								},
+								{
+									Name:  "NO_PROXY",
+									Value: os.Getenv("NO_PROXY"),
 								},
 							},
 							Args: append([]string{

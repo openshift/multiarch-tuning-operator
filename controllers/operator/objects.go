@@ -233,6 +233,7 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 									Name:  "HTTPS_PROXY",
 									Value: os.Getenv("HTTPS_PROXY"),
 								},
+
 								{
 									Name:  "NO_PROXY",
 									Value: os.Getenv("NO_PROXY"),
@@ -303,6 +304,11 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 								{
 									Name:      "ca-projected-volume",
 									MountPath: "/etc/ssl/certs",
+									ReadOnly:  true,
+								},
+								{
+									Name:      "trusted-ca",
+									MountPath: "/etc/pki/ca-trust/extracted/pem",
 									ReadOnly:  true,
 								},
 							},
@@ -402,6 +408,22 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 													},
 												},
 											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "trusted-ca",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "multiarch-tuning-operator-trusted-ca",
+									},
+									Items: []corev1.KeyToPath{
+										{
+											Key:  "ca-bundle.crt",
+											Path: "tls-ca-bundle.pem",
 										},
 									},
 								},

@@ -10,8 +10,6 @@ fi
 export NO_DOCKER=1
 export NAMESPACE=openshift-multiarch-tuning-operator
 oc create namespace ${NAMESPACE}
-oc annotate namespace ${NAMESPACE} \
-  workload.openshift.io/allowed="management"
 
 if [ "${USE_OLM:-}" == "true" ]; then
   # Get the manifest from the manifest-list

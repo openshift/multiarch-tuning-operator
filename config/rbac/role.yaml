@@ -75,6 +75,13 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - namespaces
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - get

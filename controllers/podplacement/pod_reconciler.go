@@ -61,7 +61,8 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log := ctrllog.FromContext(ctx)
 
 	pod := &Pod{
-		ctx: ctx,
+		ctx:      ctx,
+		recorder: r.Recorder,
 	}
 
 	if err := r.Get(ctx, req.NamespacedName, &pod.Pod); err != nil {
@@ -86,7 +87,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			"The nodeAffinity for this pod will not be set.")
 		// we still need to remove the scheduling gate. Therefore, we do not return here.
 	} else {
-		pod.SetNodeAffinityArchRequirement(psdl, r.Recorder)
+		pod.SetNodeAffinityArchRequirement(psdl)
 	}
 
 	// Remove the scheduling gate

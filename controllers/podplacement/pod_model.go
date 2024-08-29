@@ -37,7 +37,8 @@ var (
 
 type Pod struct {
 	corev1.Pod
-	ctx context.Context
+	ctx      context.Context
+	recorder record.EventRecorder
 }
 
 func (pod *Pod) GetPodImagePullSecrets() []string {
@@ -91,7 +92,7 @@ func (pod *Pod) RemoveSchedulingGate() {
 // It verifies first that no nodeSelector field is set for the kubernetes.io/arch label.
 // Then, it computes the intersection of the architectures supported by the images used by the pod via pod.getArchitecturePredicate.
 // Finally, it initializes the nodeAffinity for the pod and set it to the computed requirement via the pod.setArchNodeAffinity method.
-func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte, recorder record.EventRecorder) {
+func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 	log := ctrllog.FromContext(pod.ctx)
 
 	if pod.Spec.NodeSelector != nil {
@@ -103,10 +104,7 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte, reco
 				// The same behavior is implemented below within each
 				// nodeSelectorTerm's MatchExpressions field.
 				log.V(3).Info("The pod has the nodeSelector field set for the kubernetes.io/arch label. Ignoring the pod...")
-				if recorder != nil {
-					recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitecturePredicatesConflict,
-						ArchitecturePredicatesConflictMsg)
-				}
+				pod.publishEvent(corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicatesConflictMsg)
 				return
 			}
 		}
@@ -114,9 +112,7 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte, reco
 
 	requirement, err := pod.getArchitecturePredicate(pullSecretDataList)
 	if err != nil {
-		if recorder != nil {
-			recorder.Event(&pod.Pod, corev1.EventTypeWarning, ImageArchitectureInspectionError, ImageArchitectureInspectionErrorMsg+err.Error())
-		}
+		pod.publishEvent(corev1.EventTypeWarning, ImageArchitectureInspectionError, ImageArchitectureInspectionErrorMsg+err.Error())
 		log.Error(err, "Error getting the architecture predicate. The pod will not have the nodeAffinity set.")
 		return
 	}
@@ -135,14 +131,10 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte, reco
 
 	patched := pod.setArchNodeAffinity(requirement)
 	if patched {
-		if recorder != nil {
-			recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
-				ArchitecturePredicateSetupMsg+fmt.Sprintf("{%s}", strings.Join(requirement.Values, ", ")))
-		}
+		pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
+			ArchitecturePredicateSetupMsg+fmt.Sprintf("{%s}", strings.Join(requirement.Values, ", ")))
 	} else {
-		if recorder != nil {
-			recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicateSetupMsg)
-		}
+		pod.publishEvent(corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicateSetupMsg)
 	}
 
 }
@@ -237,4 +229,10 @@ func (pod *Pod) intersectImagesArchitecture(pullSecretDataList [][]byte) (suppor
 		}
 	}
 	return sets.List(supportedArchitecturesSet), nil
+}
+
+func (pod *Pod) publishEvent(eventType, reason, message string) {
+	if pod.recorder != nil {
+		pod.recorder.Event(&pod.Pod, eventType, reason, message)
+	}
 }

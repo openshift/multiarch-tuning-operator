@@ -76,6 +76,11 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	}
 	log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name)
 
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueNotSet
+
 	// ignore the kube-* and hypershift-* namespace as those are infra components, and ignore the namespace where the operand is running too
 	// Also ignore any pods which are deployed on control plane nodes
 	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "hypershift-") ||
@@ -99,15 +104,11 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 
 	pod.Spec.SchedulingGates = append(pod.Spec.SchedulingGates, schedulingGate)
 
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
-	}
 	// We also add a label to the pod to indicate that the scheduling gate was added
 	// and this pod expects processing by the operator. That's useful for testing and debugging, but also gives the user
 	// an indication that the pod is waiting for processing and can support kubectl queries to find out which pods are
 	// waiting for processing, for example when the operator is being uninstalled.
 	pod.Labels[utils.SchedulingGateLabel] = utils.SchedulingGateLabelValueGated
-	pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueNotSet
 	// we don't care about this goroutine, it's informational,
 	// we know it will finish eventually by design, and we don't need to block the response as we
 	// are right in the admission pipeline, before the pod is persisted.

@@ -686,3 +686,123 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 		})
 	}
 }
+
+// TestEnsureLabel checks the ensureLabel method to verify that it correctly sets labels.
+func TestEnsureLabel(t *testing.T) {
+	tests := []struct {
+		name           string
+		initialLabels  []string
+		label          string
+		value          string
+		expectedLabels map[string]string
+	}{
+		{
+			name:           "Empty Labels",
+			initialLabels:  nil,
+			label:          "testLabel",
+			value:          "testValue",
+			expectedLabels: map[string]string{"testLabel": "testValue"},
+		},
+		{
+			name:           "Non-empty Labels",
+			initialLabels:  []string{"existingLabel", "existingValue"},
+			label:          "testLabel",
+			value:          "testValue",
+			expectedLabels: map[string]string{"existingLabel": "existingValue", "testLabel": "testValue"},
+		},
+		{
+			name:           "Overwrite Existing Label",
+			initialLabels:  []string{"testLabel", "oldValue"},
+			label:          "testLabel",
+			value:          "newValue",
+			expectedLabels: map[string]string{"testLabel": "newValue"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod: NewPod().WithLabels(tt.initialLabels...).Build(),
+			}
+
+			pod.ensureLabel(tt.label, tt.value)
+
+			if len(pod.Labels) != len(tt.expectedLabels) {
+				t.Errorf("expected %d labels, got %d", len(tt.expectedLabels), len(pod.Labels))
+			}
+
+			for k, v := range tt.expectedLabels {
+				if pod.Labels[k] != v {
+					t.Errorf("expected label %s to have value %s, got %s", k, v, pod.Labels[k])
+				}
+			}
+		})
+	}
+}
+
+// TestEnsureArchitectureLabels checks the ensureArchitectureLabels method to ensure it sets the correct labels based on NodeSelectorRequirement.
+func TestEnsureArchitectureLabels(t *testing.T) {
+	tests := []struct {
+		name           string
+		requirement    v1.NodeSelectorRequirement
+		expectedLabels map[string]string
+	}{
+		{
+			name: "No Values",
+			requirement: v1.NodeSelectorRequirement{
+				Values: nil,
+			},
+			expectedLabels: map[string]string{},
+		},
+		{
+			name: "Zero Values",
+			requirement: v1.NodeSelectorRequirement{
+				Values: []string{},
+			},
+			expectedLabels: map[string]string{
+				utils.NoSupportedArchLabel: "",
+			},
+		},
+		{
+			name: "Single Value",
+			requirement: v1.NodeSelectorRequirement{
+				Values: []string{utils.ArchitectureAmd64},
+			},
+			expectedLabels: map[string]string{
+				utils.SingleArchLabel:                         "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64): "",
+			},
+		},
+		{
+			name: "Multiple Values",
+			requirement: v1.NodeSelectorRequirement{
+				Values: []string{utils.ArchitectureAmd64, utils.ArchitectureArm64},
+			},
+			expectedLabels: map[string]string{
+				utils.MultiArchLabel:                          "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64): "",
+				utils.ArchLabelValue(utils.ArchitectureArm64): "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod: NewPod().Build(),
+			}
+
+			pod.ensureArchitectureLabels(tt.requirement)
+
+			if len(pod.Labels) != len(tt.expectedLabels) {
+				t.Errorf("expected %d labels, got %d", len(tt.expectedLabels), len(pod.Labels))
+			}
+
+			for k, v := range tt.expectedLabels {
+				if pod.Labels[k] != v {
+					t.Errorf("expected label %s to have value %s, got %s", k, v, pod.Labels[k])
+				}
+			}
+		})
+	}
+}

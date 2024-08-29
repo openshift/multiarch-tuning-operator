@@ -82,10 +82,7 @@ func (pod *Pod) RemoveSchedulingGate() {
 	// The scheduling gate is removed. We also add a label to the pod to indicate that the scheduling gate was removed
 	// and this pod was processed by the operator. That's useful for testing and debugging, but also gives the user
 	// an indication that the pod was processed by the operator.
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
-	}
-	pod.Labels[utils.SchedulingGateLabel] = utils.SchedulingGateLabelValueRemoved
+	pod.ensureLabel(utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved)
 }
 
 // SetNodeAffinityArchRequirement wraps the logic to set the nodeAffinity for the pod.
@@ -104,6 +101,7 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 				// The same behavior is implemented below within each
 				// nodeSelectorTerm's MatchExpressions field.
 				log.V(3).Info("The pod has the nodeSelector field set for the kubernetes.io/arch label. Ignoring the pod...")
+				pod.ensureLabel(utils.NodeAffinityLabel, utils.NodeAffinityLabelValueNotSet)
 				pod.publishEvent(corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicatesConflictMsg)
 				return
 			}
@@ -112,6 +110,7 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 
 	requirement, err := pod.getArchitecturePredicate(pullSecretDataList)
 	if err != nil {
+		pod.ensureLabel(utils.ImageInspectionErrorLabel, "")
 		pod.publishEvent(corev1.EventTypeWarning, ImageArchitectureInspectionError, ImageArchitectureInspectionErrorMsg+err.Error())
 		log.Error(err, "Error getting the architecture predicate. The pod will not have the nodeAffinity set.")
 		return
@@ -119,6 +118,7 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 	if len(requirement.Values) == 0 {
 		pod.publishEvent(corev1.EventTypeNormal, NoSupportedArchitecturesFound, NoSupportedArchitecturesFoundMsg)
 	}
+	pod.ensureArchitectureLabels(requirement)
 
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
@@ -132,14 +132,7 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 		pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
 	}
 
-	patched := pod.setArchNodeAffinity(requirement)
-	if patched {
-		pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
-			ArchitecturePredicateSetupMsg+fmt.Sprintf("{%s}", strings.Join(requirement.Values, ", ")))
-	} else {
-		pod.publishEvent(corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicateSetupMsg)
-	}
-
+	pod.setArchNodeAffinity(requirement)
 }
 
 // setArchNodeAffinity sets the node affinity for the pod to the given requirement based on the rules in
@@ -180,10 +173,12 @@ func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) 
 	// if the nodeSelectorTerms were patched at least once, we set the nodeAffinity label to the set value, to keep
 	// track of the fact that the nodeAffinity was patched by the operator.
 	if patched {
-		if pod.Labels == nil {
-			pod.Labels = make(map[string]string)
-		}
-		pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueSet
+		pod.ensureLabel(utils.NodeAffinityLabel, utils.NodeAffinityLabelValueSet)
+		pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
+			ArchitecturePredicateSetupMsg+fmt.Sprintf("{%s}", strings.Join(requirement.Values, ", ")))
+	} else {
+		pod.ensureLabel(utils.NodeAffinityLabel, utils.NodeAffinityLabelValueNotSet)
+		pod.publishEvent(corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicateSetupMsg)
 	}
 	return patched
 }
@@ -244,5 +239,37 @@ func (pod *Pod) intersectImagesArchitecture(pullSecretDataList [][]byte) (suppor
 func (pod *Pod) publishEvent(eventType, reason, message string) {
 	if pod.recorder != nil {
 		pod.recorder.Event(&pod.Pod, eventType, reason, message)
+	}
+}
+
+// ensureLabel ensures that the pod has the given label with the given value.
+func (pod *Pod) ensureLabel(label string, value string) {
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[label] = value
+}
+
+// ensureArchitectureLabels adds labels for the given requirement to the pod. Labels are added to indicate
+// the supported architectures and index pods by architecture or by whether they support more than one architecture.
+// In this case, single-architecture is meant as a pod that supports only one architecture: all the images in the pod
+// may be manifest-list, but the intersection of the architectures is a single value.
+func (pod *Pod) ensureArchitectureLabels(requirement corev1.NodeSelectorRequirement) {
+	if requirement.Values == nil {
+		return
+	}
+	switch len(requirement.Values) {
+	case 0:
+		// if the requirement has no values, we set the NoSupportedArchLabel as a label for the node. That's a dummy
+		// and non-available-by-default label that we use to prevent the pod from being scheduled when it cannot run all
+		// the containers in at least one architecture.
+		pod.ensureLabel(utils.NoSupportedArchLabel, "")
+	case 1:
+		pod.ensureLabel(utils.SingleArchLabel, "")
+	default:
+		pod.ensureLabel(utils.MultiArchLabel, "")
+	}
+	for _, value := range requirement.Values {
+		pod.ensureLabel(utils.ArchLabelValue(value), "")
 	}
 }

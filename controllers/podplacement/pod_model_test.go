@@ -316,6 +316,14 @@ func TestPod_getArchitecturePredicate(t *testing.T) {
 			wantErr: true,
 			want:    v1.NodeSelectorRequirement{},
 		},
+		{
+			name: "pod with conflicting architectures",
+			pod:  NewPod().WithContainersImages(fake.SingleArchAmd64Image, fake.SingleArchArm64Image).Build(),
+			want: v1.NodeSelectorRequirement{
+				Key:      utils.NoSupportedArchLabel,
+				Operator: v1.NodeSelectorOpExists,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -651,6 +659,17 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 			name: "should not modify the pod if unable to inspect the images",
 			pod:  NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
 			want: NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
+		},
+		{
+			name: "should prevent the pod from being scheduled when no common architecture is found",
+			pod:  NewPod().WithContainersImages(fake.SingleArchAmd64Image, fake.SingleArchArm64Image).Build(),
+			want: NewPod().WithContainersImages(fake.SingleArchAmd64Image, fake.SingleArchArm64Image).WithNodeSelectorTermsMatchExpressions(
+				[]v1.NodeSelectorRequirement{
+					{
+						Key:      utils.NoSupportedArchLabel,
+						Operator: v1.NodeSelectorOpExists,
+					},
+				}).Build(),
 		},
 	}
 	for _, tt := range tests {

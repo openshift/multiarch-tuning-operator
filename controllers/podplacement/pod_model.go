@@ -116,6 +116,9 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 		log.Error(err, "Error getting the architecture predicate. The pod will not have the nodeAffinity set.")
 		return
 	}
+	if len(requirement.Values) == 0 {
+		pod.publishEvent(corev1.EventTypeNormal, NoSupportedArchitecturesFound, NoSupportedArchitecturesFoundMsg)
+	}
 
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
@@ -190,6 +193,13 @@ func (pod *Pod) getArchitecturePredicate(pullSecretDataList [][]byte) (corev1.No
 	// if an error occurs, we return an empty NodeSelectorRequirement and the error.
 	if err != nil {
 		return corev1.NodeSelectorRequirement{}, err
+	}
+
+	if len(architectures) == 0 {
+		return corev1.NodeSelectorRequirement{
+			Key:      utils.NoSupportedArchLabel,
+			Operator: corev1.NodeSelectorOpExists,
+		}, nil
 	}
 	return corev1.NodeSelectorRequirement{
 		Key:      utils.ArchLabel,

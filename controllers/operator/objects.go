@@ -2,6 +2,7 @@ package operator
 
 import (
 	"fmt"
+	"os"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -224,6 +225,19 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 									Name:  "NAMESPACE",
 									Value: utils.Namespace(),
 								},
+								{
+									Name:  "HTTP_PROXY",
+									Value: os.Getenv("HTTP_PROXY"),
+								},
+								{
+									Name:  "HTTPS_PROXY",
+									Value: os.Getenv("HTTPS_PROXY"),
+								},
+
+								{
+									Name:  "NO_PROXY",
+									Value: os.Getenv("NO_PROXY"),
+								},
 							},
 							Args: append([]string{
 								"--health-probe-bind-address=:8081",
@@ -290,6 +304,11 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 								{
 									Name:      "ca-projected-volume",
 									MountPath: "/etc/ssl/certs",
+									ReadOnly:  true,
+								},
+								{
+									Name:      "trusted-ca",
+									MountPath: "/etc/pki/ca-trust/extracted/pem",
 									ReadOnly:  true,
 								},
 							},
@@ -389,6 +408,22 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 													},
 												},
 											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "trusted-ca",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "multiarch-tuning-operator-trusted-ca",
+									},
+									Items: []corev1.KeyToPath{
+										{
+											Key:  "ca-bundle.crt",
+											Path: "tls-ca-bundle.pem",
 										},
 									},
 								},

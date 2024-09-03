@@ -9,6 +9,7 @@ const (
 	ArchitectureAwareSchedulingGateAdded          = "ArchAwareSchedGateAdded"
 	ArchitectureAwareSchedulingGateRemovalFailure = "ArchAwareSchedGateRemovalFailed"
 	ArchitectureAwareSchedulingGateRemovalSuccess = "ArchAwareSchedGateRemovalSuccess"
+	NoSupportedArchitecturesFound                 = "NoSupportedArchitecturesFound"
 
 	SchedulingGateAddedMsg              = "Successfully gated with the " + utils.SchedulingGateName + " scheduling gate"
 	SchedulingGateRemovalSuccessMsg     = "Successfully removed the " + utils.SchedulingGateName + " scheduling gate"
@@ -16,4 +17,5 @@ const (
 	ArchitecturePredicatesConflictMsg   = "All the scheduling predicates already include architecture-specific constraints"
 	ArchitecturePredicateSetupMsg       = "Set the nodeAffinity for the architecture to "
 	ImageArchitectureInspectionErrorMsg = "Failed to retrieve the supported architectures: "
+	NoSupportedArchitecturesFoundMsg    = "Pod cannot be scheduled due to incompatible image architectures; container images have no supported architectures in common"
 )

@@ -83,6 +83,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should set the node affinity on privileged deployments", func() {
@@ -145,6 +152,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should set the node affinity when users node affinity do not conflict", func() {
@@ -177,6 +191,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&hostnameLabelNSR, &archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should not set the node affinity when users node affinity conflicts", func() {
@@ -238,6 +259,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedHostnameNST := NewNodeSelectorTerm().WithMatchExpressions(&hostnameLabelNSR, &expectedArchLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedHostnameNST, archLabelNSTs)
 		})
 		It("should not set the node affinity when nodeSelector exist", func() {
@@ -325,6 +353,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.SingleArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should set the node affinity when with a single container and a multiarch image", func() {
@@ -352,6 +384,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should set the node affinity when with more containers some with singlearch image some with multiarch image", func() {
@@ -431,6 +470,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.SingleArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 	})
@@ -458,6 +501,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyDaemonSetPodNodeAffinity(ns, "app", "test", archLabelNSR)
 		})
 		It("should set the node affinity on Job owning pod", func() {
@@ -485,6 +535,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should set the node affinity on Build owning pod", func() {
@@ -507,6 +564,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "openshift.io/build.name", "test-build", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "openshift.io/build.name", "test-build",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "openshift.io/build.name", "test-build", expectedNSTs)
 		})
 		It("should set the node affinity on DeploymentConfig owning pod", func() {
@@ -534,6 +598,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 	})
@@ -584,6 +655,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should set the node affinity in pods with images requiring credentials set in pods imagePullSecrets", func() {
@@ -625,6 +701,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should set the node affinity in pods with images that require both global and local pull secrets", func() {
@@ -666,6 +749,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.SingleArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+			)
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 		})
 	})
@@ -725,6 +812,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 		})
 		It("should not set the node affinity when registry certificate is not in the trusted anchors", func() {
 			var (
@@ -822,6 +916,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 		})
 		It("should set the node affinity when registry certificate added in the trusted anchors and registry url added to allowed list", func() {
 			var (
@@ -888,6 +989,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 		})
 		It("should not set the node affinity when registry url added to blockedRegistries list", func() {
 			var err error
@@ -945,6 +1053,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
 		})
 	})
 })
@@ -1066,6 +1181,18 @@ func verifyPodLabels(ns *corev1.Namespace, labelKey string, labelInValue string,
 			}
 		}
 	}, e2e.WaitShort).Should(Succeed())
+}
+
+func verifyPodLabelsAreSet(ns *corev1.Namespace, labelKey string, labelInValue string, labelsKeyValuePair ...string) {
+	if len(labelsKeyValuePair)%2 != 0 {
+		// It's ok to panic as this is only used in unit tests.
+		panic("the number of arguments must be even")
+	}
+	entries := make(map[string]string)
+	for i := 0; i < len(labelsKeyValuePair); i += 2 {
+		entries[labelsKeyValuePair[i]] = labelsKeyValuePair[i+1]
+	}
+	verifyPodLabels(ns, labelKey, labelInValue, true, entries)
 }
 
 func waitForMCPComplete() {

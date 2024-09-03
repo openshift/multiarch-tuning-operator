@@ -133,6 +133,20 @@ func (p *PodBuilder) WithNodeName(nodeName string) *PodBuilder {
 	return p
 }
 
+func (p *PodBuilder) WithLabels(labelsKeyValuesPair ...string) *PodBuilder {
+	if p.pod.Labels == nil {
+		p.pod.Labels = make(map[string]string)
+	}
+	if len(labelsKeyValuesPair)%2 != 0 {
+		// It's ok to panic as this is only used in unit tests.
+		panic("the number of arguments must be even")
+	}
+	for i := 0; i < len(labelsKeyValuesPair); i += 2 {
+		p.pod.Labels[labelsKeyValuesPair[i]] = labelsKeyValuesPair[i+1]
+	}
+	return p
+}
+
 func (p *PodBuilder) Build() v1.Pod {
 	return p.pod
 }

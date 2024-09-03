@@ -23,6 +23,11 @@ const (
 	SchedulingGateLabelValueGated   = "gated"
 	SchedulingGateLabelValueRemoved = "removed"
 	PodPlacementFinalizerName       = "finalizers.multiarch.openshift.io/pod-placement"
+	SingleArchLabel                 = "multiarch.openshift.io/single-arch"
+	MultiArchLabel                  = "multiarch.openshift.io/multi-arch"
+	NoSupportedArchLabel            = "multiarch.openshift.io/no-supported-arch"
+	ImageInspectionErrorLabel       = "multiarch.openshift.io/image-inspect-error"
+	LabelGroup                      = "multiarch.openshift.io"
 )
 
 const (

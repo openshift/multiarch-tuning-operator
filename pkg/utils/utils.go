@@ -1,5 +1,7 @@
 package utils
 
+import "path"
+
 func NewPtr[T any](a T) *T {
 	return &a
 }
@@ -13,4 +15,8 @@ func HasControlPlaneNodeSelector(nodeSelector map[string]string) bool {
 		}
 	}
 	return false
+}
+
+func ArchLabelValue(arch string) string {
+	return path.Join(LabelGroup, arch)
 }

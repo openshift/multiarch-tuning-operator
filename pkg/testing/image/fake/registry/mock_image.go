@@ -27,6 +27,7 @@ type MockImage struct {
 	Repository    string
 	Name          string
 	Tag           string
+	Labels        map[string]string
 	partial       bool
 	destination   *types.ImageDestination
 }
@@ -76,7 +77,8 @@ func (i *MockImage) prepareSingleArchImage(ctx context.Context, dst *types.Image
 	// Single architecture images or partial manifests for manifestObj lists
 	// We expect the architecture set to be a singleton
 	arch, _ := i.Architectures.PopAny()
-	configData := []byte(fmt.Sprintf(`{"architecture":"%s","os":"linux","config":{}}`, arch))
+	labelsJsonBytes, _ := json.Marshal(i.Labels)
+	configData := []byte(fmt.Sprintf(`{"architecture":"%s","os":"linux","config":{"Labels":%s}}`, arch, string(labelsJsonBytes)))
 	configDataDigest, err := manifest.Digest(configData)
 	if err != nil {
 		log.Error(err, "Error computing the digest of the image config data")

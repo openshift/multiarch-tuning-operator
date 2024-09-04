@@ -37,15 +37,15 @@ func (matcher *equivalentNodeAffinityMatcher) Match(actual interface{}) (success
 		return true, nil
 	}
 	if actualNodeAffinity == nil || expectedNodeAffinity == nil {
-		return false, fmt.Errorf("expectedNodeAffinity: %v, actualNodeAffinity: %v", expectedNodeAffinity, actualNodeAffinity)
+		return false, fmt.Errorf("expectedNodeAffinity: %+v, actualNodeAffinity: %+v", expectedNodeAffinity, actualNodeAffinity)
 	}
 
 	if actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil && expectedNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
 		return true, nil
 	}
 	if actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil || expectedNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
-		return false, fmt.Errorf("expectedNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution: %v, "+
-			"actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution: %v",
+		return false, fmt.Errorf("expectedNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution: %+v, "+
+			"actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution: %+v",
 			expectedNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
 			actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution)
 	}
@@ -53,8 +53,8 @@ func (matcher *equivalentNodeAffinityMatcher) Match(actual interface{}) (success
 	actualTerms := actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
 	expectedTerms := expectedNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
 	if len(actualTerms) != len(expectedTerms) {
-		return false, fmt.Errorf("expectedNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms: %v, "+
-			"actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms: %v",
+		return false, fmt.Errorf("expectedNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms: %+v, "+
+			"actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms: %+v",
 			expectedTerms, actualTerms)
 	}
 
@@ -66,7 +66,7 @@ func (matcher *equivalentNodeAffinityMatcher) Match(actual interface{}) (success
 }
 
 func (matcher *equivalentNodeAffinityMatcher) FailureMessage(actual interface{}) (message string) {
-	return fmt.Sprintf("Expected\n\t%#v\nto have an equivalent node affinity with \n\t%#v", actual, matcher.expected)
+	return fmt.Sprintf("Expected\n\t%+v\nto have an equivalent node affinity with \n\t%+v", actual, matcher.expected)
 }
 
 func (matcher *equivalentNodeAffinityMatcher) NegatedFailureMessage(actual interface{}) (message string) {

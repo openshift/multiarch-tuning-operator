@@ -26,7 +26,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,6 +38,7 @@ import (
 
 	"github.com/openshift/library-go/pkg/operator/events"
 
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"go.uber.org/zap/zapcore"
 
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
@@ -45,9 +48,10 @@ import (
 // ClusterPodPlacementConfigReconciler reconciles a ClusterPodPlacementConfig object
 type ClusterPodPlacementConfigReconciler struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	ClientSet *kubernetes.Clientset
-	Recorder  events.Recorder
+	DynamicClient *dynamic.DynamicClient
+	Scheme        *runtime.Scheme
+	ClientSet     *kubernetes.Clientset
+	Recorder      events.Recorder
 }
 
 const (
@@ -90,6 +94,8 @@ const (
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;update;patch;create;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings/status,verbs=get
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings/finalizers,verbs=update
+
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;update;patch;create;delete
 
 // Reconcile reconciles the ClusterPodPlacementConfig object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
@@ -326,6 +332,17 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 			ObjName:               utils.PodPlacementControllerName,
 		},
 	}
+
+	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+		objsToDelete = append(objsToDelete, utils.ToDeleteRef{
+			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "servicemonitors"}).Namespace(utils.Namespace())),
+			ObjName:               utils.PodPlacementWebhookName,
+		}, utils.ToDeleteRef{
+			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "servicemonitors"}).Namespace(utils.Namespace())),
+			ObjName:               utils.PodPlacementControllerName,
+		})
+	}
+
 	log.Info("Deleting the remaining resources after cleanup")
 	// NOTE: err aggregates non-nil errors, excluding NotFound errors
 	if err := utils.DeleteResources(ctx, objsToDelete); err != nil {
@@ -399,6 +416,14 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		_ = r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(ctx, utils.PodMutatingWebhookConfigurationName, metav1.DeleteOptions{})
 	}
 
+	// If the servicemonitors.monitoring.coreos.com CRD is available, we create the ServiceMonitor objects
+	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+		log.V(3).Info("Creating ServiceMonitors")
+		objects = append(objects, buildServiceMonitor(utils.PodPlacementControllerName))
+		objects = append(objects, buildServiceMonitor(utils.PodPlacementWebhookName))
+	} else {
+		log.V(3).Info("servicemonitoring.monitoring.coreos.com is not available. Skipping the creation of the ServiceMonitors")
+	}
 	errs := make([]error, 0)
 	for _, o := range objects {
 		if err := ctrl.SetControllerReference(clusterPodPlacementConfig, o, r.Scheme); err != nil {
@@ -411,7 +436,7 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		return errorutils.NewAggregate(append(errs, r.updateStatus(ctx, clusterPodPlacementConfig)))
 	}
 
-	if err := utils.ApplyResources(ctx, r.ClientSet, r.Recorder, objects); err != nil {
+	if err := utils.ApplyResources(ctx, r.ClientSet, r.DynamicClient, r.Recorder, objects); err != nil {
 		log.Error(err, "Unable to apply resources")
 		return errorutils.NewAggregate([]error{err, r.updateStatus(ctx, clusterPodPlacementConfig)})
 	}
@@ -490,5 +515,6 @@ func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager)
 		Owns(&rbacv1.RoleBinding{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&admissionv1.MutatingWebhookConfiguration{}).
+		Owns(&monitoringv1.ServiceMonitor{}).
 		Complete(r)
 }

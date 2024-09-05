@@ -12,6 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
@@ -483,6 +485,11 @@ func buildClusterRoleWebhook() *rbacv1.ClusterRole {
 			Resources: []string{"tokenreviews"},
 			Verbs:     []string{CREATE},
 		},
+		{
+			APIGroups: []string{"authorization.k8s.io"},
+			Resources: []string{"subjectaccessreviews"},
+			Verbs:     []string{CREATE},
+		},
 	})
 }
 
@@ -533,6 +540,11 @@ func buildClusterRoleController() *rbacv1.ClusterRole {
 			Resources: []string{"tokenreviews"},
 			Verbs:     []string{CREATE},
 		},
+		{
+			APIGroups: []string{"authorization.k8s.io"},
+			Resources: []string{"subjectaccessreviews"},
+			Verbs:     []string{CREATE},
+		},
 	})
 }
 
@@ -552,6 +564,44 @@ func buildRoleController() *rbacv1.Role {
 				APIGroups: []string{"coordination.k8s.io"},
 				Resources: []string{"leases"},
 				Verbs:     []string{LIST, WATCH, GET, UPDATE, PATCH, CREATE, DELETE},
+			},
+		},
+	}
+}
+
+func buildServiceMonitor(name string) *monitoringv1.ServiceMonitor {
+	return &monitoringv1.ServiceMonitor{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: monitoringv1.SchemeGroupVersion.String(),
+			Kind:       monitoringv1.ServiceMonitorsKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: utils.Namespace(),
+		},
+		Spec: monitoringv1.ServiceMonitorSpec{
+			Endpoints: []monitoringv1.Endpoint{
+				{
+					HonorLabels:     true,
+					Path:            "/metrics",
+					Port:            "metrics",
+					Scheme:          "https",
+					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
+					TLSConfig: &monitoringv1.TLSConfig{
+						CAFile: "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt",
+						SafeTLSConfig: monitoringv1.SafeTLSConfig{
+							ServerName: utils.NewPtr(fmt.Sprintf("%s.%s.svc", name, utils.Namespace())),
+						},
+					},
+				},
+			},
+			NamespaceSelector: monitoringv1.NamespaceSelector{
+				MatchNames: []string{utils.Namespace()},
+			},
+			Selector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					utils.ControllerNameKey: name,
+				},
 			},
 		},
 	}

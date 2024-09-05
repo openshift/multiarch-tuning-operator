@@ -15,6 +15,7 @@ require (
 	github.com/openshift/api v0.0.0-20240817011637-2c10e5887729
 	github.com/openshift/library-go v0.0.0-20240816092752-e21e7889fd1a
 	github.com/panjf2000/ants/v2 v2.10.0
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.76.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.26.0
 	golang.org/x/sys v0.24.0

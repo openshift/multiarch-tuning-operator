@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -51,6 +52,8 @@ import (
 	"github.com/panjf2000/ants/v2"
 	zapuber "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
@@ -90,6 +93,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(multiarchv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(multiarchv1beta1.AddToScheme(scheme))
+	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 }
 
 func main() {
@@ -174,9 +178,10 @@ func RunOperator(mgr ctrl.Manager) {
 	clientset := kubernetes.NewForConfigOrDie(config)
 	gvk, _ := apiutil.GVKForObject(&multiarchv1beta1.ClusterPodPlacementConfig{}, mgr.GetScheme())
 	must((&operator.ClusterPodPlacementConfigReconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		ClientSet: clientset,
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		ClientSet:     clientset,
+		DynamicClient: dynamic.NewForConfigOrDie(config),
 		Recorder: events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, &corev1.ObjectReference{
 			Kind:       gvk.Kind,
 			Name:       common.SingletonResourceObjectName,

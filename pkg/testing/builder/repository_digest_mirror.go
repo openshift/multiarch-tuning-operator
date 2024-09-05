@@ -9,7 +9,7 @@ type RepositoryDigestMirrorsBuilder struct {
 	repositoryDigestMirrors *ocpoperatorv1alpha1.RepositoryDigestMirrors
 }
 
-//ocpoperatorv1alpha1.RepositoryDigestMirrors returns a new RepositoryDigestMirrorsBuilder to build ocpoperatorv1alpha1.RepositoryDigestMirrorset objects. It is meant to be used only in unit tests.
+// NewRepositoryDigestMirrors returns a new RepositoryDigestMirrorsBuilder to build ocpoperatorv1alpha1.RepositoryDigestMirrorset objects. It is meant to be used only in unit tests.
 func NewRepositoryDigestMirrors() *RepositoryDigestMirrorsBuilder {
 	return &RepositoryDigestMirrorsBuilder{
 		repositoryDigestMirrors: &ocpoperatorv1alpha1.RepositoryDigestMirrors{},

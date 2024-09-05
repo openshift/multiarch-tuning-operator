@@ -1010,8 +1010,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			// Update image.config
 			image := getImageConfig(ctx, client)
 			imageForRemove := image
-			blockedRegistry := "gcr.io"
-			image.Spec.RegistrySources.BlockedRegistries = append(image.Spec.RegistrySources.BlockedRegistries, blockedRegistry)
+			image.Spec.RegistrySources.BlockedRegistries = append(image.Spec.RegistrySources.BlockedRegistries, framework.GetImageRepository(e2e.PausePublicMultiarchImage))
 			err = client.Update(ctx, &image)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -1026,7 +1025,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithSelectorAndPodLabels(map[string]string{"app": "test-block"}).
 				WithPodSpec(
 					NewPodSpec().
-						WithContainersImages("gcr.io/google_containers/pause:3.2").
+						WithContainersImages(e2e.PausePublicMultiarchImage).
 						Build()).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment-blocked").
@@ -1062,6 +1061,163 @@ var _ = Describe("The Pod Placement Operand", func() {
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
 			)
+		})
+	})
+	Context("When deploying workloads running images in registries that have mirrors configuration", func() {
+		It("Should set node affinity when source registry is unavailable, mirrors working and AllowContactingSource enabled in a ImageContentSourcePolicy", func() {
+			var err error
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Create a deployment running image in source registry")
+			ps := NewPodSpec().
+				WithContainersImages(framework.GetReplacedImageURI(e2e.HelloopenshiftPublicMultiarchImageDigest, e2e.MyFakeICSPAllowContactSourceTestSourceRegistry)).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			By("The pod should get node affinity of arch info because the mirror registries are functional.")
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			By("Verify arch label are set")
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
+			By("The pod should be running")
+			Eventually(func(g Gomega) {
+				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
+			}, e2e.WaitShort).Should(Succeed())
+		})
+		It("Should set node affinity when source registry is unavailable, mirrors are working and NeverContactingSource enabled in a ImageDigestMirrorSet", func() {
+			var err error
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Create a deployment running image in source registry")
+			ps := NewPodSpec().
+				WithContainersImages(framework.GetReplacedImageURI(e2e.HelloopenshiftPublicMultiarchImageDigest, e2e.MyFakeIDMSNeverContactSourceTestSourceRegistry)).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			By("The pod should get node affinity of arch info because the mirror registries are functional.")
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			By("Verify arch label are set")
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
+			By("The pod should be running")
+			Eventually(func(g Gomega) {
+				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
+			}, e2e.WaitShort).Should(Succeed())
+		})
+		It("Should set node affinity when source registry is working, mirrors are unavailable and AllowContactingSource enabled in a ImageTagMirrorSet", func() {
+			var err error
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Create a deployment running image in source registry")
+			ps := NewPodSpec().
+				WithContainersImages(e2e.SleepPublicMultiarchImage).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			By("The pod should get node affinity of arch info even if mirror registries down but AllowContactingSource enabled and source is functional.")
+			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			By("Verify arch label are set")
+			verifyPodLabelsAreSet(ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			)
+			By("The pod should be running")
+			Eventually(func(g Gomega) {
+				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
+			}, e2e.WaitShort).Should(Succeed())
+		})
+		It("Should not set node affinity when source registry is working, mirrors are unavailable and NeverContactingSource enabled in a ImageTagMirrorSet", func() {
+			var err error
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Create a deployment running image in source registry")
+			ps := NewPodSpec().
+				WithContainersImages(e2e.RedisPublicMultiarchImage).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			By("The pod should not get node affinity of arch info because mirror registries are down and NeverContactSource is enabled.")
+			verifyPodNodeAffinity(ns, "app", "test")
 		})
 	})
 })

@@ -125,3 +125,11 @@ func GetReplacedImageURI(image, replacedRegistry string) string {
 	}
 	return replacedRegistry + image[index:]
 }
+
+func GetImageRepository(image string) string {
+	colonIndex := strings.LastIndex(image, ":")
+	if colonIndex != -1 {
+		image = image[:colonIndex]
+	}
+	return image
+}

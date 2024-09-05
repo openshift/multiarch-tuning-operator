@@ -8,26 +8,6 @@ metadata:
 spec:
   template:
     spec:
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                - key: kubernetes.io/arch
-                  operator: In
-                  values:
-                    - amd64
-                    - arm64
-                    - ppc64le
-                    - s390x
-                - key: kubernetes.io/os
-                  operator: In
-                  values:
-                    - linux
       containers:
       - name: kube-rbac-proxy
         securityContext:
@@ -49,18 +29,3 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-      - name: manager
-        env:
-          - name: NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
-          - name: IMAGE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.annotations['multiarch.openshift.io/image']
-        args:
-        - "--health-probe-bind-address=:8081"
-        - "--metrics-bind-address=127.0.0.1:8080"
-        - "--leader-elect"
-        - "--enable-operator"

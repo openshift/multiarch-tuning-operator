@@ -5,8 +5,12 @@ metadata:
   name: multiarch-tuning-operator-controller-manager-service
 spec:
   ports:
-  - port: 443
+  - name: webhook
+    port: 443
     targetPort: 9443
+  - name: metrics
+    port: 8443
+    targetPort: 8443
   selector:
     control-plane: controller-manager
 status:

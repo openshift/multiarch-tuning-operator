@@ -74,14 +74,14 @@ func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1beta1.Cluste
 	}
 }
 
-func buildService(name string, controllerName string, port int32, targetPort intstr.IntOrString) *corev1.Service {
+func buildService(name string) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: utils.Namespace(),
 			Labels: map[string]string{
 				utils.OperandLabelKey:   operandName,
-				utils.ControllerNameKey: controllerName,
+				utils.ControllerNameKey: name,
 			},
 			Annotations: map[string]string{
 				"service.beta.openshift.io/serving-cert-secret-name": name,
@@ -91,14 +91,20 @@ func buildService(name string, controllerName string, port int32, targetPort int
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "https",
-					Port:       port,
-					TargetPort: targetPort,
+					Port:       443,
+					TargetPort: intstr.FromInt32(9443),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "metrics",
+					Port:       8443,
+					TargetPort: intstr.FromInt32(8443),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
 			Selector: map[string]string{
 				utils.OperandLabelKey:   operandName,
-				utils.ControllerNameKey: controllerName,
+				utils.ControllerNameKey: name,
 			},
 		},
 	}
@@ -241,7 +247,7 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 							},
 							Args: append([]string{
 								"--health-probe-bind-address=:8081",
-								"--metrics-bind-address=127.0.0.1:8080",
+								"--metrics-bind-address=:8443",
 								fmt.Sprintf("--initial-log-level=%d",
 									clusterPodPlacementConfig.Spec.LogVerbosity.ToZapLevelInt()),
 							}, args...),
@@ -310,42 +316,6 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 									Name:      "trusted-ca",
 									MountPath: "/etc/pki/ca-trust/extracted/pem",
 									ReadOnly:  true,
-								},
-							},
-						}, {
-							Name:            "kube-rbac-proxy",
-							Image:           "gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522",
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Args: []string{
-								"--secure-listen-address=0.0.0.0:8443",
-								"--upstream=http://127.0.0.1:8080/",
-								"--logtostderr=true",
-								"--v=0",
-							},
-							Ports: []corev1.ContainerPort{
-								{
-									ContainerPort: 8443,
-									Protocol:      corev1.ProtocolTCP,
-									Name:          "https",
-								},
-							},
-							SecurityContext: &corev1.SecurityContext{
-								AllowPrivilegeEscalation: utils.NewPtr(false),
-								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{
-										"ALL",
-									},
-								},
-								Privileged:   utils.NewPtr(false),
-								RunAsNonRoot: utils.NewPtr(true),
-								SeccompProfile: &corev1.SeccompProfile{
-									Type: corev1.SeccompProfileTypeRuntimeDefault,
-								},
-							},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("10m"),
-									corev1.ResourceMemory: resource.MustParse("64Mi"),
 								},
 							},
 						},
@@ -508,6 +478,11 @@ func buildClusterRoleWebhook() *rbacv1.ClusterRole {
 			Resources: []string{"pods"},
 			Verbs:     []string{LIST, WATCH, GET},
 		},
+		{
+			APIGroups: []string{"authentication.k8s.io"},
+			Resources: []string{"tokenreviews"},
+			Verbs:     []string{CREATE},
+		},
 	})
 }
 
@@ -552,6 +527,11 @@ func buildClusterRoleController() *rbacv1.ClusterRole {
 			APIGroups: []string{"config.openshift.io"},
 			Resources: []string{"imagetagmirrorsets", "imagedigestmirrorsets", "images"},
 			Verbs:     []string{LIST, WATCH, GET},
+		},
+		{
+			APIGroups: []string{"authentication.k8s.io"},
+			Resources: []string{"tokenreviews"},
+			Verbs:     []string{CREATE},
 		},
 	})
 }

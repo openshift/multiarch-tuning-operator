@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -39,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -101,15 +103,29 @@ func main() {
 	if enableClusterPodPlacementConfigOperandControllers {
 		leaderId = fmt.Sprintf("ppc-controllers-%s", leaderId)
 	}
+	// Rapid Reset CVEs. For more information see:
+	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
+	// - https://github.com/advisories/GHSA-4374-p667-p6c8
+	// - https://github.com/kubernetes-sigs/kubebuilder/blob/33a2f3dc556a9e49e06e6f19e0ae737d82d402db/testdata/project-v4/cmd/main.go#L78-L89
+	var tlsOpts []func(*tls.Config)
+	disableHTTP2 := func(c *tls.Config) {
+		setupLog.Info("disabling http/2")
+		c.NextProtos = []string{"http/1.1"}
+	}
+	tlsOpts = append(tlsOpts, disableHTTP2)
+
 	webhookServer := webhook.NewServer(webhook.Options{
 		Port:    9443,
 		CertDir: certDir,
+		TLSOpts: tlsOpts,
 	})
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
-			CertDir:     certDir,
+			BindAddress:    metricsAddr,
+			CertDir:        certDir,
+			FilterProvider: filters.WithAuthenticationAndAuthorization,
+			SecureServing:  true,
 		},
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,

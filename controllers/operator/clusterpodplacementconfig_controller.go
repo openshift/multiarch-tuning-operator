@@ -27,7 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -212,14 +211,6 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 			ObjName:               utils.PodPlacementWebhookName,
 		},
 		{
-			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
-			ObjName:               utils.PodPlacementControllerMetricsServiceName,
-		},
-		{
-			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
-			ObjName:               utils.PodPlacementWebhookMetricsServiceName,
-		},
-		{
 			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
 			ObjName:               utils.PodPlacementWebhookName,
 		},
@@ -307,6 +298,10 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 	}
 	objsToDelete = []utils.ToDeleteRef{
 		{
+			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
+			ObjName:               utils.PodPlacementControllerName,
+		},
+		{
 			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
 			ObjName:               utils.PodPlacementControllerName,
 		},
@@ -354,25 +349,8 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 	objects := []client.Object{
 		// The finalizer will not affect the reconciliation of ReplicaSets and Pods
 		// when updates to the ClusterPodPlacementConfig are made.
-		buildService(utils.PodPlacementControllerName, utils.PodPlacementControllerName,
-			443, intstr.FromInt32(9443)),
-		buildService(utils.PodPlacementWebhookName, utils.PodPlacementWebhookName,
-			443, intstr.FromInt32(9443)),
-		buildService(
-			utils.PodPlacementControllerMetricsServiceName, utils.PodPlacementControllerName,
-			8443, intstr.FromInt32(8443)),
-		buildService(
-			utils.PodPlacementWebhookMetricsServiceName, utils.PodPlacementWebhookName,
-			8443, intstr.FromInt32(8443)), buildService(utils.PodPlacementControllerName, utils.PodPlacementControllerName,
-			443, intstr.FromInt32(9443)),
-		buildService(utils.PodPlacementWebhookName, utils.PodPlacementWebhookName,
-			443, intstr.FromInt32(9443)),
-		buildService(
-			utils.PodPlacementControllerMetricsServiceName, utils.PodPlacementControllerName,
-			8443, intstr.FromInt32(8443)),
-		buildService(
-			utils.PodPlacementWebhookMetricsServiceName, utils.PodPlacementWebhookName,
-			8443, intstr.FromInt32(8443)),
+		buildService(utils.PodPlacementControllerName),
+		buildService(utils.PodPlacementWebhookName),
 		buildClusterRoleController(), buildClusterRoleWebhook(), buildRoleController(),
 		buildServiceAccount(utils.PodPlacementWebhookName), buildServiceAccount(utils.PodPlacementControllerName),
 		buildClusterRoleBinding(utils.PodPlacementControllerName, rbacv1.RoleRef{

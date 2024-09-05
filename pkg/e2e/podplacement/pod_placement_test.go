@@ -892,9 +892,8 @@ var _ = Describe("The Pod Placement Operand", func() {
 				image.Spec = imageForRemove.Spec
 				err = client.Update(ctx, &image)
 				Expect(err).NotTo(HaveOccurred())
-				waitForCOComplete()
 			}()
-			waitForCOComplete()
+			framework.WaitForCOComplete(ctx, client, "openshift-apiserver")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
@@ -1189,44 +1188,4 @@ func verifyPodLabelsAreSet(ns *corev1.Namespace, labelKey string, labelInValue s
 		entries[labelsKeyValuePair[i]] = labelsKeyValuePair[i+1]
 	}
 	verifyPodLabels(ns, labelKey, labelInValue, true, entries)
-}
-
-func waitForCOComplete() {
-	var err error
-	// wait to co openshift-apiserver start updating
-	Eventually(func(g Gomega) {
-		coApiserver := ocpconfigv1.ClusterOperator{}
-		err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.ClusterOperator{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "openshift-apiserver",
-			},
-		}), &coApiserver)
-		Expect(err).NotTo(HaveOccurred())
-		progressingStatus := ocpconfigv1.ConditionFalse
-		for _, condition := range coApiserver.Status.Conditions {
-			if condition.Type == "Progressing" {
-				progressingStatus = condition.Status
-				break
-			}
-		}
-		g.Expect(progressingStatus).To(Equal(ocpconfigv1.ConditionTrue))
-	}, e2e.WaitShort).Should(Succeed())
-	// wait to co openshift-apiserver finish updating
-	Eventually(func(g Gomega) {
-		coApiserver := ocpconfigv1.ClusterOperator{}
-		err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.ClusterOperator{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "openshift-apiserver",
-			},
-		}), &coApiserver)
-		Expect(err).NotTo(HaveOccurred())
-		progressingStatus := ocpconfigv1.ConditionTrue
-		for _, condition := range coApiserver.Status.Conditions {
-			if condition.Type == "Progressing" {
-				progressingStatus = condition.Status
-				break
-			}
-		}
-		g.Expect(progressingStatus).To(Equal(ocpconfigv1.ConditionFalse))
-	}, e2e.WaitOverMedium, e2e.WaitShort).Should(Succeed())
 }

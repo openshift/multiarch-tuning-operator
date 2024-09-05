@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
-	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -803,7 +802,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
 					NewPodSpec().
-						WithContainersImages(getMirroredImageURI(registryConfig.RegistryHost, helloOpenshiftPrivateMultiarchImageLocal)).
+						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, registryConfig.RegistryHost)).
 						Build()).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -849,7 +848,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
 					NewPodSpec().
-						WithContainersImages(getMirroredImageURI(registryConfig.RegistryHost, helloOpenshiftPrivateMultiarchImageLocal)).
+						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, registryConfig.RegistryHost)).
 						Build()).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -906,7 +905,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
 					NewPodSpec().
-						WithContainersImages(getMirroredImageURI(registryConfig.RegistryHost, helloOpenshiftPrivateMultiarchImageLocal)).
+						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, registryConfig.RegistryHost)).
 						Build()).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -978,7 +977,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
 					NewPodSpec().
-						WithContainersImages(getMirroredImageURI(registryConfig.RegistryHost, helloOpenshiftPrivateMultiarchImageLocal)).
+						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, registryConfig.RegistryHost)).
 						Build()).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -1066,12 +1065,6 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 	})
 })
-
-func getMirroredImageURI(registryHost, image string) string {
-	newImage := strings.Replace(image, "quay.io", registryHost, 1)
-	Expect(newImage).NotTo(BeEmpty())
-	return newImage
-}
 
 func getImageConfig(ctx context.Context, client runtimeclient.Client) ocpconfigv1.Image {
 	image := ocpconfigv1.Image{}

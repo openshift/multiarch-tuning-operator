@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -115,4 +116,12 @@ func WriteToFile(dir, fileName, content string) error {
 		return fmt.Errorf("Failed to write content to file: %w", err)
 	}
 	return nil
+}
+
+func GetReplacedImageURI(image, replacedRegistry string) string {
+	index := strings.Index(image, "/")
+	if index == -1 {
+		return image
+	}
+	return replacedRegistry + image[index:]
 }

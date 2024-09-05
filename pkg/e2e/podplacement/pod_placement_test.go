@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -52,6 +53,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 		By("Operand ready. Executing the case")
 	})
 	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			By("The test case failed, get the podplacement and podplacement webhook logs for debug")
+			// ignore err
+			_ = framework.StorePodsLog(ctx, clientset, client, utils.Namespace(), "control-plane", "controller-manager", "manager", os.Getenv("ARTIFACT_DIR"))
+			_ = framework.StorePodsLog(ctx, clientset, client, utils.Namespace(), "controller", utils.PodPlacementControllerName, utils.PodPlacementControllerName, os.Getenv("ARTIFACT_DIR"))
+			_ = framework.StorePodsLog(ctx, clientset, client, utils.Namespace(), "controller", utils.PodPlacementWebhookName, utils.PodPlacementWebhookName, os.Getenv("ARTIFACT_DIR"))
+		}
 		By("Verify the operand is still ready after the case ran")
 		Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed(), "operand not ready after the test case execution")
 		By("Operand ready after the case execution. Continuing")

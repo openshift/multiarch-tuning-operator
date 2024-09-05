@@ -2,6 +2,10 @@ package framework
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -81,6 +85,34 @@ func RegisterScheme(s *runtime.Scheme) error {
 	errs = append(errs, v1beta1.AddToScheme(s))
 	if len(errs) > 0 {
 		return errors.NewAggregate(errs)
+	}
+	return nil
+}
+
+func WriteToFile(dir, fileName, content string) error {
+	if dir == "" {
+		return fmt.Errorf("directory path is empty")
+	}
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.MkdirAll(dir, 0700)
+		if err != nil {
+			return err
+		}
+	}
+	filePath := fmt.Sprintf("%s/%s", dir, fileName)
+	file, err := os.Create(filepath.Clean(filePath))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("Error closing file: %v", err)
+		}
+	}()
+	log.Printf("Writing content to file %s", filePath)
+	_, err = file.WriteString(content)
+	if err != nil {
+		return fmt.Errorf("Failed to write content to file: %w", err)
 	}
 	return nil
 }

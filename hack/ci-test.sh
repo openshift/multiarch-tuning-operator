@@ -21,7 +21,7 @@ set -o pipefail
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 
 OPENSHIFT_CI=${OPENSHIFT_CI:-""}
-ARTIFACT_DIR=${ARTIFACT_DIR:-""}
+export ARTIFACT_DIR=${ARTIFACT_DIR:-$(mktemp -d)}
 GINKGO=${GINKGO:-"go run ${REPO_ROOT}/vendor/github.com/onsi/ginkgo/v2/ginkgo"}
 GINKGO_ARGS=${GINKGO_ARGS:-"-vv --randomize-all --randomize-suites -race -trace --keep-going --timeout=60m "}
 TEST_LABEL=${TEST_LABEL:-"integration"}

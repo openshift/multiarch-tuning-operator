@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	ocpconfigv1 "github.com/openshift/api/config/v1"
-	ocpmachineconfigurationv1 "github.com/openshift/api/machineconfiguration/v1"
 
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -790,9 +789,8 @@ var _ = Describe("The Pod Placement Operand", func() {
 				image.Spec = imageForRemove.Spec
 				err = client.Update(ctx, &image)
 				Expect(err).NotTo(HaveOccurred())
-				waitForMCPComplete()
 			}()
-			waitForMCPComplete()
+			framework.WaitForMCPComplete(ctx, client)
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
@@ -967,9 +965,8 @@ var _ = Describe("The Pod Placement Operand", func() {
 				image.Spec = imageForRemove.Spec
 				err = client.Update(ctx, &image)
 				Expect(err).NotTo(HaveOccurred())
-				waitForMCPComplete()
 			}()
-			waitForMCPComplete()
+			framework.WaitForMCPComplete(ctx, client)
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
@@ -1016,9 +1013,8 @@ var _ = Describe("The Pod Placement Operand", func() {
 				image.Spec = imageForRemove.Spec
 				err = client.Update(ctx, &image)
 				Expect(err).NotTo(HaveOccurred())
-				waitForMCPComplete()
 			}()
-			waitForMCPComplete()
+			framework.WaitForMCPComplete(ctx, client)
 			// Check ppo will block image from registry in blocked registry list
 			d := NewDeployment().
 				WithSelectorAndPodLabels(map[string]string{"app": "test-block"}).
@@ -1193,44 +1189,6 @@ func verifyPodLabelsAreSet(ns *corev1.Namespace, labelKey string, labelInValue s
 		entries[labelsKeyValuePair[i]] = labelsKeyValuePair[i+1]
 	}
 	verifyPodLabels(ns, labelKey, labelInValue, true, entries)
-}
-
-func waitForMCPComplete() {
-	var err error
-	// wait to mcp start updating
-	Eventually(func(g Gomega) {
-		mcps := ocpmachineconfigurationv1.MachineConfigPoolList{}
-		err = client.List(ctx, &mcps)
-		Expect(err).NotTo(HaveOccurred())
-		g.Expect(mcps.Items).NotTo(BeEmpty())
-		g.Expect(mcps.Items).Should(HaveEach(WithTransform(func(mcp ocpmachineconfigurationv1.MachineConfigPool) corev1.ConditionStatus {
-			status := corev1.ConditionFalse
-			for _, condition := range mcp.Status.Conditions {
-				if condition.Type == "Updating" {
-					status = condition.Status
-					break
-				}
-			}
-			return status
-		}, Equal(corev1.ConditionTrue))))
-	}, e2e.WaitLong, e2e.WaitShort).Should(Succeed())
-	// wait to mcp finish updating
-	Eventually(func(g Gomega) {
-		mcps := ocpmachineconfigurationv1.MachineConfigPoolList{}
-		err = client.List(ctx, &mcps)
-		Expect(err).NotTo(HaveOccurred())
-		g.Expect(mcps.Items).NotTo(BeEmpty())
-		g.Expect(mcps.Items).Should(HaveEach(WithTransform(func(mcp ocpmachineconfigurationv1.MachineConfigPool) corev1.ConditionStatus {
-			status := corev1.ConditionFalse
-			for _, condition := range mcp.Status.Conditions {
-				if condition.Type == "Updated" {
-					status = condition.Status
-					break
-				}
-			}
-			return status
-		}, Equal(corev1.ConditionTrue))))
-	}, e2e.WaitLong, e2e.WaitShort).Should(Succeed())
 }
 
 func waitForCOComplete() {

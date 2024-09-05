@@ -37,7 +37,8 @@ if [ "${USE_OLM:-}" == "true" ]; then
   oc registry login || echo "[WARN] Unable to login the registry, this could be expected in non-Prow envs"
 
   export KUBECONFIG="${OLD_KUBECONFIG}"
-  operator-sdk run bundle "${OO_BUNDLE}" -n "${NAMESPACE}" --security-context-config restricted
+  export JUNIT_SUFFIX="-olm"
+  operator-sdk run bundle "${OO_BUNDLE}" -n "${NAMESPACE}" --security-context-config restricted --timeout=10m
 else
   make deploy IMG="${OPERATOR_IMAGE}"
 fi
@@ -50,3 +51,13 @@ oc wait pods -n ${NAMESPACE} \
   --for=condition=Ready=True
 
 make e2e
+
+if [ "${CLEANUP:-false}" == "false" ]; then
+  exit 0
+fi
+
+set +e
+operator-sdk cleanup multiarch-tuning-operator -n ${NAMESPACE}
+make undeploy
+oc delete --ignore-not-found --force namespace ${NAMESPACE}
+exit 0

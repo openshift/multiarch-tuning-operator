@@ -505,7 +505,7 @@ func isDeploymentUpToDate(deployment *appsv1.Deployment) bool {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	c := ctrl.NewControllerManagedBy(mgr).
 		For(&multiarchv1beta1.ClusterPodPlacementConfig{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
@@ -514,7 +514,10 @@ func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager)
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
 		Owns(&corev1.ServiceAccount{}).
-		Owns(&admissionv1.MutatingWebhookConfiguration{}).
-		Owns(&monitoringv1.ServiceMonitor{}).
-		Complete(r)
+		Owns(&admissionv1.MutatingWebhookConfiguration{})
+	if utils.IsResourceAvailable(context.Background(), r.DynamicClient,
+		monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+		c = c.Owns(&monitoringv1.ServiceMonitor{})
+	}
+	return c.Complete(r)
 }

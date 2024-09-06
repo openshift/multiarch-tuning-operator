@@ -18,6 +18,7 @@ package podplacement
 
 import (
 	"context"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -58,6 +60,8 @@ type PodReconciler struct {
 // Reconcile has to watch the pod object if it has the scheduling gate with name SchedulingGateName,
 // inspect the images in the pod spec, update the nodeAffinity accordingly and remove the scheduling gate.
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	now := time.Now()
+	defer metrics.HistogramObserve(now, metrics.TimeToProcessPod)
 	log := ctrllog.FromContext(ctx)
 
 	pod := &Pod{
@@ -78,6 +82,8 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// The scheduling gate is found.
+	metrics.ProcessedPodsCtrl.Inc()
+	defer metrics.HistogramObserve(now, metrics.TimeToProcessGatedPod)
 	log.V(3).Info("Processing pod")
 
 	// Prepare the requirement for the node affinity.
@@ -101,6 +107,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 	r.Recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitectureAwareSchedulingGateRemovalSuccess, SchedulingGateRemovalSuccessMsg)
+	metrics.GatedPodsGauge.Dec()
 
 	return ctrl.Result{}, nil
 }
@@ -128,6 +135,7 @@ func (r *PodReconciler) pullSecretDataList(ctx context.Context, pod *Pod) ([][]b
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	metrics.InitPodPlacementControllerMetrics()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}).
 		Complete(r)

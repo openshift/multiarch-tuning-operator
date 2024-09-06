@@ -20,12 +20,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/image"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
@@ -111,6 +113,7 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 	requirement, err := pod.getArchitecturePredicate(pullSecretDataList)
 	if err != nil {
 		pod.ensureLabel(utils.ImageInspectionErrorLabel, "")
+		metrics.FailedInspectionCounter.Inc()
 		pod.publishEvent(corev1.EventTypeWarning, ImageArchitectureInspectionError, ImageArchitectureInspectionErrorMsg+err.Error())
 		log.Error(err, "Error getting the architecture predicate. The pod will not have the nodeAffinity set.")
 		return
@@ -220,9 +223,15 @@ func (pod *Pod) intersectImagesArchitecture(pullSecretDataList [][]byte) (suppor
 	// https://github.com/containers/skopeo/blob/v1.11.1/cmd/skopeo/inspect.go#L72
 	// Iterate over the images, get their architectures and intersect (as in set intersection) them each other
 	var supportedArchitecturesSet sets.Set[string]
+	nowExternal := time.Now()
+	defer metrics.HistogramObserve(nowExternal, metrics.TimeToInspectPodImages)
 	for imageName := range imageNamesSet {
 		log.V(5).Info("Checking image", "imageName", imageName)
+		// We are collecting the time to inspect the image here to avoid implementing a metric in each of the
+		// cache implementations.
+		now := time.Now()
 		currentImageSupportedArchitectures, err := imageInspectionCache.GetCompatibleArchitecturesSet(pod.ctx, imageName, pullSecretDataList)
+		metrics.HistogramObserve(now, metrics.TimeToInspectImage)
 		if err != nil {
 			log.V(3).Error(err, "Error inspecting the image", "imageName", imageName)
 			return nil, err

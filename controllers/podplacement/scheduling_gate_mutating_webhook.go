@@ -38,6 +38,7 @@ import (
 
 	"github.com/panjf2000/ants/v2"
 
+	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -66,6 +67,9 @@ func (a *PodSchedulingGateMutatingWebHook) patchedPodResponse(pod *corev1.Pod, r
 }
 
 func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admission.Request) admission.Response {
+	responseTimeStart := time.Now()
+	defer metrics.HistogramObserve(responseTimeStart, metrics.ResponseTime)
+	metrics.ProcessedPodsWH.Inc()
 	if a.decoder == nil {
 		a.decoder = admission.NewDecoder(a.scheme)
 	}
@@ -114,6 +118,8 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	// are right in the admission pipeline, before the pod is persisted.
 	log.V(5).Info("Scheduling gate added to the pod, launching the event creation goroutine")
 	a.delayedSchedulingGatedEvent(ctx, pod)
+	metrics.GatedPods.Inc()
+	metrics.GatedPodsGauge.Inc()
 	log.V(4).Info("Accepting pod")
 	return a.patchedPodResponse(pod, req)
 }
@@ -170,6 +176,6 @@ func NewPodSchedulingGateMutatingWebHook(client client.Client, clientSet *kubern
 		recorder:   recorder,
 		workerPool: workerPool,
 	}
-	initWebhookMetrics()
+	metrics.InitWebhookMetrics()
 	return a
 }

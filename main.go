@@ -222,13 +222,8 @@ func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
 		}
 		ants.Release()
 	})
-	handler := &podplacement.PodSchedulingGateMutatingWebHook{
-		Client:     mgr.GetClient(),
-		ClientSet:  clientset,
-		Scheme:     mgr.GetScheme(),
-		Recorder:   mgr.GetEventRecorderFor(utils.OperatorName),
-		WorkerPool: pool,
-	}
+	handler := podplacement.NewPodSchedulingGateMutatingWebHook(mgr.GetClient(), clientset, mgr.GetScheme(),
+		mgr.GetEventRecorderFor(utils.OperatorName), pool)
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: handler})
 }
 

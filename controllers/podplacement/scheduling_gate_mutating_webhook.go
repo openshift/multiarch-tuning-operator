@@ -49,12 +49,12 @@ var schedulingGate = corev1.PodSchedulingGate{
 
 // PodSchedulingGateMutatingWebHook annotates Pods
 type PodSchedulingGateMutatingWebHook struct {
-	Client     client.Client
-	ClientSet  *kubernetes.Clientset
+	client     client.Client
+	clientSet  *kubernetes.Clientset
 	decoder    admission.Decoder
-	Scheme     *runtime.Scheme
-	Recorder   record.EventRecorder
-	WorkerPool *ants.MultiPool
+	scheme     *runtime.Scheme
+	recorder   record.EventRecorder
+	workerPool *ants.MultiPool
 }
 
 func (a *PodSchedulingGateMutatingWebHook) patchedPodResponse(pod *corev1.Pod, req admission.Request) admission.Response {
@@ -67,7 +67,7 @@ func (a *PodSchedulingGateMutatingWebHook) patchedPodResponse(pod *corev1.Pod, r
 
 func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admission.Request) admission.Response {
 	if a.decoder == nil {
-		a.decoder = admission.NewDecoder(a.Scheme)
+		a.decoder = admission.NewDecoder(a.scheme)
 	}
 	pod := &corev1.Pod{}
 	err := a.decoder.Decode(req, pod)
@@ -119,7 +119,7 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 }
 
 func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(ctx context.Context, pod *corev1.Pod) {
-	err := a.WorkerPool.Submit(func() {
+	err := a.workerPool.Submit(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name,
@@ -134,10 +134,10 @@ func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(ctx conte
 			Factor:   2,
 			Steps:    15,
 		}, func() (bool, error) {
-			createdPod, err := a.ClientSet.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+			createdPod, err := a.clientSet.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
 			if err == nil {
 				log.V(4).Info("Pod was found", "namespace", pod.Namespace, "name", pod.Name)
-				a.Recorder.Event(createdPod, corev1.EventTypeNormal, ArchitectureAwareSchedulingGateAdded, SchedulingGateAddedMsg)
+				a.recorder.Event(createdPod, corev1.EventTypeNormal, ArchitectureAwareSchedulingGateAdded, SchedulingGateAddedMsg)
 				// Pod was found, return true to stop retrying
 				return true, nil
 			}
@@ -159,4 +159,17 @@ func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(ctx conte
 		ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name,
 			"function", "delayedSchedulingGatedEvent").Error(err, "Failed to submit the delayedSchedulingGatedEvent job")
 	}
+}
+
+func NewPodSchedulingGateMutatingWebHook(client client.Client, clientSet *kubernetes.Clientset,
+	scheme *runtime.Scheme, recorder record.EventRecorder, workerPool *ants.MultiPool) *PodSchedulingGateMutatingWebHook {
+	a := &PodSchedulingGateMutatingWebHook{
+		client:     client,
+		clientSet:  clientSet,
+		scheme:     scheme,
+		recorder:   recorder,
+		workerPool: workerPool,
+	}
+	initWebhookMetrics()
+	return a
 }

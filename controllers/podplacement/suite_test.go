@@ -251,13 +251,9 @@ func runManager() {
 		ants.WithNonblocking(true))
 	Expect(err).NotTo(HaveOccurred())
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{
-		Handler: &PodSchedulingGateMutatingWebHook{
-			Client:     mgr.GetClient(),
-			ClientSet:  clientset,
-			Scheme:     mgr.GetScheme(),
-			Recorder:   mgr.GetEventRecorderFor(utils.OperatorName),
-			WorkerPool: pool,
-		}})
+		Handler: NewPodSchedulingGateMutatingWebHook(
+			mgr.GetClient(), clientset, mgr.GetScheme(), mgr.GetEventRecorderFor(utils.OperatorName), pool),
+	})
 	By("Setting up System Config Syncer")
 	err = mgr.Add(NewConfigSyncerRunnable())
 	Expect(err).NotTo(HaveOccurred())

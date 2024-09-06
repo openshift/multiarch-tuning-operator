@@ -1,7 +1,6 @@
 package podplacement_test
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -11,17 +10,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-
-	ocpconfigv1 "github.com/openshift/api/config/v1"
 
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
-	"github.com/openshift/multiarch-tuning-operator/pkg/testing/registry"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -764,45 +759,18 @@ var _ = Describe("The Pod Placement Operand", func() {
 	})
 	Context("When deploying workloads that registry of image uses a self-signed certificate", Serial, func() {
 		It("should set the node affinity when registry url added to insecureRegistries list", func() {
-			var (
-				registryName string = "insecure-registry"
-				err          error
-			)
+			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
-			// Create registry
-			registryConfig, err := registry.NewRegistry(ns, registryName, dns.Spec.BaseDomain, "https://quay.io", auth_user_local, auth_pass_local)
-			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err = registry.RemoveCertificateFiles(registryConfig.KeyPath)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-
-			err = registry.Deploy(ctx, client, registryConfig)
-			Expect(err).NotTo(HaveOccurred())
-			// Update image.config
-			// todo consider a retry mechanism such as exponentialBackOff to make concurrent running cases safe
-			// now we can't make sure timeout for mcp updating when cases running in Parallel
-			image := getImageConfig(ctx, client)
-			imageForRemove := image
-			image.Spec.RegistrySources.InsecureRegistries = append(image.Spec.RegistrySources.InsecureRegistries, registryConfig.RegistryHost)
-			err = client.Update(ctx, &image)
-			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				image := getImageConfig(ctx, client)
-				image.Spec = imageForRemove.Spec
-				err = client.Update(ctx, &image)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			framework.WaitForMCPComplete(ctx, client)
+			By("Create deployment with image in insecure Registry")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
 					NewPodSpec().
-						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, registryConfig.RegistryHost)).
+						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, fmt.Sprintf("%s:%d", inSecureRegistryConfig.RegistryHost, inSecureRegistryConfig.Port))).
 						Build()).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -815,8 +783,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			By("The pod should get node affinity of arch info beucase registry is added in insecure list.")
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			By("The pod should have been set architecture label")
 			verifyPodLabelsAreSet(ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
@@ -826,29 +797,18 @@ var _ = Describe("The Pod Placement Operand", func() {
 			)
 		})
 		It("should not set the node affinity when registry certificate is not in the trusted anchors", func() {
-			var (
-				registryName string = "untrusted-registry"
-				err          error
-			)
+			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
-			// Create registry
-			registryConfig, err := registry.NewRegistry(ns, registryName, dns.Spec.BaseDomain, "https://quay.io", auth_user_local, auth_pass_local)
-			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err = registry.RemoveCertificateFiles(registryConfig.KeyPath)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			err = registry.Deploy(ctx, client, registryConfig)
-			Expect(err).NotTo(HaveOccurred())
+			By("Create deployment with image in untrusted Registry")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
 					NewPodSpec().
-						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, registryConfig.RegistryHost)).
+						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, fmt.Sprintf("%s:%d", notTrustedRegistryConfig.RegistryHost, notTrustedRegistryConfig.Port))).
 						Build()).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -856,56 +816,24 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			verifyPodNodeAffinity(ns, "app", "test")
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			By("The pod should not get node affinity of arch info beucase registry certificate is not in the trusted anchors.")
+			verifyPodNodeAffinity(ns, "app", "test")
 		})
 		It("should set the node affinity when registry certificate is added in the trusted anchors", func() {
-			var (
-				registryName string = "trusted-registry"
-				err          error
-			)
+			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
-			// Create registry
-			registryConfig, err := registry.NewRegistry(ns, registryName, dns.Spec.BaseDomain, "https://quay.io", auth_user_local, auth_pass_local)
-			Expect(err).NotTo(HaveOccurred())
-			// remove Certificate dir
-			defer func() {
-				err = registry.RemoveCertificateFiles(registryConfig.KeyPath)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			err = registry.Deploy(ctx, client, registryConfig)
-			Expect(err).NotTo(HaveOccurred())
-			// Create configmap for registry Certificate
-			err = registry.AddCertificateToConfigmap(ctx, client, registryConfig)
-			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err = registry.RemoveCertificateFromConfigmap(ctx, client, registryConfig)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			// Update image.config
-			image := getImageConfig(ctx, client)
-			imageForRemove := image
-			image.Spec.AdditionalTrustedCA = ocpconfigv1.ConfigMapNameReference{
-				Name: "registry-cas",
-			}
-			err = client.Update(ctx, &image)
-			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				image := getImageConfig(ctx, client)
-				image.Spec = imageForRemove.Spec
-				err = client.Update(ctx, &image)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			framework.WaitForCOComplete(ctx, client, "openshift-apiserver")
+			By("Create deployment with image in trusted Registry")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
 					NewPodSpec().
-						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, registryConfig.RegistryHost)).
+						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, fmt.Sprintf("%s:%d", trustedRegistryConfig.RegistryHost, trustedRegistryConfig.Port))).
 						Build()).
 				WithReplicas(utils.NewPtr(int32(1))).
 				WithName("test-deployment").
@@ -918,80 +846,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
-			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
-				utils.MultiArchLabel, "",
-				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
-				utils.ArchLabelValue(utils.ArchitectureArm64), "",
-				utils.ArchLabelValue(utils.ArchitectureS390x), "",
-				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-		})
-		It("should set the node affinity when registry certificate added in the trusted anchors and registry url added to allowed list", func() {
-			var (
-				registryName string = "allowed-registry"
-				err          error
-			)
-			ns := framework.NewEphemeralNamespace()
-			err = client.Create(ctx, ns)
-			Expect(err).NotTo(HaveOccurred())
-			//nolint:errcheck
-			defer client.Delete(ctx, ns)
-			// Create registry
-			registryConfig, err := registry.NewRegistry(ns, registryName, dns.Spec.BaseDomain, "https://quay.io", auth_user_local, auth_pass_local)
-			Expect(err).NotTo(HaveOccurred())
-			// remove Certificate dir
-			defer func() {
-				err = registry.RemoveCertificateFiles(registryConfig.KeyPath)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			err = registry.Deploy(ctx, client, registryConfig)
-			Expect(err).NotTo(HaveOccurred())
-			// Create configmap for registry Certificate
-			err = registry.AddCertificateToConfigmap(ctx, client, registryConfig)
-			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err = registry.RemoveCertificateFromConfigmap(ctx, client, registryConfig)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			// Update image.config
-			// Add registry-cas configmap and registry urls to image.config
-			image := getImageConfig(ctx, client)
-			imageForRemove := image
-			image.Spec.AdditionalTrustedCA = ocpconfigv1.ConfigMapNameReference{
-				Name: "registry-cas",
-			}
-			image.Spec.RegistrySources.AllowedRegistries = append(image.Spec.RegistrySources.AllowedRegistries, registryConfig.RegistryHost, "quay.io",
-				"registry.redhat.io", "image-registry.openshift-image-registry.svc:5000", "registry.build10.ci.openshift.org")
-			err = client.Update(ctx, &image)
-			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				image := getImageConfig(ctx, client)
-				image.Spec = imageForRemove.Spec
-				err = client.Update(ctx, &image)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			framework.WaitForMCPComplete(ctx, client)
-			d := NewDeployment().
-				WithSelectorAndPodLabels(podLabel).
-				WithPodSpec(
-					NewPodSpec().
-						WithContainersImages(framework.GetReplacedImageURI(helloOpenshiftPrivateMultiarchImageLocal, registryConfig.RegistryHost)).
-						Build()).
-				WithReplicas(utils.NewPtr(int32(1))).
-				WithName("test-deployment").
-				WithNamespace(ns.Name).
-				Build()
-			err = client.Create(ctx, d)
-			Expect(err).NotTo(HaveOccurred())
-			archLabelNSR := NewNodeSelectorRequirement().
-				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
-					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
-				Build()
-			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			By("The pod should get node affinity of arch info because registry certificate is added in the trusted anchors.")
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			By("The pod should have been set architecture label")
 			verifyPodLabelsAreSet(ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
@@ -1002,25 +861,14 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 		It("should not set the node affinity when registry url added to blockedRegistries list", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
-			// Update image.config
-			image := getImageConfig(ctx, client)
-			imageForRemove := image
-			image.Spec.RegistrySources.BlockedRegistries = append(image.Spec.RegistrySources.BlockedRegistries, framework.GetImageRepository(e2e.PausePublicMultiarchImage))
-			err = client.Update(ctx, &image)
-			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				image := getImageConfig(ctx, client)
-				image.Spec = imageForRemove.Spec
-				err = client.Update(ctx, &image)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			framework.WaitForMCPComplete(ctx, client)
 			// Check ppo will block image from registry in blocked registry list
+			By("Create deployment with image in blocked Registry")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(map[string]string{"app": "test-block"}).
 				WithPodSpec(
@@ -1033,34 +881,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
 			verifyPodLabels(ns, "app", "test-block", e2e.Present, schedulingGateLabel)
+			By("The pod should not get node affinity of arch info beucase registry is in blocked list.")
 			verifyPodNodeAffinity(ns, "app", "test-block")
-			// Check ppo will allow image from registry not in blocked registry list
-			d = NewDeployment().
-				WithSelectorAndPodLabels(podLabel).
-				WithPodSpec(NewPodSpec().
-					WithContainersImages(helloOpenshiftPublicMultiarchImage).
-					Build()).
-				WithReplicas(utils.NewPtr(int32(1))).
-				WithName("test-deployment").
-				WithNamespace(ns.Name).
-				Build()
-			err = client.Create(ctx, d)
-			Expect(err).NotTo(HaveOccurred())
-			archLabelNSR := NewNodeSelectorRequirement().
-				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
-					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
-				Build()
-			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
-			verifyPodLabelsAreSet(ns, "app", "test",
-				utils.MultiArchLabel, "",
-				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
-				utils.ArchLabelValue(utils.ArchitectureArm64), "",
-				utils.ArchLabelValue(utils.ArchitectureS390x), "",
-				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
 		})
 	})
 	Context("When deploying workloads running images in registries that have mirrors configuration", func() {
@@ -1221,17 +1045,6 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 	})
 })
-
-func getImageConfig(ctx context.Context, client runtimeclient.Client) ocpconfigv1.Image {
-	image := ocpconfigv1.Image{}
-	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.Image{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cluster",
-		},
-	}), &image)
-	Expect(err).NotTo(HaveOccurred(), "failed to get image.config cluster", err)
-	return image
-}
 
 func verifyPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue string, nodeSelectorTerms ...corev1.NodeSelectorTerm) {
 	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})

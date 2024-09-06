@@ -17,12 +17,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	ocproutev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -32,6 +31,7 @@ type RegistryConfig struct {
 	Namespace           *corev1.Namespace
 	Name                string
 	RegistryHost        string
+	CertConfigmapName   string
 	KeyPath             string
 	CaPath              string
 	RegistryProxyUrl    string
@@ -40,8 +40,8 @@ type RegistryConfig struct {
 	Port                int32
 }
 
-func NewRegistry(ns *corev1.Namespace, name, baseDomain, registryProxyUrl, registryProxyUser, registryProxyPasswd string) (*RegistryConfig, error) {
-	registryHost := fmt.Sprintf("%s-%s.apps.%s", name, ns.Name, baseDomain)
+func NewRegistry(ns *corev1.Namespace, name, certConfigmapName, registryProxyUrl, registryProxyUser, registryProxyPasswd string) (*RegistryConfig, error) {
+	registryHost := fmt.Sprintf("%s.%s.svc.cluster.local", name, ns.Name)
 	serverTLS, err := buildRegistryTLSConfig(registryHost)
 	if err != nil {
 		return nil, err
@@ -50,6 +50,7 @@ func NewRegistry(ns *corev1.Namespace, name, baseDomain, registryProxyUrl, regis
 		Namespace:           ns,
 		Name:                name,
 		RegistryHost:        registryHost,
+		CertConfigmapName:   certConfigmapName,
 		KeyPath:             serverTLS.privateKeyPath,
 		CaPath:              serverTLS.certificatePath,
 		RegistryProxyUrl:    registryProxyUrl,
@@ -99,31 +100,6 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 		return err
 	}
 
-	// Create ingress
-	tlsAnnotations := map[string]string{
-		"route.openshift.io/destination-ca-certificate-secret": secret.Name,
-		"route.openshift.io/termination":                       string(ocproutev1.TLSTerminationReencrypt),
-	}
-	ingress := NewIngress().
-		WithAnnotations(tlsAnnotations).
-		WithIngressRules(
-			NewIngressRule().
-				WithIngressRuleHost(r.RegistryHost).
-				WithIngressRuleHttpPath(
-					NewRulePath().
-						WithRulePathPath("/").
-						WithRulePathPathTypePrefix().
-						WithRulePathBackendService(service.Name, r.Port).
-						Build()).
-				Build()).
-		WithName(r.Name).
-		WithNamespace(r.Namespace.Name).
-		Build()
-	err = client.Create(ctx, &ingress)
-	if err != nil {
-		return err
-	}
-
 	// Create deployment
 	registryD := NewDeployment().
 		WithSelectorAndPodLabels(registryLabel).
@@ -166,16 +142,16 @@ func AddCertificateToConfigmap(ctx context.Context, client runtimeclient.Client,
 	c := v1.ConfigMap{}
 	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "registry-cas",
+			Name:      r.CertConfigmapName,
 			Namespace: "openshift-config",
 		},
 	}), &c)
 	if err != nil {
 		if runtimeclient.IgnoreNotFound(err) == nil {
-			configMapData := map[string]string{r.RegistryHost: string(caData)}
+			configMapData := map[string]string{fmt.Sprintf("%s..%d", r.RegistryHost, r.Port): string(caData)}
 			configmap := NewConfigMap().
 				WithData(configMapData).
-				WithName("registry-cas").
+				WithName(r.CertConfigmapName).
 				WithNamespace("openshift-config").
 				Build()
 			err = client.Create(ctx, &configmap)
@@ -190,7 +166,7 @@ func AddCertificateToConfigmap(ctx context.Context, client runtimeclient.Client,
 	if c.Data == nil {
 		c.Data = map[string]string{}
 	}
-	c.Data[r.RegistryHost] = string(caData)
+	c.Data[fmt.Sprintf("%s..%d", r.RegistryHost, r.Port)] = string(caData)
 	err = client.Update(ctx, &c)
 	if err != nil {
 		return err
@@ -202,14 +178,14 @@ func RemoveCertificateFromConfigmap(ctx context.Context, client runtimeclient.Cl
 	c := v1.ConfigMap{}
 	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "registry-cas",
+			Name:      r.CertConfigmapName,
 			Namespace: "openshift-config",
 		},
 	}), &c)
 	if err != nil {
 		return err
 	}
-	delete(c.Data, r.RegistryHost)
+	delete(c.Data, fmt.Sprintf("%s..%d", r.RegistryHost, r.Port))
 	err = client.Update(ctx, &c)
 	if err != nil {
 		return err

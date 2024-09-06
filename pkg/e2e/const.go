@@ -26,4 +26,8 @@ const (
 	ITMSName                                       = "mto-itms-test"
 	IDMSName                                       = "mto-idms-test"
 	ICSPName                                       = "mto-icsp-test"
+	RegistryNamespace                              = "registry"
+	InsecureRegistryName                           = "insecure"
+	NotTrustedRegistryName                         = "not-trusted"
+	TrustedRegistryName                            = "trusted"
 )

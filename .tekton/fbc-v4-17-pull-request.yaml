@@ -292,7 +292,7 @@ spec:
         - name: name
           value: fbc-validation
         - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-fbc-validation:0.1@sha256:d959d581e4bfcb065e7ceaf9cd2e485e1d3e4de1185b825b5f7b85a9e61629ba
+          value: quay.io/redhat-appstudio-tekton-catalog/task-fbc-validation:0.1@sha256:a94ae3af2e3a9f144b0aedf27620e820ed76b4a5163ab2266ca26e93ec425466
         - name: kind
           value: task
         resolver: bundles

@@ -231,6 +231,10 @@ func validateFlags() error {
 	if !enableOperator && !enableClusterPodPlacementConfigOperandControllers && !enableClusterPodPlacementConfigOperandWebHook {
 		return errors.New("at least one of the following flags must be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook")
 	}
+	// no more than one of the flags can be set
+	if btoi(enableOperator)+btoi(enableClusterPodPlacementConfigOperandControllers)+btoi(enableClusterPodPlacementConfigOperandWebHook) > 1 {
+		return errors.New("only one of the following flags can be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook")
+	}
 	return nil
 }
 
@@ -267,4 +271,11 @@ func must(err error, msg string, keysAndValues ...interface{}) {
 		setupLog.Error(err, msg, keysAndValues...)
 		os.Exit(1)
 	}
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

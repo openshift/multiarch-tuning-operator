@@ -29,6 +29,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/dynamic"
@@ -37,6 +38,7 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -99,6 +101,10 @@ func init() {
 func main() {
 	bindFlags()
 	must(validateFlags(), "invalid flags")
+	cacheOpts := cache.Options{
+		DefaultTransform: cache.TransformStripManagedFields(),
+	}
+
 	// Build the leader election ID deterministically and based on the flags
 	leaderId := "208d7abd.multiarch.openshift.io"
 	if enableOperator {
@@ -106,6 +112,9 @@ func main() {
 	}
 	if enableClusterPodPlacementConfigOperandControllers {
 		leaderId = fmt.Sprintf("ppc-controllers-%s", leaderId)
+		// We need to watch the pods with the status.phase equal to Pending to be able to update the nodeAffinity.
+		// We can discard the other pods because they are already scheduled.
+		cacheOpts.DefaultFieldSelector = fields.OneTermEqualSelector("status.phase", "Pending")
 	}
 	// Rapid Reset CVEs. For more information see:
 	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
@@ -135,6 +144,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       leaderId,
+		Cache:                  cacheOpts,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly

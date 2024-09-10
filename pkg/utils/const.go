@@ -1,5 +1,7 @@
 package utils
 
+import "k8s.io/apimachinery/pkg/util/sets"
+
 const (
 	ControllerNameKey = "controller"
 	OperandLabelKey   = "multiarch.openshift.io/operand"
@@ -45,3 +47,7 @@ const (
 	PodPlacementControllerName               = "pod-placement-controller"
 	PodPlacementWebhookName                  = "pod-placement-web-hook"
 )
+
+func AllSupportedArchitecturesSet() sets.Set[string] {
+	return sets.New(ArchitectureAmd64, ArchitectureArm64, ArchitecturePpc64le, ArchitectureS390x)
+}

@@ -31,11 +31,17 @@ import (
 	"github.com/containers/image/v5/manifest"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
+	"github.com/opencontainers/go-digest"
 
 	"github.com/go-logr/logr"
 	"golang.org/x/sys/unix"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/systemconfig"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
+)
+
+const (
+	operatorSDKBuilderBundleAnnotation = "operators.operatorframework.io.metrics.builder"
 )
 
 type registryInspector struct {
@@ -44,6 +50,12 @@ type registryInspector struct {
 	mutex sync.RWMutex
 }
 
+// GetCompatibleArchitecturesSet returns the set of compatibles architectures given an imageReference and a list of secrets.
+// It uses the containers/image library to get the manifest of the image and extract the architecture from it.
+// If the image is a manifest list, it will return the set of architectures supported by the manifest list.
+// If the image is a manifest, it will return the architecture set in the manifest's config.
+// If the image is an operator bundle image, it will return an empty set. This is because operator bundle images
+// are not tied to a specific architecture, and we should not set any constraints based on the architecture they report.
 func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (supportedArchitectures sets.Set[string], err error) {
 	// Create the auth file
 	log := ctrllog.FromContext(ctx, "imageReference", imageReference)
@@ -115,33 +127,53 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 		return nil, err
 	}
 
+	supportedArchitectures = sets.New[string]()
+	var instanceDigest *digest.Digest = nil
 	if manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest)) {
-		supportedArchitectures = sets.New[string]()
-		log.V(5).Info("Image is a manifest list... getting the list of supported architectures")
-		// The image is a manifest list
 		index, err := manifest.OCI1IndexFromManifest(rawManifest)
 		if err != nil {
 			log.Error(err, "Error parsing the OCI index from the raw manifest of the image")
+			return nil, err
 		}
 		for _, m := range index.Manifests {
 			supportedArchitectures = sets.Insert(supportedArchitectures, m.Platform.Architecture)
 		}
-		return supportedArchitectures, nil
+		// In the case of non-manifest-list images, we will not execute this code path and the instanceDigest will be nil.
+		// The architecture will be only one, i.e., the one from the config object of the single manifest.
+		// In the case of manifest-list images, we will get the first manifest and check the config object for the operator-sdk label.
+		// The set of architectures will be the union of the architectures of all the manifests in the index and computed later.
+		// In this way, we can avoid the library from looking for the manifest that matches the architecture of the node where this
+		// code is running. That would lead to a failure if the node architecture is not present in the list of architectures of the image.
+		instanceDigest = &index.Manifests[0].Digest
 	}
-	// no else here because the return statement above will be executed if the image is a manifest list
-	log.V(5).Info("The image is not a manifest list... getting the supported architecture")
-	parsedImage, err := image.FromUnparsedImage(ctx, sys, image.UnparsedInstance(src, nil))
+
+	parsedImage, err := image.FromUnparsedImage(ctx, sys, image.UnparsedInstance(src, instanceDigest))
 	if err != nil {
 		log.Error(err, "Error parsing the manifest of the image")
 		return nil, err
 	}
+
 	config, err := parsedImage.OCIConfig(ctx)
+
 	if err != nil {
-		// Ignore errors due to invalid images at this stage
 		log.Error(err, "Error parsing the OCI config of the image")
 		return nil, err
 	}
-	return sets.New[string](config.Architecture), nil
+	if _, ok := config.Config.Labels[operatorSDKBuilderBundleAnnotation]; ok {
+		log.V(5).Info("The image is an operator bundle image")
+		// Operator bundle images are not tied to a specific architecture, so we should not set any constraints
+		// based on the architecture they report.
+		// We return the full set of supported architectures so that the intersection with the node architecture set
+		// does not change later.
+		// See https://issues.redhat.com/browse/OCPBUGS-38823 for more information.
+		return utils.AllSupportedArchitecturesSet(), nil
+	}
+
+	if !manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest)) {
+		log.V(5).Info("The image is not a manifest list... getting the supported architecture")
+		return sets.New[string](config.Architecture), nil
+	}
+	return supportedArchitectures, nil
 }
 
 func (i *registryInspector) createAuthFile(log logr.Logger, secrets ...[]byte) (*os.File, error) {

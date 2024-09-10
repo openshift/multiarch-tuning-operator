@@ -73,6 +73,25 @@ func GetMockImages() []MockImage {
 			}
 		}
 	}
+	mockImages = append(mockImages, MockImage{
+		Architectures: sets.New[string](utils.ArchitecturePpc64le, utils.ArchitectureS390x),
+		MediaType:     imgspecv1.MediaTypeImageIndex,
+		Repository:    PublicRepo,
+		Name:          ComputeNameByMediaType(imgspecv1.MediaTypeImageIndex, "bundle"),
+		Tag:           "latest",
+	}, MockImage{
+		Architectures: sets.New[string](utils.ArchitecturePpc64le),
+		MediaType:     imgspecv1.MediaTypeImageManifest,
+		Repository:    PublicRepo,
+		Name:          ComputeNameByMediaType(imgspecv1.MediaTypeImageManifest, "bundle"),
+		Tag:           "latest",
+	}, MockImage{
+		Architectures: sets.New[string](utils.ArchitecturePpc64le, utils.ArchitectureS390x),
+		MediaType:     imgspecv1.MediaTypeImageIndex,
+		Repository:    PublicRepo,
+		Name:          ComputeNameByMediaType(imgspecv1.MediaTypeImageIndex, "ppc64le-s390x"),
+		Tag:           "latest",
+	})
 	return mockImages
 }
 
@@ -80,10 +99,13 @@ func GetMockImages() []MockImage {
 // The name of the image is given by the media type, replacing the "." with "-" and
 // removing the "+...." suffix and "application/" prefix.
 // The tag is given by the indices of the for loops.
-func ComputeNameByMediaType(mediaType string) string {
+func ComputeNameByMediaType(mediaType string, suffixes ...string) string {
 	name := strings.Split(mediaType, "+")[0]
 	name = strings.Split(name, "/")[1]
 	name = strings.ReplaceAll(name, ".", "-")
+	for _, suffix := range suffixes {
+		name = fmt.Sprintf("%s-%s", name, suffix)
+	}
 	return name
 }
 

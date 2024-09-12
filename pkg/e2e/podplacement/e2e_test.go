@@ -5,36 +5,47 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+
+	ctrl "sigs.k8s.io/controller-runtime"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	ocpappsv1 "github.com/openshift/api/apps/v1"
 	ocpbuildv1 "github.com/openshift/api/build/v1"
 	ocpconfigv1 "github.com/openshift/api/config/v1"
 	ocpmachineconfigurationv1 "github.com/openshift/api/machineconfiguration/v1"
-
-	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	ocpoperatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
+	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/registry"
 )
 
 var (
 	client    runtimeclient.Client
 	clientset *kubernetes.Clientset
 	ctx       context.Context
-	dns       = ocpconfigv1.DNS{}
 	suiteLog  = ctrl.Log.WithName("setup")
+)
+
+var (
+	inSecureRegistryConfig   *registry.RegistryConfig
+	notTrustedRegistryConfig *registry.RegistryConfig
+	trustedRegistryConfig    *registry.RegistryConfig
+	registryNS               *corev1.Namespace
+	imageForRemove           *ocpconfigv1.Image
+	certConfigmapName        = "registry-config"
 )
 
 func init() {
@@ -60,6 +71,9 @@ var _ = BeforeSuite(func() {
 	err = ocpmachineconfigurationv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = ocpoperatorv1alpha1.Install(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	err = client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
@@ -68,13 +82,10 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 	updateGlobalPullSecret()
-
-	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.DNS{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cluster",
-		},
-	}), &dns)
-	Expect(err).NotTo(HaveOccurred())
+	By("Prepare registry config test data")
+	createRegistryConfigTestData()
+	By("Wait for machineconfig finishing updating")
+	framework.WaitForMCPComplete(ctx, client)
 })
 
 var _ = AfterSuite(func() {
@@ -85,7 +96,8 @@ var _ = AfterSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(framework.ValidateDeletion(client, ctx)).Should(Succeed())
-	deleteCertificatesConfigmap(ctx, client)
+	By("Clean up registry config test data")
+	deleteRegistryConfigTestData()
 })
 
 // updateGlobalPullSecret patches the global pull secret to onboard the
@@ -121,11 +133,122 @@ func updateGlobalPullSecret() {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func deleteCertificatesConfigmap(ctx context.Context, client runtimeclient.Client) {
-	configmap := v1.ConfigMap{}
-	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
+func createRegistryConfigTestData() {
+	By("Creating registry configuration custom resources")
+	createTestICSP(ctx, client, e2e.ICSPName)
+	createTestIDMS(ctx, client, e2e.IDMSName)
+	createTestITMS(ctx, client, e2e.ITMSName)
+	By("Getting image.config")
+	image, err := framework.GetImageConfig(ctx, client)
+	Expect(err).NotTo(HaveOccurred())
+	imageForRemove = image.DeepCopy()
+	By("Creating namespace for registry set up")
+	registryNS = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "registry-cas",
+			Name: e2e.RegistryNamespace,
+		},
+	}
+	err = client.Create(ctx, registryNS)
+	Expect(err).NotTo(HaveOccurred())
+	inSecureRegistryConfig = runRegistry(ctx, client, registryNS, e2e.InsecureRegistryName, false)
+	notTrustedRegistryConfig = runRegistry(ctx, client, registryNS, e2e.NotTrustedRegistryName, false)
+	trustedRegistryConfig = runRegistry(ctx, client, registryNS, e2e.TrustedRegistryName, true)
+	By("Updating image.config")
+	image.Spec.RegistrySources.InsecureRegistries = append(image.Spec.RegistrySources.InsecureRegistries, inSecureRegistryConfig.RegistryHost)
+	image.Spec.AdditionalTrustedCA = ocpconfigv1.ConfigMapNameReference{
+		Name: trustedRegistryConfig.CertConfigmapName,
+	}
+	image.Spec.RegistrySources.BlockedRegistries = append(image.Spec.RegistrySources.BlockedRegistries, framework.GetImageRepository(e2e.PausePublicMultiarchImage))
+	err = client.Update(ctx, image)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func createTestICSP(ctx context.Context, client runtimeclient.Client, name string) {
+	By(fmt.Sprintf("Creating ImageContentSourcePolicy %s", name))
+	icsp := NewImageContentSourcePolicy().
+		WithRepositoryDigestMirrors(
+			// source repository unavailable, mirror repository available, AllowContactingSource enabled
+			NewRepositoryDigestMirrors().
+				WithMirrors(framework.GetImageRepository(e2e.HelloopenshiftPublicMultiarchImage)).
+				WithSource(framework.GetReplacedImageURI(framework.GetImageRepository(e2e.HelloopenshiftPublicMultiarchImage), e2e.MyFakeICSPAllowContactSourceTestSourceRegistry)).
+				Build()).
+		WithName(name).
+		Build()
+	err := client.Create(ctx, icsp)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func createTestIDMS(ctx context.Context, client runtimeclient.Client, name string) {
+	By(fmt.Sprintf("Creating ImageDigestMirrorSet %s", name))
+	idms := NewImageDigestMirrorSet().
+		WithImageDigestMirrors(
+			// source repository unavailable, mirror repository available, NeverContactingSource enabled
+			NewImageDigestMirrors().
+				WithMirrors(ocpconfigv1.ImageMirror(framework.GetImageRepository(e2e.HelloopenshiftPublicMultiarchImage))).
+				WithSource(framework.GetReplacedImageURI(framework.GetImageRepository(e2e.HelloopenshiftPublicMultiarchImage), e2e.MyFakeIDMSNeverContactSourceTestSourceRegistry)).
+				WithMirrorNeverContactSource().
+				Build()).
+		WithName(name).
+		Build()
+	err := client.Create(ctx, idms)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func createTestITMS(ctx context.Context, client runtimeclient.Client, name string) {
+	By(fmt.Sprintf("Creating ImageTagMirrorSet %s", name))
+	itms := NewImageTagMirrorSet().
+		WithImageTagMirrors(
+			// source repository available, mirror repository unavailable, AllowContactingSource enabled
+			NewImageTagMirrors().
+				WithMirrors(ocpconfigv1.ImageMirror(framework.GetReplacedImageURI(framework.GetImageRepository(e2e.SleepPublicMultiarchImage), e2e.MyFakeITMSAllowContactSourceTestMirrorRegistry))).
+				WithSource(framework.GetImageRepository(e2e.SleepPublicMultiarchImage)).
+				WithMirrorAllowContactingSource().
+				Build(),
+			// source repository available, mirror repository unavailable, NeverContactingSource enabled
+			NewImageTagMirrors().
+				WithMirrors(ocpconfigv1.ImageMirror(framework.GetReplacedImageURI(framework.GetImageRepository(e2e.RedisPublicMultiarchImage), e2e.MyFakeITMSNeverContactSourceTestMirrorRegistry))).
+				WithSource(framework.GetImageRepository(e2e.RedisPublicMultiarchImage)).
+				WithMirrorNeverContactSource().
+				Build()).
+		WithName(name).
+		Build()
+	err := client.Create(ctx, itms)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func deleteRegistryConfigTestData() {
+	By("Deleting registry configuration custom resources")
+	deleteTestRegistryConfigObject(ctx, client, e2e.ICSPName, &ocpoperatorv1alpha1.ImageContentSourcePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: e2e.ICSPName},
+	}, "ImageContentSourcePolicy")
+	deleteTestRegistryConfigObject(ctx, client, e2e.IDMSName, &ocpconfigv1.ImageDigestMirrorSet{
+		ObjectMeta: metav1.ObjectMeta{Name: e2e.IDMSName},
+	}, "ImageDigestMirrorSet")
+	deleteTestRegistryConfigObject(ctx, client, e2e.ITMSName, &ocpconfigv1.ImageTagMirrorSet{
+		ObjectMeta: metav1.ObjectMeta{Name: e2e.ITMSName},
+	}, "ImageTagMirrorSet")
+	By("Restoring image.config")
+	image, err := framework.GetImageConfig(ctx, client)
+	Expect(err).NotTo(HaveOccurred())
+	image.Spec = imageForRemove.Spec
+	err = client.Update(ctx, image)
+	Expect(err).NotTo(HaveOccurred())
+	By("Deleting registry namespace")
+	err = client.Delete(ctx, registryNS)
+	Expect(err).NotTo(HaveOccurred())
+	By("Cleaning up certificate files for registry")
+	deleteTestRegistry(ctx, client, inSecureRegistryConfig)
+	deleteTestRegistry(ctx, client, notTrustedRegistryConfig)
+	deleteTestRegistry(ctx, client, trustedRegistryConfig)
+	By("Deleting Certificates configmap if spec.data is null")
+	deleteCertificatesConfigmap(ctx, client, certConfigmapName)
+}
+
+func deleteCertificatesConfigmap(ctx context.Context, client runtimeclient.Client, configmapName string) {
+	configmap := corev1.ConfigMap{}
+	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configmapName,
 			Namespace: "openshift-config",
 		},
 	}), &configmap)
@@ -137,4 +260,37 @@ func deleteCertificatesConfigmap(ctx context.Context, client runtimeclient.Clien
 		err = client.Delete(ctx, &configmap)
 		Expect(err).NotTo(HaveOccurred())
 	}
+}
+
+func deleteTestRegistry(ctx context.Context, client runtimeclient.Client, registryConfig *registry.RegistryConfig) {
+	By(fmt.Sprintf("Cleaning up created resources for %s registry test", registryConfig.Name))
+	err := registry.RemoveCertificateFiles(registryConfig.KeyPath)
+	Expect(err).NotTo(HaveOccurred())
+	err = registry.RemoveCertificateFromConfigmap(ctx, client, registryConfig)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func deleteTestRegistryConfigObject(ctx context.Context, client runtimeclient.Client, name string, obj runtimeclient.Object, objType string) {
+	By(fmt.Sprintf("Deleting test %s", objType))
+	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(obj), obj)
+	if err != nil && runtimeclient.IgnoreNotFound(err) == nil {
+		log.Printf("test %s %s does not exist, skip", objType, name)
+		return
+	}
+	Expect(err).NotTo(HaveOccurred())
+	err = client.Delete(ctx, obj)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func runRegistry(ctx context.Context, client runtimeclient.Client, ns *corev1.Namespace, name string, ifAddCertificateToConfigmap bool) *registry.RegistryConfig {
+	By(fmt.Sprintf("Runing registry for %s test", name))
+	registryConfig, err := registry.NewRegistry(ns, name, certConfigmapName, "https://quay.io", auth_user_local, auth_pass_local)
+	Expect(err).NotTo(HaveOccurred())
+	err = registry.Deploy(ctx, client, registryConfig)
+	Expect(err).NotTo(HaveOccurred())
+	if ifAddCertificateToConfigmap {
+		err = registry.AddCertificateToConfigmap(ctx, client, registryConfig)
+		Expect(err).NotTo(HaveOccurred())
+	}
+	return registryConfig
 }

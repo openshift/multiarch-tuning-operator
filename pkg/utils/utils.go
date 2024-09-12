@@ -7,8 +7,10 @@ func NewPtr[T any](a T) *T {
 }
 
 func HasControlPlaneNodeSelector(nodeSelector map[string]string) bool {
+	if nodeSelector == nil {
+		return false
+	}
 	requiredSelectors := []string{MasterNodeSelectorLabel, ControlPlaneNodeSelectorLabel}
-
 	for _, value := range requiredSelectors {
 		if _, ok := nodeSelector[value]; ok {
 			return true

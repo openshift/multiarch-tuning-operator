@@ -90,21 +90,30 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	defer metrics.HistogramObserve(now, metrics.TimeToProcessGatedPod)
 	log.V(3).Info("Processing pod")
 
-	// Prepare the requirement for the node affinity.
-	psdl, err := r.pullSecretDataList(ctx, pod)
-	if err != nil {
-		log.Error(err, "Unable to retrieve the image pull secret data for the pod. "+
-			"The nodeAffinity for this pod will not be set.")
-		// we still need to remove the scheduling gate. Therefore, we do not return here.
+	if !pod.shouldIgnorePod() {
+		// Prepare the requirement for the node affinity.
+		psdl, err := r.pullSecretDataList(ctx, pod)
+		if err != nil {
+			log.Error(err, "Unable to retrieve the image pull secret data for the pod. "+
+				"The nodeAffinity for this pod will not be set.")
+			// we still need to remove the scheduling gate. Therefore, we do not return here.
+		} else {
+			pod.SetNodeAffinityArchRequirement(psdl)
+		}
 	} else {
-		pod.SetNodeAffinityArchRequirement(psdl)
+		log.V(5).Info("A pod with the scheduling gate should be ignored. Ignoring...")
+		// We can reach this branch when:
+		// - The pod has been gated but not processed before the operator changed configuration such that the pod should be ignored.
+		// - The pod has got some other changes in the admission chain from another webhook that makes it not suitable for processing anymore
+		//	(for example another actor set the nodeAffinity already for the kubernetes.io/arch label).
+		// In both cases, we should just remove the scheduling gate.
+		r.Recorder.Event(&pod.Pod, corev1.EventTypeWarning, ArchitectureAwareGatedPodIgnored, ArchitectureAwareGatedPodIgnoredMsg)
 	}
-
 	// Remove the scheduling gate
 	log.V(3).Info("Removing the scheduling gate from pod.")
 	pod.RemoveSchedulingGate()
 
-	err = r.Client.Update(ctx, &pod.Pod)
+	err := r.Client.Update(ctx, &pod.Pod)
 	if err != nil {
 		log.Error(err, "Unable to update the pod")
 		r.Recorder.Event(&pod.Pod, corev1.EventTypeWarning, ArchitectureAwareSchedulingGateRemovalFailure, SchedulingGateRemovalFailureMsg)

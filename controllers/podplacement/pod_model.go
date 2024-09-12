@@ -282,3 +282,43 @@ func (pod *Pod) ensureArchitectureLabels(requirement corev1.NodeSelectorRequirem
 		pod.ensureLabel(utils.ArchLabelValue(value), "")
 	}
 }
+
+// hasControlPlaneNodeSelector returns true if the pod has a node selector that matches the control plane nodes.
+func (pod *Pod) hasControlPlaneNodeSelector() bool {
+	if pod.Spec.NodeSelector == nil {
+		return false
+	}
+	requiredSelectors := []string{utils.MasterNodeSelectorLabel, utils.ControlPlaneNodeSelectorLabel}
+	for _, value := range requiredSelectors {
+		if _, ok := pod.Spec.NodeSelector[value]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// shouldIgnorePod returns true if the pod should be ignored by the operator.
+// The operator should ignore the pods in the following cases:
+// - the pod is in the same namespace as the operator
+// - the pod is in the kube-* namespace
+// - the pod has a node name set
+// - the pod has a node selector that matches the control plane nodes
+func (pod *Pod) shouldIgnorePod() bool {
+	return utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "kube-") ||
+		pod.Spec.NodeName != "" || pod.hasControlPlaneNodeSelector()
+}
+
+// ensureSchedulingGate ensures that the pod has the scheduling gate utils.SchedulingGateName.
+func (pod *Pod) ensureSchedulingGate() {
+	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3521-pod-scheduling-readiness
+	if pod.Spec.SchedulingGates == nil {
+		pod.Spec.SchedulingGates = []corev1.PodSchedulingGate{}
+	}
+	// if the gate is already present, do not try to patch (it would fail)
+	for _, schedulingGate := range pod.Spec.SchedulingGates {
+		if schedulingGate.Name == utils.SchedulingGateName {
+			return
+		}
+	}
+	pod.Spec.SchedulingGates = append(pod.Spec.SchedulingGates, corev1.PodSchedulingGate{Name: utils.SchedulingGateName})
+}

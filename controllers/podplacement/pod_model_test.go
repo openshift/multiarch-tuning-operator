@@ -2,11 +2,13 @@ package podplacement
 
 import (
 	"context"
+	"reflect"
 	"sort"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/record"
 
 	. "github.com/onsi/gomega"
 
@@ -805,6 +807,187 @@ func TestEnsureArchitectureLabels(t *testing.T) {
 				if pod.Labels[k] != v {
 					t.Errorf("expected label %s to have value %s, got %s", k, v, pod.Labels[k])
 				}
+			}
+		})
+	}
+}
+
+func TestPod_EnsureSchedulingGate(t *testing.T) {
+	tests := []struct {
+		name            string
+		schedulingGates []v1.PodSchedulingGate
+		expectedGates   []v1.PodSchedulingGate
+	}{
+		{
+			name:            "No SchedulingGates",
+			schedulingGates: nil,
+			expectedGates: []v1.PodSchedulingGate{
+				{Name: utils.SchedulingGateName},
+			},
+		},
+		{
+			name:            "Empty SchedulingGates",
+			schedulingGates: []v1.PodSchedulingGate{},
+			expectedGates: []v1.PodSchedulingGate{
+				{Name: utils.SchedulingGateName},
+			},
+		},
+		{
+			name: "SchedulingGate Already Present",
+			schedulingGates: []v1.PodSchedulingGate{
+				{Name: utils.SchedulingGateName},
+			},
+			expectedGates: []v1.PodSchedulingGate{
+				{Name: utils.SchedulingGateName},
+			},
+		},
+		{
+			name: "Other SchedulingGates Present",
+			schedulingGates: []v1.PodSchedulingGate{
+				{Name: "other-gate"},
+			},
+			expectedGates: []v1.PodSchedulingGate{
+				{Name: "other-gate"},
+				{Name: utils.SchedulingGateName},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod: v1.Pod{
+					Spec: v1.PodSpec{
+						SchedulingGates: test.schedulingGates,
+					},
+				},
+			}
+
+			pod.ensureSchedulingGate()
+			if !reflect.DeepEqual(pod.Spec.SchedulingGates, test.expectedGates) {
+				t.Errorf("expected %v, got %v", test.expectedGates, pod.Spec.SchedulingGates)
+			}
+		})
+	}
+}
+
+func TestPod_hasControlPlaneNodeSelector(t *testing.T) {
+	type fields struct {
+		Pod      v1.Pod
+		ctx      context.Context
+		recorder record.EventRecorder
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   bool
+	}{
+		{
+			name: "pod with no node selector terms",
+			fields: fields{
+				Pod: NewPod().Build(),
+			},
+			want: false,
+		},
+		{
+			name: "pod with empty node selector terms",
+			fields: fields{
+				Pod: NewPod().WithNodeSelectors().Build(),
+			},
+			want: false,
+		},
+		{
+			name: "pod with node selector terms and no control plane node selector",
+			fields: fields{
+				Pod: NewPod().WithNodeSelectors("foo", "bar").Build(),
+			},
+			want: false,
+		},
+		{
+			name: "pod with node selector terms and control plane node selector",
+			fields: fields{
+				Pod: NewPod().WithNodeSelectors("foo", "bar", utils.ControlPlaneNodeSelectorLabel, "").Build(),
+			},
+			want: true,
+		},
+		{
+			name: "pod with node selector terms and control plane node selector and other node selector",
+			fields: fields{
+				Pod: NewPod().WithNodeSelectors("foo", "bar", utils.MasterNodeSelectorLabel, "", "baz", "foo").Build(),
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod:      tt.fields.Pod,
+				ctx:      tt.fields.ctx,
+				recorder: tt.fields.recorder,
+			}
+			if got := pod.hasControlPlaneNodeSelector(); got != tt.want {
+				t.Errorf("hasControlPlaneNodeSelector() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPod_shouldIgnorePod(t *testing.T) {
+	type fields struct {
+		Pod      v1.Pod
+		ctx      context.Context
+		recorder record.EventRecorder
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   bool
+	}{
+		{
+			name: "pod with no node selector terms",
+			fields: fields{
+				Pod: NewPod().Build(),
+			},
+			want: false,
+		},
+		{
+			name: "pod in the same namespace as the multiarch-tuning-operator",
+			fields: fields{
+				Pod: NewPod().WithNamespace(utils.Namespace()).Build(),
+			},
+			want: true,
+		},
+		{
+			name: "pod in the kube- namespace",
+			fields: fields{
+				Pod: NewPod().WithNamespace("kube-system").Build(),
+			},
+			want: true,
+		},
+		{
+			name: "pod with nodeName set",
+			fields: fields{
+				Pod: NewPod().WithNodeName("node-name").Build(),
+			},
+			want: true,
+		},
+		{
+			name: "pod with control plane node selector",
+			fields: fields{
+				Pod: NewPod().WithNodeSelectors(utils.ControlPlaneNodeSelectorLabel, "").Build(),
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod:      tt.fields.Pod,
+				ctx:      tt.fields.ctx,
+				recorder: tt.fields.recorder,
+			}
+			if got := pod.shouldIgnorePod(); got != tt.want {
+				t.Errorf("shouldIgnorePod() = %v, want %v", got, tt.want)
 			}
 		})
 	}

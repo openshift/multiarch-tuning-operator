@@ -533,13 +533,14 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 					},
 				}).Build(),
 		},
-		{
+		/*{ // This test is not valid anymore after 300e719608271b5c9baa6ecfd845c24c2a71eec8:
+		    // We now check the predicates are set earlier in the process.
 			name: "pod with node selector and architecture requirement",
 			pod: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectors("foo", "bar",
 				utils.ArchLabel, utils.ArchitectureArm64).Build(),
 			want: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectors("foo", "bar",
 				utils.ArchLabel, utils.ArchitectureArm64).Build(),
-		},
+		},*/
 		{
 			name: "pod with no affinity",
 			pod:  NewPod().WithContainersImages(fake.MultiArchImage).Build(),

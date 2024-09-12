@@ -70,7 +70,7 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	}
 	pod := &Pod{
 		ctx:      ctx,
-		recorder: a.Recorder,
+		recorder: nil, // do we want to publish events if the pod is ignored?
 	}
 	err := a.decoder.Decode(req, &pod.Pod)
 	if err != nil {

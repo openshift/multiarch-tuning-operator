@@ -992,3 +992,114 @@ func TestPod_shouldIgnorePod(t *testing.T) {
 		})
 	}
 }
+
+func TestIsNodeSelectorConfiguredForArchitecture(t *testing.T) {
+	tests := []struct {
+		name         string
+		nodeSelector map[string]string
+		affinity     *v1.Affinity
+		expected     bool
+	}{
+		{
+			name:         "Has NodeSelector for Architecture Label",
+			nodeSelector: map[string]string{utils.ArchLabel: utils.ArchitectureAmd64},
+			affinity:     nil,
+			expected:     true,
+		},
+		{
+			name:         "No NodeSelector and No Affinity",
+			nodeSelector: nil,
+			affinity:     nil,
+			expected:     false,
+		},
+		{
+			name:         "No NodeSelector, Affinity without NodeAffinity",
+			nodeSelector: nil,
+			affinity:     &v1.Affinity{},
+			expected:     false,
+		},
+		{
+			name:         "No NodeSelector, Affinity with empty NodeAffinity",
+			nodeSelector: nil,
+			affinity:     &v1.Affinity{NodeAffinity: &v1.NodeAffinity{}},
+			expected:     false,
+		},
+		{
+			name:         "No NodeSelector, has NodeAffinity with Arch Label",
+			nodeSelector: nil,
+			affinity: &v1.Affinity{
+				NodeAffinity: &v1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
+						NodeSelectorTerms: []v1.NodeSelectorTerm{
+							{
+								MatchExpressions: []v1.NodeSelectorRequirement{
+									{Key: utils.ArchLabel, Operator: v1.NodeSelectorOpIn, Values: []string{utils.ArchitectureAmd64}},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:         "No NodeSelector, NodeAffinity without Arch Label",
+			nodeSelector: nil,
+			affinity: &v1.Affinity{
+				NodeAffinity: &v1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
+						NodeSelectorTerms: []v1.NodeSelectorTerm{
+							{
+								MatchExpressions: []v1.NodeSelectorRequirement{
+									{Key: "some-other-label", Operator: v1.NodeSelectorOpIn, Values: []string{"value"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:         "No NodeSelector, One NodeSelectorTerm has Arch Label, Others Do Not",
+			nodeSelector: nil,
+			affinity: &v1.Affinity{
+				NodeAffinity: &v1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
+						NodeSelectorTerms: []v1.NodeSelectorTerm{
+							{
+								MatchExpressions: []v1.NodeSelectorRequirement{
+									{Key: "some-other-label", Operator: v1.NodeSelectorOpIn, Values: []string{"value"}},
+								},
+							},
+							{
+								MatchExpressions: []v1.NodeSelectorRequirement{
+									{Key: utils.ArchLabel, Operator: v1.NodeSelectorOpIn, Values: []string{utils.ArchitectureAmd64}},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod: v1.Pod{
+					Spec: v1.PodSpec{
+						NodeSelector: test.nodeSelector,
+						Affinity:     test.affinity,
+					},
+				},
+			}
+
+			result := pod.isNodeSelectorConfiguredForArchitecture()
+			if result != test.expected {
+				t.Errorf("expected %v, got %v", test.expected, result)
+			}
+		})
+	}
+}

@@ -1,5 +1,5 @@
 ---
-defaultChannel: tech-preview
+defaultChannel: stable
 description: |
   The Multiarch Tuning Operator enhances the operational experience within multi-architecture clusters,
   and single-architecture clusters that are migrating to a multi-architecture compute configuration.
@@ -27,11 +27,18 @@ schema: olm.package
 ---
 schema: olm.channel
 package: multiarch-tuning-operator
+name: stable
+entries:
+  - name: multiarch-tuning-operator.v1.0.0
+    replaces: multiarch-tuning-operator.v0.9.0
+---
+schema: olm.channel
+package: multiarch-tuning-operator
 name: tech-preview
 entries:
   - name: multiarch-tuning-operator.v0.9.0
 ---
-image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:b7c0e2ac16ea027d5af85e3ee10556e2f4cb5cbda956e432b63030ba688262cb
+image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:440d0bbcf88a33f83ae9caeb7caad4c9234509e341d7385442b33063d31d8e27
 name: multiarch-tuning-operator.v0.9.0
 package: multiarch-tuning-operator
 properties:
@@ -73,5 +80,140 @@ relatedImages:
   - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:b7c0e2ac16ea027d5af85e3ee10556e2f4cb5cbda956e432b63030ba688262cb
     name: ""
   - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:118500bb10296469335b260ba28fb67785d05b1f9d0aab7dbf1d1b243620ed8f
+    name: ""
+schema: olm.bundle
+---
+image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:1a3cb62081d6e6c6ce874b861bf94906c6f18fae39e2ad85b7c4dba1481dddd5
+name: multiarch-tuning-operator.v1.0.0
+package: multiarch-tuning-operator
+properties:
+  - type: olm.gvk
+    value:
+      group: multiarch.openshift.io
+      kind: ClusterPodPlacementConfig
+      version: v1alpha1
+  - type: olm.gvk
+    value:
+      group: multiarch.openshift.io
+      kind: ClusterPodPlacementConfig
+      version: v1beta1
+  - type: olm.package
+    value:
+      packageName: multiarch-tuning-operator
+      version: 1.0.0
+  - type: olm.csv.metadata
+    value:
+      annotations:
+        alm-examples: |-
+          [
+            {
+              "apiVersion": "multiarch.openshift.io/v1beta1",
+              "kind": "ClusterPodPlacementConfig",
+              "metadata": {
+                "name": "cluster"
+              },
+              "spec": {
+                "logVerbosity": "Normal",
+                "namespaceSelector": {
+                  "matchExpressions": [
+                    {
+                      "key": "multiarch.openshift.io/exclude-pod-placement",
+                      "operator": "DoesNotExist"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        capabilities: Seamless Upgrades
+        categories: OpenShift Optional, Other
+        console.openshift.io/disable-operand-delete: "false"
+        containerImage: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:531048914f493b44f8b1c6f23adaf506c2a67bee23fb92eabc3d7938f5e5d56d
+        createdAt: "2024-09-30T12:29:39Z"
+        features.operators.openshift.io/cnf: "false"
+        features.operators.openshift.io/cni: "false"
+        features.operators.openshift.io/csi: "false"
+        features.operators.openshift.io/disconnected: "true"
+        features.operators.openshift.io/fips-compliant: "true"
+        features.operators.openshift.io/proxy-aware: "true"
+        features.operators.openshift.io/tls-profiles: "false"
+        features.operators.openshift.io/token-auth-aws: "false"
+        features.operators.openshift.io/token-auth-azure: "false"
+        features.operators.openshift.io/token-auth-gcp: "false"
+        operator.openshift.io/uninstall-message: You must remove all Operands before
+          uninstalling the operator.
+        operatorframework.io/cluster-monitoring: "true"
+        operatorframework.io/suggested-namespace: openshift-multiarch-tuning-operator
+        operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine",
+        "OpenShift Container Platform", "OpenShift Platform Plus"]'
+        operators.operatorframework.io/builder: operator-sdk-v1.31.0
+        operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
+        repository: https://github.com/openshift/multiarch-tuning-operator
+        support: Red Hat
+      apiServiceDefinitions: {}
+      crdDescriptions:
+        owned:
+          - description: ClusterPodPlacementConfig defines the configuration for the architecture
+              aware pod placement operand. Users can only deploy a single object named
+              "cluster". Creating the object enables the operand.
+            displayName: Cluster Pod Placement Config
+            kind: ClusterPodPlacementConfig
+            name: clusterpodplacementconfigs.multiarch.openshift.io
+            version: v1alpha1
+          - description: ClusterPodPlacementConfig defines the configuration for the architecture
+              aware pod placement operand. Users can only deploy a single object named
+              "cluster". Creating the object enables the operand.
+            displayName: Cluster Pod Placement Config
+            kind: ClusterPodPlacementConfig
+            name: clusterpodplacementconfigs.multiarch.openshift.io
+            version: v1beta1
+      description: |
+        The Multiarch Tuning Operator optimizes workload management within multi-architecture clusters and in
+        single-architecture clusters transitioning to multi-architecture environments.
+
+        By default, the scheduler does not consider the architecture of a pod's container images
+        when determining the placement of new pods onto nodes.
+
+        The Multiarch Tuning Operator introduces the ClusterPodPlacementConfig custom resource to
+        enable architecture-aware scheduling, ensuring that pods are assigned to nodes with
+        a corresponding architecture for their container images.
+
+        To enable this functionality, you must create a ClusterPodPlacementConfig resource.
+
+        When the ClusterPodPlacementConfig object is created, the Multiarch Tuning Operator deploys the necessary operands
+        to support architecture-aware workload scheduling.
+      displayName: Multiarch Tuning Operator
+      installModes:
+        - supported: false
+          type: OwnNamespace
+        - supported: false
+          type: SingleNamespace
+        - supported: false
+          type: MultiNamespace
+        - supported: true
+          type: AllNamespaces
+      keywords:
+        - multiarch-tuning-operator
+        - pod-placement
+      labels:
+        operatorframework.io/arch.amd64: supported
+        operatorframework.io/arch.arm64: supported
+        operatorframework.io/arch.ppc64le: supported
+        operatorframework.io/arch.s390x: supported
+      links:
+        - name: Multiarch Tuning Operator Documentation
+          url: https://docs.openshift.com/container-platform/4.16/post_installation_configuration/configuring-multi-arch-compute-machines/multiarch-tuning-operator.html
+      maintainers:
+        - email: support@redhat.com
+          name: Red Hat
+      maturity: beta
+      minKubeVersion: 1.27.0
+      provider:
+        name: Red Hat
+        url: https://github.com/openshift/multiarch-tuning-operator
+relatedImages:
+  - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:1a3cb62081d6e6c6ce874b861bf94906c6f18fae39e2ad85b7c4dba1481dddd5
+    name: ""
+  - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:531048914f493b44f8b1c6f23adaf506c2a67bee23fb92eabc3d7938f5e5d56d
     name: ""
 schema: olm.bundle

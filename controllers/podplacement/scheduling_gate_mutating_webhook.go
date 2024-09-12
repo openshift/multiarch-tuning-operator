@@ -85,11 +85,10 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	}
 	pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueNotSet
 
-	// ignore the kube-* and hypershift-* namespace as those are infra components, and ignore the namespace where the operand is running too
+	// ignore the kube-* namespace as those are infra components, and ignore the namespace where the operand is running too
 	// Also ignore any pods which are deployed on control plane nodes
-	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "hypershift-") ||
-		strings.HasPrefix(pod.Namespace, "kube-") || pod.Spec.NodeName != "" ||
-		pod.Spec.NodeSelector != nil && utils.HasControlPlaneNodeSelector(pod.Spec.NodeSelector) {
+	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "kube-") ||
+		pod.Spec.NodeName != "" || pod.Spec.NodeSelector != nil && utils.HasControlPlaneNodeSelector(pod.Spec.NodeSelector) {
 		log.V(5).Info("Ignoring the pod")
 		return a.patchedPodResponse(pod, req)
 	}

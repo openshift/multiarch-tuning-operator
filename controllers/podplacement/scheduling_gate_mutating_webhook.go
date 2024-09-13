@@ -78,7 +78,8 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	}
 	log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name)
 
-	pod.ensureLabel(utils.NodeAffinityLabel, utils.NodeAffinityLabelValueNotSet)
+	pod.ensureLabel(utils.NodeAffinityLabel, utils.LabelValueNotSet)
+	pod.ensureLabel(utils.SchedulingGateLabel, utils.LabelValueNotSet)
 
 	if pod.shouldIgnorePod() {
 		log.V(5).Info("Ignoring the pod")

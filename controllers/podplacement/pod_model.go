@@ -346,6 +346,6 @@ func (pod *Pod) isNodeSelectorConfiguredForArchitecture() bool {
 func (pod *Pod) publishIgnorePod() {
 	log := ctrllog.FromContext(pod.ctx)
 	log.V(3).Info("The pod has the nodeSelector or all the nodeAffinityTerms set for the kubernetes.io/arch label. Ignoring the pod...")
-	pod.ensureLabel(utils.NodeAffinityLabel, utils.NodeAffinityLabelValueNotSet)
+	pod.ensureLabel(utils.NodeAffinityLabel, utils.LabelValueNotSet)
 	pod.publishEvent(corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicatesConflictMsg)
 }

@@ -38,8 +38,9 @@ const (
 
 var _ = Describe("The Pod Placement Operand", func() {
 	var (
-		podLabel            = map[string]string{"app": "test"}
-		schedulingGateLabel = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
+		podLabel                  = map[string]string{"app": "test"}
+		schedulingGateLabel       = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
+		schedulingGateNotSetLabel = map[string]string{utils.SchedulingGateLabel: utils.LabelValueNotSet}
 	)
 	BeforeEach(func() {
 		By("Verifying the operand is ready")
@@ -224,7 +225,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
 			verifyPodNodeAffinity(ns, "app", "test", archLabelNSTs)
 		})
 		It("should check each matchExpressions when users node affinity has multiple matchExpressions", func() {
@@ -269,7 +270,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			)
 			verifyPodNodeAffinity(ns, "app", "test", expectedHostnameNST, archLabelNSTs)
 		})
-		It("should not set the node affinity when nodeSelector exist", func() {
+		It("should neither set the node affinity nor gate pods when nodeSelector exist", func() {
 			var err error
 			var nodeSelectors = map[string]string{utils.ArchLabel: utils.ArchitectureAmd64}
 			ns := framework.NewEphemeralNamespace()
@@ -290,10 +291,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
 			verifyPodNodeAffinity(ns, "app", "test")
 		})
-		It("should not set the node affinity when nodeName exist", func() {
+		It("should neither set the node affinity not gate pods when nodeName exist", func() {
 			var err error
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
@@ -420,7 +421,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
-		It("should not set the node affinity when with more containers all with multiarch image but users node affinity conflicts", func() {
+		It("should not set the node affinity when more multiarch image-based containers and users set node affinity", func() {
 			var err error
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
@@ -444,7 +445,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, &s)
 			Expect(err).NotTo(HaveOccurred())
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
 			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
 		})
 		It("should set the node affinity when with more containers all with multiarch image", func() {

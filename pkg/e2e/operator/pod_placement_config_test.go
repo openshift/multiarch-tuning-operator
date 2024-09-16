@@ -26,8 +26,9 @@ const (
 
 var _ = Describe("The Multiarch Tuning Operator", func() {
 	var (
-		podLabel            = map[string]string{"app": "test"}
-		schedulingGateLabel = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
+		podLabel                  = map[string]string{"app": "test"}
+		schedulingGateLabel       = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}
+		schedulingGateNotSetLabel = map[string]string{utils.SchedulingGateLabel: utils.LabelValueNotSet}
 	)
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
@@ -256,7 +257,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
-			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
 			verifyPodNodeAffinity(ns, "app", "test")
 		},
 			Entry(utils.ControlPlaneNodeSelectorLabel, utils.ControlPlaneNodeSelectorLabel),

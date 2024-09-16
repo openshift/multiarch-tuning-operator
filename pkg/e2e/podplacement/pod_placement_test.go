@@ -321,7 +321,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			By("The pod should not have been processed by the webhook and the scheduling gate label should not be added")
-			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
+			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
 			By("The pod should keep the same node affinity provided by the users. No node affinity is added by the controller.")
 			verifyPodNodeAffinity(ns, "app", "test")
 			By("The pod should be running and not gated")

@@ -18,39 +18,61 @@ package image
 
 import (
 	"context"
+	"encoding/hex"
+	"hash/fnv"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-//nolint:unused
 type cacheProxy struct {
 	registryInspector        IRegistryInspector
 	imageRefsArchitectureMap map[string]sets.Set[string]
 	mutex                    sync.Mutex
 }
 
-//nolint:unused
 func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (sets.Set[string], error) {
-	if c.imageRefsArchitectureMap[imageReference] != nil {
-		return c.imageRefsArchitectureMap[imageReference], nil
+	authJson, err := marshaledImagePullSecrets(secrets)
+	if err != nil {
+		return nil, err
+	}
+
+	log := ctrllog.FromContext(ctx, "cacheProxy")
+
+	if architectures, ok := c.imageRefsArchitectureMap[computeFNV128Hash(imageReference, authJson)]; ok {
+		log.V(3).Info("Cache hit", "imageReference", imageReference)
+		return architectures, nil
 	}
 	architectures, err := c.registryInspector.GetCompatibleArchitecturesSet(ctx, imageReference, secrets)
 	if err != nil {
 		return nil, err
 	}
+
+	log.V(3).Info("Cache miss...adding to cache", "imageReference", imageReference)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.imageRefsArchitectureMap[imageReference] = architectures
+	c.imageRefsArchitectureMap[computeFNV128Hash(imageReference, authJson)] = architectures
 	return architectures, nil
 }
 
-//nolint:unused
-func newCacheProxy() ICache {
+func (c *cacheProxy) GetRegistryInspector() IRegistryInspector {
+	return c.registryInspector
+}
+
+func newCacheProxy() *cacheProxy {
 	return &cacheProxy{
 		imageRefsArchitectureMap: map[string]sets.Set[string]{},
 		registryInspector:        newRegistryInspector(),
 	}
+}
+
+func computeFNV128Hash(imageReference string, secrets []byte) string {
+	hash := fnv.New128()
+	hash.Write([]byte(imageReference)) // Add the image reference
+	hash.Write(secrets)                // Add the secrets
+
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 // TODO: eviction policy

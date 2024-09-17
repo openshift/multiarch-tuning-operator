@@ -18,7 +18,6 @@ package podplacement
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"net/http"
@@ -41,10 +40,6 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
-
-var schedulingGate = corev1.PodSchedulingGate{
-	Name: utils.SchedulingGateName,
-}
 
 // [disabled:operator]kubebuilder:webhook:path=/add-pod-scheduling-gate,mutating=true,sideEffects=None,admissionReviewVersions=v1,failurePolicy=ignore,groups="",resources=pods,verbs=create,versions=v1,name=pod-placement-scheduling-gate.multiarch.openshift.io
 
@@ -73,41 +68,25 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	if a.decoder == nil {
 		a.decoder = admission.NewDecoder(a.scheme)
 	}
-	pod := &corev1.Pod{}
-	err := a.decoder.Decode(req, pod)
+	pod := &Pod{
+		ctx:      ctx,
+		recorder: nil, // do we want to publish events if the pod is ignored?
+	}
+	err := a.decoder.Decode(req, &pod.Pod)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 	log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name)
 
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
-	}
-	pod.Labels[utils.NodeAffinityLabel] = utils.NodeAffinityLabelValueNotSet
+	pod.ensureLabel(utils.NodeAffinityLabel, utils.LabelValueNotSet)
+	pod.ensureLabel(utils.SchedulingGateLabel, utils.LabelValueNotSet)
 
-	// ignore the kube-* and hypershift-* namespace as those are infra components, and ignore the namespace where the operand is running too
-	// Also ignore any pods which are deployed on control plane nodes
-	if utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "hypershift-") ||
-		strings.HasPrefix(pod.Namespace, "kube-") || pod.Spec.NodeName != "" ||
-		pod.Spec.NodeSelector != nil && utils.HasControlPlaneNodeSelector(pod.Spec.NodeSelector) {
+	if pod.shouldIgnorePod() {
 		log.V(5).Info("Ignoring the pod")
-		return a.patchedPodResponse(pod, req)
+		return a.patchedPodResponse(&pod.Pod, req)
 	}
 
-	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3521-pod-scheduling-readiness
-	if pod.Spec.SchedulingGates == nil {
-		pod.Spec.SchedulingGates = []corev1.PodSchedulingGate{}
-	}
-
-	// if the gate is already present, do not try to patch (it would fail)
-	for _, schedulingGate := range pod.Spec.SchedulingGates {
-		if schedulingGate.Name == utils.SchedulingGateName {
-			return a.patchedPodResponse(pod, req)
-		}
-	}
-
-	pod.Spec.SchedulingGates = append(pod.Spec.SchedulingGates, schedulingGate)
-
+	pod.ensureSchedulingGate()
 	// We also add a label to the pod to indicate that the scheduling gate was added
 	// and this pod expects processing by the operator. That's useful for testing and debugging, but also gives the user
 	// an indication that the pod is waiting for processing and can support kubectl queries to find out which pods are
@@ -117,11 +96,11 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	// we know it will finish eventually by design, and we don't need to block the response as we
 	// are right in the admission pipeline, before the pod is persisted.
 	log.V(5).Info("Scheduling gate added to the pod, launching the event creation goroutine")
-	a.delayedSchedulingGatedEvent(ctx, pod)
+	a.delayedSchedulingGatedEvent(ctx, pod.DeepCopy())
 	metrics.GatedPods.Inc()
 	metrics.GatedPodsGauge.Inc()
 	log.V(4).Info("Accepting pod")
-	return a.patchedPodResponse(pod, req)
+	return a.patchedPodResponse(&pod.Pod, req)
 }
 
 func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(ctx context.Context, pod *corev1.Pod) {

@@ -10,6 +10,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	mmoimage "github.com/openshift/multiarch-tuning-operator/pkg/image"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -245,6 +246,7 @@ func TestPod_intersectImagesArchitecture(t *testing.T) {
 			wantSupportedArchitectures: nil,
 		},
 	}
+	metrics.InitPodPlacementControllerMetrics()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			imageInspectionCache = fake.FacadeSingleton()
@@ -672,6 +674,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 				}).Build(),
 		},
 	}
+	metrics.InitPodPlacementControllerMetrics()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			imageInspectionCache = fake.FacadeSingleton()

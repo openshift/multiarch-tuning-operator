@@ -34,6 +34,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -52,6 +53,9 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/openshift/library-go/pkg/operator/events"
+
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
@@ -119,6 +123,8 @@ func startTestEnv() {
 	err = v1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = admissionv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = monitoringv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
@@ -205,10 +211,11 @@ func runManager() {
 		suiteLog.Error(err, "unable to get controller reference for current pod (falling back to namespace)")
 	}
 	Expect((&ClusterPodPlacementConfigReconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		ClientSet: clientset,
-		Recorder:  events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, ctrlref),
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		ClientSet:     clientset,
+		DynamicClient: dynamic.NewForConfigOrDie(cfg),
+		Recorder:      events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, ctrlref),
 	}).SetupWithManager(mgr)).NotTo(HaveOccurred())
 
 	err = mgr.AddReadyzCheck("readyz", healthz.Ping)

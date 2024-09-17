@@ -18,6 +18,8 @@ package podplacement
 
 import (
 	"context"
+	runtime2 "runtime"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,8 +28,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl2 "sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -58,6 +62,10 @@ type PodReconciler struct {
 // Reconcile has to watch the pod object if it has the scheduling gate with name SchedulingGateName,
 // inspect the images in the pod spec, update the nodeAffinity accordingly and remove the scheduling gate.
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// Lazy initialization of the metrics to support concurrent reconciles
+	metrics.InitPodPlacementControllerMetrics()
+	now := time.Now()
+	defer metrics.HistogramObserve(now, metrics.TimeToProcessPod)
 	log := ctrllog.FromContext(ctx)
 
 	pod := &Pod{
@@ -78,6 +86,8 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// The scheduling gate is found.
+	metrics.ProcessedPodsCtrl.Inc()
+	defer metrics.HistogramObserve(now, metrics.TimeToProcessGatedPod)
 	log.V(3).Info("Processing pod")
 
 	// Prepare the requirement for the node affinity.
@@ -101,6 +111,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 	r.Recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitectureAwareSchedulingGateRemovalSuccess, SchedulingGateRemovalSuccessMsg)
+	metrics.GatedPodsGauge.Dec()
 
 	return ctrl.Result{}, nil
 }
@@ -128,7 +139,13 @@ func (r *PodReconciler) pullSecretDataList(ctx context.Context, pod *Pod) ([][]b
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	ctrllog.FromContext(context.Background()).Info("Setting up the PodReconciler with the manager with max"+
+		" concurrent reconciles", "maxConcurrentReconciles", runtime2.NumCPU()*2)
+	// As the main bottleneck is the image inspection, which is strongly I/O bound, we can increase the number of concurrent
+	// reconciles to the number of CPUs * 4.
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1.Pod{}).
+		For(&corev1.Pod{}).WithOptions(ctrl2.Options{
+		MaxConcurrentReconciles: runtime2.NumCPU() * 4,
+	}).
 		Complete(r)
 }

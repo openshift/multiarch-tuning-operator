@@ -15,6 +15,7 @@ require (
 	github.com/openshift/api v0.0.0-20240817011637-2c10e5887729
 	github.com/openshift/library-go v0.0.0-20240816092752-e21e7889fd1a
 	github.com/panjf2000/ants/v2 v2.10.0
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.76.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.26.0
 	golang.org/x/sys v0.24.0
@@ -28,6 +29,7 @@ require (
 )
 
 require (
+	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
@@ -72,6 +74,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/google/cel-go v0.17.8 // indirect
 	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-containerregistry v0.20.2 // indirect
@@ -101,7 +104,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/proglottis/gpgme v0.1.3 // indirect
-	github.com/prometheus/client_golang v1.20.0 // indirect
+	github.com/prometheus/client_golang v1.20.0
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
@@ -115,6 +118,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
 	github.com/titanous/rocacheck v0.0.0-20171023193734-afe73141d399 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
@@ -155,10 +159,12 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.30.4 // indirect
+	k8s.io/apiserver v0.30.4 // indirect
 	k8s.io/component-base v0.30.4 // indirect
 	k8s.io/kube-aggregator v0.30.4 // indirect
 	k8s.io/kube-openapi v0.0.0-20240816214639-573285566f34 // indirect
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect

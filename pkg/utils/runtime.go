@@ -1,7 +1,13 @@
 package utils
 
 import (
+	"context"
 	"os"
+	"sync"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 
 	"go.uber.org/zap"
 )
@@ -9,6 +15,8 @@ import (
 var namespace string
 var image string
 var AtomicLevel zap.AtomicLevel = zap.NewAtomicLevelAt(-5)
+var availableResourcesMap = map[schema.GroupVersionResource]bool{}
+var rwMutex = sync.RWMutex{}
 
 func init() {
 	// Get the namespace from the env variable
@@ -32,4 +40,18 @@ func Namespace() string {
 // Image returns the image used to run the operator.
 func Image() string {
 	return image
+}
+
+func IsResourceAvailable(ctx context.Context, client *dynamic.DynamicClient, resource schema.GroupVersionResource) bool {
+	rwMutex.RLock()
+	if v, ok := availableResourcesMap[resource]; ok {
+		rwMutex.RUnlock()
+		return v
+	}
+	rwMutex.RUnlock()
+	_, err := client.Resource(resource).Namespace(Namespace()).List(ctx, metav1.ListOptions{})
+	rwMutex.Lock()
+	defer rwMutex.Unlock()
+	availableResourcesMap[resource] = err == nil
+	return availableResourcesMap[resource]
 }

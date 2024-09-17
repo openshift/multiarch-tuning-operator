@@ -40,12 +40,10 @@ const (
 )
 
 const (
-	PodMutatingWebhookConfigurationName      = "pod-placement-mutating-webhook-configuration"
-	PodPlacementWebhookMetricsServiceName    = "pod-placement-web-hook-metrics-service"
-	PodMutatingWebhookName                   = "pod-placement-scheduling-gate.multiarch.openshift.io"
-	PodPlacementControllerMetricsServiceName = "pod-placement-controller-metrics-service"
-	PodPlacementControllerName               = "pod-placement-controller"
-	PodPlacementWebhookName                  = "pod-placement-web-hook"
+	PodMutatingWebhookConfigurationName = "pod-placement-mutating-webhook-configuration"
+	PodMutatingWebhookName              = "pod-placement-scheduling-gate.multiarch.openshift.io"
+	PodPlacementControllerName          = "pod-placement-controller"
+	PodPlacementWebhookName             = "pod-placement-web-hook"
 )
 
 func AllSupportedArchitecturesSet() sets.Set[string] {

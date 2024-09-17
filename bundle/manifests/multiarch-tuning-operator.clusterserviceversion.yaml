@@ -27,7 +27,7 @@ metadata:
     categories: OpenShift Optional, Other
     console.openshift.io/disable-operand-delete: "false"
     containerImage: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
-    createdAt: "2024-08-27T22:08:50Z"
+    createdAt: "2024-09-09T21:37:53Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -220,6 +220,18 @@ spec:
           verbs:
           - get
         - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - servicemonitors
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - multiarch.openshift.io
           resources:
           - clusterpodplacementconfigs
@@ -350,7 +362,7 @@ spec:
               containers:
               - args:
                 - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
+                - --metrics-bind-address=:8443
                 - --leader-elect
                 - --enable-operator
                 command:
@@ -373,6 +385,13 @@ spec:
                   initialDelaySeconds: 15
                   periodSeconds: 20
                 name: manager
+                ports:
+                - containerPort: 8081
+                  name: health
+                  protocol: TCP
+                - containerPort: 8443
+                  name: https
+                  protocol: TCP
                 readinessProbe:
                   httpGet:
                     path: /readyz
@@ -395,26 +414,6 @@ spec:
                 - mountPath: /etc/ssl/certs/
                   name: ca-projected-volume
                   readOnly: true
-              - args:
-                - --secure-listen-address=0.0.0.0:8443
-                - --upstream=http://127.0.0.1:8080/
-                - --logtostderr=true
-                - --v=0
-                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1@sha256:d4883d7c622683b3319b5e6b3a7edfbf2594c18060131a8bf64504805f875522
-                name: kube-rbac-proxy
-                ports:
-                - containerPort: 8443
-                  name: https
-                  protocol: TCP
-                resources:
-                  requests:
-                    cpu: 10m
-                    memory: 64Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
               priorityClassName: system-cluster-critical
               securityContext:
                 runAsNonRoot: true

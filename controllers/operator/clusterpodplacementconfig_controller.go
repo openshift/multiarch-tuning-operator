@@ -26,8 +26,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,6 +38,7 @@ import (
 
 	"github.com/openshift/library-go/pkg/operator/events"
 
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"go.uber.org/zap/zapcore"
 
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
@@ -46,9 +48,10 @@ import (
 // ClusterPodPlacementConfigReconciler reconciles a ClusterPodPlacementConfig object
 type ClusterPodPlacementConfigReconciler struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	ClientSet *kubernetes.Clientset
-	Recorder  events.Recorder
+	DynamicClient *dynamic.DynamicClient
+	Scheme        *runtime.Scheme
+	ClientSet     *kubernetes.Clientset
+	Recorder      events.Recorder
 }
 
 const (
@@ -91,6 +94,8 @@ const (
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;update;patch;create;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings/status,verbs=get
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings/finalizers,verbs=update
+
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;update;patch;create;delete
 
 // Reconcile reconciles the ClusterPodPlacementConfig object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
@@ -212,14 +217,6 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 			ObjName:               utils.PodPlacementWebhookName,
 		},
 		{
-			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
-			ObjName:               utils.PodPlacementControllerMetricsServiceName,
-		},
-		{
-			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
-			ObjName:               utils.PodPlacementWebhookMetricsServiceName,
-		},
-		{
 			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
 			ObjName:               utils.PodPlacementWebhookName,
 		},
@@ -307,6 +304,10 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 	}
 	objsToDelete = []utils.ToDeleteRef{
 		{
+			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
+			ObjName:               utils.PodPlacementControllerName,
+		},
+		{
 			NamespacedTypedClient: r.ClientSet.AppsV1().Deployments(utils.Namespace()),
 			ObjName:               utils.PodPlacementControllerName,
 		},
@@ -331,6 +332,17 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 			ObjName:               utils.PodPlacementControllerName,
 		},
 	}
+
+	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+		objsToDelete = append(objsToDelete, utils.ToDeleteRef{
+			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "servicemonitors"}).Namespace(utils.Namespace())),
+			ObjName:               utils.PodPlacementWebhookName,
+		}, utils.ToDeleteRef{
+			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "servicemonitors"}).Namespace(utils.Namespace())),
+			ObjName:               utils.PodPlacementControllerName,
+		})
+	}
+
 	log.Info("Deleting the remaining resources after cleanup")
 	// NOTE: err aggregates non-nil errors, excluding NotFound errors
 	if err := utils.DeleteResources(ctx, objsToDelete); err != nil {
@@ -354,25 +366,8 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 	objects := []client.Object{
 		// The finalizer will not affect the reconciliation of ReplicaSets and Pods
 		// when updates to the ClusterPodPlacementConfig are made.
-		buildService(utils.PodPlacementControllerName, utils.PodPlacementControllerName,
-			443, intstr.FromInt32(9443)),
-		buildService(utils.PodPlacementWebhookName, utils.PodPlacementWebhookName,
-			443, intstr.FromInt32(9443)),
-		buildService(
-			utils.PodPlacementControllerMetricsServiceName, utils.PodPlacementControllerName,
-			8443, intstr.FromInt32(8443)),
-		buildService(
-			utils.PodPlacementWebhookMetricsServiceName, utils.PodPlacementWebhookName,
-			8443, intstr.FromInt32(8443)), buildService(utils.PodPlacementControllerName, utils.PodPlacementControllerName,
-			443, intstr.FromInt32(9443)),
-		buildService(utils.PodPlacementWebhookName, utils.PodPlacementWebhookName,
-			443, intstr.FromInt32(9443)),
-		buildService(
-			utils.PodPlacementControllerMetricsServiceName, utils.PodPlacementControllerName,
-			8443, intstr.FromInt32(8443)),
-		buildService(
-			utils.PodPlacementWebhookMetricsServiceName, utils.PodPlacementWebhookName,
-			8443, intstr.FromInt32(8443)),
+		buildService(utils.PodPlacementControllerName),
+		buildService(utils.PodPlacementWebhookName),
 		buildClusterRoleController(), buildClusterRoleWebhook(), buildRoleController(),
 		buildServiceAccount(utils.PodPlacementWebhookName), buildServiceAccount(utils.PodPlacementControllerName),
 		buildClusterRoleBinding(utils.PodPlacementControllerName, rbacv1.RoleRef{
@@ -421,6 +416,14 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		_ = r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(ctx, utils.PodMutatingWebhookConfigurationName, metav1.DeleteOptions{})
 	}
 
+	// If the servicemonitors.monitoring.coreos.com CRD is available, we create the ServiceMonitor objects
+	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+		log.V(3).Info("Creating ServiceMonitors")
+		objects = append(objects, buildServiceMonitor(utils.PodPlacementControllerName))
+		objects = append(objects, buildServiceMonitor(utils.PodPlacementWebhookName))
+	} else {
+		log.V(3).Info("servicemonitoring.monitoring.coreos.com is not available. Skipping the creation of the ServiceMonitors")
+	}
 	errs := make([]error, 0)
 	for _, o := range objects {
 		if err := ctrl.SetControllerReference(clusterPodPlacementConfig, o, r.Scheme); err != nil {
@@ -433,7 +436,7 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		return errorutils.NewAggregate(append(errs, r.updateStatus(ctx, clusterPodPlacementConfig)))
 	}
 
-	if err := utils.ApplyResources(ctx, r.ClientSet, r.Recorder, objects); err != nil {
+	if err := utils.ApplyResources(ctx, r.ClientSet, r.DynamicClient, r.Recorder, objects); err != nil {
 		log.Error(err, "Unable to apply resources")
 		return errorutils.NewAggregate([]error{err, r.updateStatus(ctx, clusterPodPlacementConfig)})
 	}
@@ -502,7 +505,7 @@ func isDeploymentUpToDate(deployment *appsv1.Deployment) bool {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	c := ctrl.NewControllerManagedBy(mgr).
 		For(&multiarchv1beta1.ClusterPodPlacementConfig{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
@@ -511,6 +514,10 @@ func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager)
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
 		Owns(&corev1.ServiceAccount{}).
-		Owns(&admissionv1.MutatingWebhookConfiguration{}).
-		Complete(r)
+		Owns(&admissionv1.MutatingWebhookConfiguration{})
+	if utils.IsResourceAvailable(context.Background(), r.DynamicClient,
+		monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+		c = c.Owns(&monitoringv1.ServiceMonitor{})
+	}
+	return c.Complete(r)
 }

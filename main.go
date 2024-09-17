@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -28,17 +29,21 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -49,6 +54,8 @@ import (
 	"github.com/panjf2000/ants/v2"
 	zapuber "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	multiarchv1alpha1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
@@ -88,11 +95,16 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(multiarchv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(multiarchv1beta1.AddToScheme(scheme))
+	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 }
 
 func main() {
 	bindFlags()
 	must(validateFlags(), "invalid flags")
+	cacheOpts := cache.Options{
+		DefaultTransform: cache.TransformStripManagedFields(),
+	}
+
 	// Build the leader election ID deterministically and based on the flags
 	leaderId := "208d7abd.multiarch.openshift.io"
 	if enableOperator {
@@ -100,21 +112,39 @@ func main() {
 	}
 	if enableClusterPodPlacementConfigOperandControllers {
 		leaderId = fmt.Sprintf("ppc-controllers-%s", leaderId)
+		// We need to watch the pods with the status.phase equal to Pending to be able to update the nodeAffinity.
+		// We can discard the other pods because they are already scheduled.
+		cacheOpts.DefaultFieldSelector = fields.OneTermEqualSelector("status.phase", "Pending")
 	}
+	// Rapid Reset CVEs. For more information see:
+	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
+	// - https://github.com/advisories/GHSA-4374-p667-p6c8
+	// - https://github.com/kubernetes-sigs/kubebuilder/blob/33a2f3dc556a9e49e06e6f19e0ae737d82d402db/testdata/project-v4/cmd/main.go#L78-L89
+	var tlsOpts []func(*tls.Config)
+	disableHTTP2 := func(c *tls.Config) {
+		setupLog.Info("disabling http/2")
+		c.NextProtos = []string{"http/1.1"}
+	}
+	tlsOpts = append(tlsOpts, disableHTTP2)
+
 	webhookServer := webhook.NewServer(webhook.Options{
 		Port:    9443,
 		CertDir: certDir,
+		TLSOpts: tlsOpts,
 	})
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
-			CertDir:     certDir,
+			BindAddress:    metricsAddr,
+			CertDir:        certDir,
+			FilterProvider: filters.WithAuthenticationAndAuthorization,
+			SecureServing:  true,
 		},
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       leaderId,
+		Cache:                  cacheOpts,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -158,9 +188,10 @@ func RunOperator(mgr ctrl.Manager) {
 	clientset := kubernetes.NewForConfigOrDie(config)
 	gvk, _ := apiutil.GVKForObject(&multiarchv1beta1.ClusterPodPlacementConfig{}, mgr.GetScheme())
 	must((&operator.ClusterPodPlacementConfigReconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		ClientSet: clientset,
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		ClientSet:     clientset,
+		DynamicClient: dynamic.NewForConfigOrDie(config),
 		Recorder: events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, &corev1.ObjectReference{
 			Kind:       gvk.Kind,
 			Name:       common.SingletonResourceObjectName,
@@ -201,19 +232,18 @@ func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
 		}
 		ants.Release()
 	})
-	handler := &podplacement.PodSchedulingGateMutatingWebHook{
-		Client:     mgr.GetClient(),
-		ClientSet:  clientset,
-		Scheme:     mgr.GetScheme(),
-		Recorder:   mgr.GetEventRecorderFor(utils.OperatorName),
-		WorkerPool: pool,
-	}
+	handler := podplacement.NewPodSchedulingGateMutatingWebHook(mgr.GetClient(), clientset, mgr.GetScheme(),
+		mgr.GetEventRecorderFor(utils.OperatorName), pool)
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: handler})
 }
 
 func validateFlags() error {
 	if !enableOperator && !enableClusterPodPlacementConfigOperandControllers && !enableClusterPodPlacementConfigOperandWebHook {
 		return errors.New("at least one of the following flags must be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook")
+	}
+	// no more than one of the flags can be set
+	if btoi(enableOperator)+btoi(enableClusterPodPlacementConfigOperandControllers)+btoi(enableClusterPodPlacementConfigOperandWebHook) > 1 {
+		return errors.New("only one of the following flags can be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook")
 	}
 	return nil
 }
@@ -251,4 +281,11 @@ func must(err error, msg string, keysAndValues ...interface{}) {
 		setupLog.Error(err, msg, keysAndValues...)
 		os.Exit(1)
 	}
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

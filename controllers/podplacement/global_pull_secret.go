@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 
@@ -54,7 +55,7 @@ func (s *GlobalPullSecretSyncer) Start(ctx context.Context) (err error) {
 	s.log.Info("Starting System Config Syncer")
 	clientSet := s.clientSet
 	// Watch the Secret that contains the global pull secret and Sync the inspector
-	globalPullSecretInformer := clientv1.NewSecretInformer(clientSet, s.namespace, 0, cache.Indexers{})
+	globalPullSecretInformer := clientv1.NewSecretInformer(clientSet, s.namespace, time.Hour, cache.Indexers{})
 
 	_, err = globalPullSecretInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
@@ -93,6 +94,19 @@ func (s *GlobalPullSecretSyncer) onAddOrUpdate(obj interface{}) {
 
 func (s *GlobalPullSecretSyncer) onUpdate() func(oldobj, newobj interface{}) {
 	return func(oldobj, newobj interface{}) {
+		oldSecret, ok := oldobj.(*corev1.Secret)
+		if !ok {
+			s.log.Error(errors.New("undexpected type, expected v1.Secret"), "unexpected type", "type", fmt.Sprintf("%T", oldobj))
+			return
+		}
+		newSecret, ok := newobj.(*corev1.Secret)
+		if !ok {
+			s.log.Error(errors.New("undexpected type, expected v1.Secret"), "unexpected type", "type", fmt.Sprintf("%T", newobj))
+			return
+		}
+		if oldSecret.ResourceVersion == newSecret.ResourceVersion {
+			return
+		}
 		s.onAddOrUpdate(newobj)
 	}
 }

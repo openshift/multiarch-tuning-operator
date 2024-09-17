@@ -10,7 +10,10 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -21,6 +24,8 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcehelper"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
+
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 )
 
 var resourceCache resourceapply.ResourceCache
@@ -28,6 +33,21 @@ var resourceCache resourceapply.ResourceCache
 // DeleterInterface abstracts the Delete method of a typed and namespaced client got from a clientset
 type DeleterInterface interface {
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
+}
+
+// Wrapper struct that holds the dynamic client for the specific resource
+type dynamicDeleter struct {
+	dynamicClient dynamic.ResourceInterface
+}
+
+// Delete implements the DeleterInterface's Delete method for the dynamicDeleter struct
+func (d *dynamicDeleter) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
+	// Call the dynamic client's Delete method and ignore the subresources variadic parameter
+	return d.dynamicClient.Delete(ctx, name, opts)
+}
+
+func NewDynamicDeleter(dynamicClient dynamic.ResourceInterface) DeleterInterface {
+	return &dynamicDeleter{dynamicClient: dynamicClient}
 }
 
 type ToDeleteRef struct {
@@ -42,7 +62,7 @@ func init() {
 // ApplyResource applies the given object to the cluster. It returns the object as it is in the cluster, a boolean
 // indicating if the object was created or updated and an error if any.
 // TODO[integration-tests]: integration tests for this function in a suite dedicated to this package
-func ApplyResource(ctx context.Context, clientSet *kubernetes.Clientset, recorder events.Recorder,
+func ApplyResource(ctx context.Context, clientSet *kubernetes.Clientset, client *dynamic.DynamicClient, recorder events.Recorder,
 	obj client.Object) (client.Object, bool, error) {
 	switch t := obj.(type) {
 	case *appsv1.Deployment:
@@ -62,6 +82,14 @@ func ApplyResource(ctx context.Context, clientSet *kubernetes.Clientset, recorde
 		return resourceapply.ApplyClusterRole(ctx, clientSet.RbacV1(), recorder, t)
 	case *rbacv1.ClusterRoleBinding:
 		return resourceapply.ApplyClusterRoleBinding(ctx, clientSet.RbacV1(), recorder, t)
+	case *monitoringv1.ServiceMonitor:
+		objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(t)
+		if err != nil {
+			return nil, false, err
+		}
+		return resourceapply.ApplyServiceMonitor(ctx, client, recorder, &unstructured.Unstructured{
+			Object: objMap,
+		})
 	default:
 		return nil, false, fmt.Errorf("unhandled type %T", obj)
 	}
@@ -69,13 +97,13 @@ func ApplyResource(ctx context.Context, clientSet *kubernetes.Clientset, recorde
 
 // ApplyResources applies the given objects to the cluster. It returns an error if any.
 // TODO[integration-tests]: integration tests for this function in a suite dedicated to this package
-func ApplyResources(ctx context.Context, clientSet *kubernetes.Clientset, recorder events.Recorder,
+func ApplyResources(ctx context.Context, clientSet *kubernetes.Clientset, client *dynamic.DynamicClient, recorder events.Recorder,
 	objs []client.Object) error {
 	log := ctrllog.FromContext(ctx)
 	var errs []error
 	for _, obj := range objs {
 		log.Info("Applying object", "name", obj.GetName(), "type", fmt.Sprintf("%T", obj))
-		_, _, err := ApplyResource(ctx, clientSet, recorder, obj)
+		_, _, err := ApplyResource(ctx, clientSet, client, recorder, obj)
 		if err != nil {
 			errs = append(errs, err)
 		}

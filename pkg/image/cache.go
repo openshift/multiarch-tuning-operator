@@ -38,10 +38,10 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 		return nil, err
 	}
 
-	log := ctrllog.FromContext(ctx, "cacheProxy")
+	log := ctrllog.FromContext(ctx).WithValues("imageReference", imageReference)
 
 	if architectures, ok := c.imageRefsArchitectureMap[computeFNV128Hash(imageReference, authJson)]; ok {
-		log.V(3).Info("Cache hit", "imageReference", imageReference)
+		log.V(3).Info("Cache hit")
 		return architectures, nil
 	}
 	architectures, err := c.registryInspector.GetCompatibleArchitecturesSet(ctx, imageReference, secrets)
@@ -49,7 +49,7 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 		return nil, err
 	}
 
-	log.V(3).Info("Cache miss...adding to cache", "imageReference", imageReference)
+	log.V(3).Info("Cache miss...adding to cache")
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.imageRefsArchitectureMap[computeFNV128Hash(imageReference, authJson)] = architectures

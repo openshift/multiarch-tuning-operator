@@ -3,6 +3,8 @@ package podplacement
 import (
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -79,7 +81,109 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 			})
 		})
 	})
-
+	When("Reconciling a pod", func() {
+		Context("with cache enabled and an image that changes after the first time it is used", func() {
+			It("does not query the remote registry until the cache expires", func() {
+				imageName := registry.ComputeNameByMediaType(imgspecv1.MediaTypeImageIndex, "custom-image-that-will-change-supported-architectures")
+				By("Pushing a custom image to the registry")
+				supportedArchitectures := sets.New[string](utils.ArchitectureArm64, utils.ArchitectureAmd64)
+				err := registry.PushMockImage(ctx,
+					&registry.MockImage{
+						Architectures: supportedArchitectures,
+						Repository:    registry.PublicRepo,
+						Name:          imageName,
+						MediaType:     imgspecv1.MediaTypeImageIndex,
+						Tag:           "latest",
+					})
+				Expect(err).NotTo(HaveOccurred(), "failed push custom image to registry, err")
+				By("Creating a pod with the custom image [the cache will be populated with info about that image and its supported architectures]")
+				pod := NewPod().
+					WithContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
+						registry.PublicRepo, imageName)).
+					WithGenerateName("test-pod-").
+					WithNamespace("test-namespace").
+					Build()
+				err = k8sClient.Create(ctx, &pod)
+				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
+				By("Waiting for the pod to be mutated and the scheduling gate to be removed")
+				Eventually(func(g Gomega) {
+					// Get pod from the API server
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
+					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
+					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
+						Name: utils.SchedulingGateName,
+					}), "scheduling gate not removed")
+					g.Expect(pod.Labels).To(HaveKeyWithValue(utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved),
+						"scheduling gate annotation not found")
+				}).Should(Succeed(), "failed to remove scheduling gate from pod")
+				By("Checking that the pod has the correct node affinity")
+				Expect(pod).To(HaveEquivalentNodeAffinity(
+					&corev1.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+							NodeSelectorTerms: []corev1.NodeSelectorTerm{
+								{
+									MatchExpressions: []corev1.NodeSelectorRequirement{
+										{
+											Key:      utils.ArchLabel,
+											Operator: corev1.NodeSelectorOpIn,
+											Values:   sets.List(supportedArchitectures),
+										},
+									},
+								},
+							},
+						},
+					}), "unexpected node affinity")
+				By("Replace the image with a new one having a different set of supported architectures [the cache will not be invalidated]")
+				supportedArchitectures = sets.New[string](utils.ArchitectureArm64, utils.ArchitectureAmd64, utils.ArchitecturePpc64le)
+				err = registry.PushMockImage(ctx,
+					&registry.MockImage{
+						Repository:    registry.PublicRepo,
+						Name:          imageName,
+						Architectures: supportedArchitectures,
+						MediaType:     imgspecv1.MediaTypeImageIndex,
+						Tag:           "latest",
+					})
+				Expect(err).NotTo(HaveOccurred(), "failed push custom image to registry, err")
+				By("Creating a new pod with the custom image [the cache will be used to set the node affinity]")
+				pod = NewPod().
+					WithContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
+						registry.PublicRepo, imageName)).
+					WithGenerateName("test-pod-").
+					WithNamespace("test-namespace").
+					Build()
+				err = k8sClient.Create(ctx, &pod)
+				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
+				By("Waiting for the pod to be mutated and the scheduling gate to be removed")
+				Eventually(func(g Gomega) {
+					// Get pod from the API server
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
+					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
+					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
+						Name: utils.SchedulingGateName,
+					}), "scheduling gate not removed")
+					g.Expect(pod.Labels).To(HaveKeyWithValue(utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved),
+						"scheduling gate annotation not found")
+				}).Should(Succeed(), "failed to remove scheduling gate from pod")
+				By("Checking that the pod has the wrong, cached, node affinity [this proves we are not querying the remote registry]")
+				Expect(pod).To(HaveEquivalentNodeAffinity(
+					&corev1.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+							NodeSelectorTerms: []corev1.NodeSelectorTerm{
+								{
+									MatchExpressions: []corev1.NodeSelectorRequirement{
+										{
+											Key:      utils.ArchLabel,
+											Operator: corev1.NodeSelectorOpIn,
+											Values:   []string{utils.ArchitectureArm64, utils.ArchitectureAmd64},
+										},
+									},
+								},
+							},
+						},
+					}), "unexpected node affinity")
+			})
+		})
+	})
 	When("Handling Multi-container Pods", func() {
 		Context("with different image types and different auth credentials sources", func() {
 			It("handles node affinity as the intersection of the compatible architectures of each multi-arch image", func() {

@@ -211,3 +211,7 @@ func (i *MockImage) pushImage(ctx context.Context, authFile string) (length int6
 	}
 	return length, manifestDigest, nil
 }
+
+func (i *MockImage) Equals(other *MockImage) bool {
+	return i.GetUrl() == other.GetUrl()
+}

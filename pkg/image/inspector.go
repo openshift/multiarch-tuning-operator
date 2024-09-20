@@ -119,7 +119,7 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 		var e *signature.PolicyRequirementError
 		if errors.As(err, &e) {
 			// false and valid error
-			log.V(5).Info("The signature policy JSON file configuration does not allow inspecting this image",
+			log.V(3).Info("The signature policy JSON file configuration does not allow inspecting this image",
 				"validationError", e)
 			return nil, e
 		}
@@ -160,7 +160,7 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 		return nil, err
 	}
 	if _, ok := config.Config.Labels[operatorSDKBuilderBundleAnnotation]; ok {
-		log.V(5).Info("The image is an operator bundle image")
+		log.V(3).Info("The image is an operator bundle image")
 		// Operator bundle images are not tied to a specific architecture, so we should not set any constraints
 		// based on the architecture they report.
 		// We return the full set of supported architectures so that the intersection with the node architecture set
@@ -170,7 +170,7 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	}
 
 	if !manifest.MIMETypeIsMultiImage(manifest.GuessMIMEType(rawManifest)) {
-		log.V(5).Info("The image is not a manifest list... getting the supported architecture")
+		log.V(3).Info("The image is not a manifest list... getting the supported architecture")
 		return sets.New[string](config.Architecture), nil
 	}
 	return supportedArchitectures, nil

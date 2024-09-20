@@ -82,7 +82,7 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	pod.ensureLabel(utils.SchedulingGateLabel, utils.LabelValueNotSet)
 
 	if pod.shouldIgnorePod() {
-		log.V(5).Info("Ignoring the pod")
+		log.V(3).Info("Ignoring the pod")
 		return a.patchedPodResponse(&pod.Pod, req)
 	}
 
@@ -95,11 +95,11 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	// we don't care about this goroutine, it's informational,
 	// we know it will finish eventually by design, and we don't need to block the response as we
 	// are right in the admission pipeline, before the pod is persisted.
-	log.V(5).Info("Scheduling gate added to the pod, launching the event creation goroutine")
+	log.V(3).Info("Scheduling gate added to the pod, launching the event creation goroutine")
 	a.delayedSchedulingGatedEvent(ctx, pod.DeepCopy())
 	metrics.GatedPods.Inc()
 	metrics.GatedPodsGauge.Inc()
-	log.V(4).Info("Accepting pod")
+	log.V(2).Info("Accepting pod")
 	return a.patchedPodResponse(&pod.Pod, req)
 }
 
@@ -121,22 +121,22 @@ func (a *PodSchedulingGateMutatingWebHook) delayedSchedulingGatedEvent(ctx conte
 		}, func() (bool, error) {
 			createdPod, err := a.clientSet.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
 			if err == nil {
-				log.V(4).Info("Pod was found", "namespace", pod.Namespace, "name", pod.Name)
+				log.V(2).Info("Pod was found", "namespace", pod.Namespace, "name", pod.Name)
 				a.recorder.Event(createdPod, corev1.EventTypeNormal, ArchitectureAwareSchedulingGateAdded, SchedulingGateAddedMsg)
 				// Pod was found, return true to stop retrying
 				return true, nil
 			}
 			if apierrors.IsNotFound(err) {
-				log.V(5).Info("Pod not found yet", "namespace", pod.Namespace, "name", pod.Name)
+				log.V(3).Info("Pod not found yet", "namespace", pod.Namespace, "name", pod.Name)
 				// Pod not found yet, continue retrying
 				return false, nil
 			}
 			// Stop retrying
-			log.V(5).Info("Failed to get pod", "error", err)
+			log.V(3).Info("Failed to get pod", "error", err)
 			return false, err
 		})
 		if err != nil {
-			log.V(4).Info("Failed to get a scheduling gated Pod after retries",
+			log.V(2).Info("Failed to get a scheduling gated Pod after retries",
 				"error", err)
 		}
 	})

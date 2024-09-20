@@ -102,7 +102,7 @@ const (
 // the user.
 func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
-	log.V(3).Info("+++++++++++++++++++ Reconciling ClusterPodPlacementConfig +++++++++++++++++++")
+	log.V(1).Info("+++++++++++++++++++ Reconciling ClusterPodPlacementConfig +++++++++++++++++++")
 	// Lookup the ClusterPodPlacementConfig instance for this reconcile request
 	clusterPodPlacementConfig := &multiarchv1beta1.ClusterPodPlacementConfig{}
 	var err error
@@ -113,7 +113,7 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 		log.Error(err, "Unable to fetch ClusterPodPlacementConfig")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	log.V(3).Info("ClusterPodPlacementConfig fetched...", "name", clusterPodPlacementConfig.Name)
+	log.V(1).Info("ClusterPodPlacementConfig fetched...", "name", clusterPodPlacementConfig.Name)
 	err = r.dependentsStatusToClusterPodPlacementConfig(ctx, clusterPodPlacementConfig)
 	if err != nil {
 		log.Error(err, "Unable to retrieve the status of the PodPlacementConfig dependencies")
@@ -121,7 +121,7 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 	}
 	switch {
 	case !clusterPodPlacementConfig.DeletionTimestamp.IsZero() && !controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.PodPlacementFinalizerName):
-		log.V(4).Info("the ClusterPodPlacementConfig object is being deleted, and the finalizer has already been removed successfully.")
+		log.V(2).Info("the ClusterPodPlacementConfig object is being deleted, and the finalizer has already been removed successfully.")
 		return ctrl.Result{}, nil
 	case !clusterPodPlacementConfig.DeletionTimestamp.IsZero():
 		// Only execute deletion if the object is being deleted and the finalizer is present
@@ -135,7 +135,7 @@ func (r *ClusterPodPlacementConfigReconciler) ensureNamespaceLabels(ctx context.
 	// https://kubernetes.io/docs/concepts/security/pod-security-admission/
 	// https://kubernetes.io/docs/tasks/configure-pod-container/enforce-standards-namespace-labels/
 	log := ctrllog.FromContext(ctx)
-	log.V(3).Info("Ensuring namespace labels", "namespace", utils.Namespace())
+	log.V(1).Info("Ensuring namespace labels", "namespace", utils.Namespace())
 
 	ns, err := r.ClientSet.CoreV1().Namespaces().Get(ctx, utils.Namespace(), metav1.GetOptions{})
 	if err != nil {
@@ -153,7 +153,7 @@ func (r *ClusterPodPlacementConfigReconciler) ensureNamespaceLabels(ctx context.
 	ns.Labels["pod-security.kubernetes.io/warn-version"] = "v1.29"
 	// See https://github.com/openshift/enhancements/blob/c5b9aea25e/enhancements/workload-partitioning/management-workload-partitioning.md
 	ns.Labels["workload.openshift.io/allowed"] = "management"
-	log.V(4).Info("Updating the namespace labels", "labels", ns.Labels)
+	log.V(2).Info("Updating the namespace labels", "labels", ns.Labels)
 	_, err = r.ClientSet.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
 	return err
 }
@@ -262,7 +262,7 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 		found := false
 		for _, pod := range pods.Items {
 			for _, sg := range pod.Spec.SchedulingGates {
-				log.V(4).Info("Pod has scheduling gate", "pod", pod.Name, "gate", sg.Name)
+				log.V(2).Info("Pod has scheduling gate", "pod", pod.Name, "gate", sg.Name)
 				if sg.Name == utils.SchedulingGateName {
 					log.Info("Found pod with the pod placement scheduling gate", "pod", pod.Name)
 					found = true
@@ -287,7 +287,7 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 		return err
 	}
 	if err == nil && controllerutil.RemoveFinalizer(ppcDeployment, utils.PodPlacementFinalizerName) {
-		log.V(4).Info("Updating the deployment")
+		log.V(2).Info("Updating the deployment")
 		if err = r.Update(ctx, ppcDeployment); err != nil {
 			log.Error(err, "Unable to remove the finalizer")
 			return err
@@ -418,11 +418,11 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 
 	// If the servicemonitors.monitoring.coreos.com CRD is available, we create the ServiceMonitor objects
 	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
-		log.V(3).Info("Creating ServiceMonitors")
+		log.V(1).Info("Creating ServiceMonitors")
 		objects = append(objects, buildServiceMonitor(utils.PodPlacementControllerName))
 		objects = append(objects, buildServiceMonitor(utils.PodPlacementWebhookName))
 	} else {
-		log.V(3).Info("servicemonitoring.monitoring.coreos.com is not available. Skipping the creation of the ServiceMonitors")
+		log.V(1).Info("servicemonitoring.monitoring.coreos.com is not available. Skipping the creation of the ServiceMonitors")
 	}
 	errs := make([]error, 0)
 	for _, o := range objects {
@@ -459,7 +459,7 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 func (r *ClusterPodPlacementConfigReconciler) updateStatus(ctx context.Context, config *multiarchv1beta1.ClusterPodPlacementConfig) error {
 	log := ctrllog.FromContext(ctx).WithValues("ClusterPodPlacementConfig", config.Name,
 		"function", "updateStatus")
-	log.V(4).Info("----------------- ClusterPodPlacementConfig status report ------------------",
+	log.V(2).Info("----------------- ClusterPodPlacementConfig status report ------------------",
 		"ready", config.Status.IsReady(),
 		"progressing", config.Status.IsProgressing(),
 		"degraded", config.Status.IsDegraded(),

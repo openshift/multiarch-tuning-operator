@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euxo pipefail
 
+mkdir -p /tmp/bin
+export PATH=/tmp/bin:${PATH}
 if ! which kubectl >/dev/null; then
-  mkdir -p /tmp/bin
-  export PATH=/tmp/bin:${PATH}
   ln -s "$(which oc)" "/tmp/bin/kubectl"
 fi
 

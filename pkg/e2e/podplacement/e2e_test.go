@@ -98,6 +98,8 @@ var _ = AfterSuite(func() {
 	Eventually(framework.ValidateDeletion(client, ctx)).Should(Succeed())
 	By("Clean up registry config test data")
 	deleteRegistryConfigTestData()
+	By("Wait for machineconfig finishing updating")
+	framework.WaitForMCPComplete(ctx, client)
 })
 
 // updateGlobalPullSecret patches the global pull secret to onboard the

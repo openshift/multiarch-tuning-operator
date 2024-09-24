@@ -194,21 +194,21 @@ func (pod *Pod) imagesNamesSet() sets.Set[string] {
 func (pod *Pod) intersectImagesArchitecture(pullSecretDataList [][]byte) (supportedArchitectures []string, err error) {
 	log := ctrllog.FromContext(pod.ctx)
 	imageNamesSet := pod.imagesNamesSet()
-	log.V(3).Info("Images list for pod", "imageNamesSet", fmt.Sprintf("%+v", imageNamesSet))
+	log.V(1).Info("Images list for pod", "imageNamesSet", fmt.Sprintf("%+v", imageNamesSet))
 	// https://github.com/containers/skopeo/blob/v1.11.1/cmd/skopeo/inspect.go#L72
 	// Iterate over the images, get their architectures and intersect (as in set intersection) them each other
 	var supportedArchitecturesSet sets.Set[string]
 	nowExternal := time.Now()
 	defer metrics.HistogramObserve(nowExternal, metrics.TimeToInspectPodImages)
 	for imageName := range imageNamesSet {
-		log.V(5).Info("Checking image", "imageName", imageName)
+		log.V(3).Info("Checking image", "imageName", imageName)
 		// We are collecting the time to inspect the image here to avoid implementing a metric in each of the
 		// cache implementations.
 		now := time.Now()
 		currentImageSupportedArchitectures, err := imageInspectionCache.GetCompatibleArchitecturesSet(pod.ctx, imageName, pullSecretDataList)
 		metrics.HistogramObserve(now, metrics.TimeToInspectImage)
 		if err != nil {
-			log.V(3).Error(err, "Error inspecting the image", "imageName", imageName)
+			log.V(1).Error(err, "Error inspecting the image", "imageName", imageName)
 			return nil, err
 		}
 		if supportedArchitecturesSet == nil {
@@ -345,7 +345,7 @@ func (pod *Pod) isNodeSelectorConfiguredForArchitecture() bool {
 
 func (pod *Pod) publishIgnorePod() {
 	log := ctrllog.FromContext(pod.ctx)
-	log.V(3).Info("The pod has the nodeSelector or all the nodeAffinityTerms set for the kubernetes.io/arch label. Ignoring the pod...")
+	log.V(1).Info("The pod has the nodeSelector or all the nodeAffinityTerms set for the kubernetes.io/arch label. Ignoring the pod...")
 	pod.ensureLabel(utils.NodeAffinityLabel, utils.LabelValueNotSet)
 	pod.publishEvent(corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicatesConflictMsg)
 }

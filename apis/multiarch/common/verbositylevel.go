@@ -13,10 +13,10 @@ const (
 
 func (verbosity LogVerbosityLevel) ToZapLevelInt() int {
 	logVerbosityToZapLevelMap := map[LogVerbosityLevel]int{
-		LogVerbosityLevelNormal:   3,
-		LogVerbosityLevelDebug:    4,
-		LogVerbosityLevelTrace:    5,
-		LogVerbosityLevelTraceAll: 6,
+		LogVerbosityLevelNormal:   0,
+		LogVerbosityLevelDebug:    1,
+		LogVerbosityLevelTrace:    2,
+		LogVerbosityLevelTraceAll: 3,
 	}
 
 	if level, ok := logVerbosityToZapLevelMap[verbosity]; ok {

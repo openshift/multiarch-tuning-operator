@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"flag"
@@ -145,6 +146,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       leaderId,
 		Cache:                  cacheOpts,
+		Logger:                 ctrllog.FromContext(context.Background()).WithName("manager"),
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -268,11 +270,11 @@ func bindFlags() {
 	// and the log level will be set in the ClusterPodPlacementConfig at runtime (with no need for reconciliation)
 	flag.IntVar(&initialLogLevel, "initial-log-level", common.LogVerbosityLevelNormal.ToZapLevelInt(), "Initial log level. Converted to zap")
 	klog.InitFlags(nil)
-	_ = flag.Set("alsologtostderr", "true")
 	flag.Parse()
 	// Set the Log Level as AtomicLevel to allow runtime changes
 	utils.AtomicLevel = zapuber.NewAtomicLevelAt(zapcore.Level(-initialLogLevel))
 	zapLogger := zap.New(zap.Level(utils.AtomicLevel), zap.UseDevMode(false))
+	klog.SetLogger(zapLogger)
 	ctrllog.SetLogger(zapLogger)
 }
 

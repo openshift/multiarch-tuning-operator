@@ -74,13 +74,13 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	if err := r.Get(ctx, req.NamespacedName, &pod.Pod); err != nil {
-		log.V(4).Info("Unable to fetch pod", "error", err)
+		log.V(2).Info("Unable to fetch pod", "error", err)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// verify whether the pod has the scheduling gate
 	if !pod.HasSchedulingGate() {
-		log.V(4).Info("Pod does not have the scheduling gate. Ignoring...")
+		log.V(2).Info("Pod does not have the scheduling gate. Ignoring...")
 		// if not, return
 		return ctrl.Result{}, nil
 	}
@@ -88,7 +88,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// The scheduling gate is found.
 	metrics.ProcessedPodsCtrl.Inc()
 	defer metrics.HistogramObserve(now, metrics.TimeToProcessGatedPod)
-	log.V(3).Info("Processing pod")
+	log.V(1).Info("Processing pod")
 
 	if !pod.shouldIgnorePod() {
 		// Prepare the requirement for the node affinity.
@@ -101,7 +101,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			pod.SetNodeAffinityArchRequirement(psdl)
 		}
 	} else {
-		log.V(5).Info("A pod with the scheduling gate should be ignored. Ignoring...")
+		log.V(3).Info("A pod with the scheduling gate should be ignored. Ignoring...")
 		// We can reach this branch when:
 		// - The pod has been gated but not processed before the operator changed configuration such that the pod should be ignored.
 		// - The pod has got some other changes in the admission chain from another webhook that makes it not suitable for processing anymore
@@ -110,7 +110,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		r.Recorder.Event(&pod.Pod, corev1.EventTypeWarning, ArchitectureAwareGatedPodIgnored, ArchitectureAwareGatedPodIgnoredMsg)
 	}
 	// Remove the scheduling gate
-	log.V(3).Info("Removing the scheduling gate from pod.")
+	log.V(1).Info("Removing the scheduling gate from pod.")
 	pod.RemoveSchedulingGate()
 
 	err := r.Client.Update(ctx, &pod.Pod)

@@ -20,16 +20,17 @@ import (
 	"context"
 	"encoding/hex"
 	"hash/fnv"
-	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
-	"sync"
+	"time"
 
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type cacheProxy struct {
-	registryInspector        IRegistryInspector
-	imageRefsArchitectureMap map[string]sets.Set[string]
-	mutex                    sync.Mutex
+	registryInspector IRegistryInspector
+	imageRefsCache    *expirable.LRU[string, sets.Set[string]] // LRU cache with expirable keys
 }
 
 func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (sets.Set[string], error) {
@@ -40,7 +41,7 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 
 	log := ctrllog.FromContext(ctx).WithValues("imageReference", imageReference)
 
-	if architectures, ok := c.imageRefsArchitectureMap[computeFNV128Hash(imageReference, authJson)]; ok {
+	if architectures, ok := c.imageRefsCache.Get(computeFNV128Hash(imageReference, authJson)); ok {
 		log.V(3).Info("Cache hit")
 		return architectures, nil
 	}
@@ -50,9 +51,7 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 	}
 
 	log.V(3).Info("Cache miss...adding to cache")
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.imageRefsArchitectureMap[computeFNV128Hash(imageReference, authJson)] = architectures
+	c.imageRefsCache.Add(computeFNV128Hash(imageReference, authJson), architectures)
 	return architectures, nil
 }
 
@@ -62,8 +61,8 @@ func (c *cacheProxy) GetRegistryInspector() IRegistryInspector {
 
 func newCacheProxy() *cacheProxy {
 	return &cacheProxy{
-		imageRefsArchitectureMap: map[string]sets.Set[string]{},
-		registryInspector:        newRegistryInspector(),
+		registryInspector: newRegistryInspector(),
+		imageRefsCache:    expirable.NewLRU[string, sets.Set[string]](256, nil, time.Hour*6),
 	}
 }
 
@@ -74,5 +73,3 @@ func computeFNV128Hash(imageReference string, secrets []byte) string {
 
 	return hex.EncodeToString(hash.Sum(nil))
 }
-
-// TODO: eviction policy

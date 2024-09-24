@@ -3,6 +3,8 @@ package metrics
 import (
 	"sync"
 
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
+
 	metrics2 "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,28 +31,28 @@ func initPodPlacementControllerMetrics() {
 		prometheus.HistogramOpts{
 			Name:    "mto_ppo_ctrl_time_to_process_pod_seconds",
 			Help:    "Time taken to process any pod",
-			Buckets: buckets(),
+			Buckets: utils.Buckets(),
 		},
 	)
 	TimeToProcessGatedPod = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "mto_ppo_ctrl_time_to_process_gated_pod_seconds",
 			Help:    "Time taken to process a pod that is gated (includes inspection)",
-			Buckets: buckets(),
+			Buckets: utils.Buckets(),
 		},
 	)
 	TimeToInspectImage = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "mto_ppo_ctrl_time_to_inspect_image_seconds",
 			Help:    "Time taken to inspect an image",
-			Buckets: buckets(),
+			Buckets: utils.Buckets(),
 		},
 	)
 	TimeToInspectPodImages = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "mto_ppo_ctrl_time_to_inspect_pod_images_seconds",
 			Help:    "The time taken to inspect all the images in a pod (all containers)",
-			Buckets: buckets(),
+			Buckets: utils.Buckets(),
 		},
 	)
 	ProcessedPodsCtrl = prometheus.NewCounter(

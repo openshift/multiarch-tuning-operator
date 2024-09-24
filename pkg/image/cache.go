@@ -22,10 +22,13 @@ import (
 	"hash/fnv"
 	"time"
 
-	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"github.com/openshift/multiarch-tuning-operator/pkg/image/metrics"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type cacheProxy struct {
@@ -34,6 +37,9 @@ type cacheProxy struct {
 }
 
 func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (sets.Set[string], error) {
+	metrics.InitCommonMetrics()
+	metrics.InspectionGauge.Set(float64(c.imageRefsCache.Len()))
+	now := time.Now()
 	authJson, err := marshaledImagePullSecrets(secrets)
 	if err != nil {
 		return nil, err
@@ -43,6 +49,7 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 
 	if architectures, ok := c.imageRefsCache.Get(computeFNV128Hash(imageReference, authJson)); ok {
 		log.V(3).Info("Cache hit")
+		defer utils.HistogramObserve(now, metrics.TimeToInspectImageGivenHit)
 		return architectures, nil
 	}
 	architectures, err := c.registryInspector.GetCompatibleArchitecturesSet(ctx, imageReference, secrets)
@@ -52,6 +59,7 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 
 	log.V(3).Info("Cache miss...adding to cache")
 	c.imageRefsCache.Add(computeFNV128Hash(imageReference, authJson), architectures)
+	defer utils.HistogramObserve(now, metrics.TimeToInspectImageGivenMiss)
 	return architectures, nil
 }
 

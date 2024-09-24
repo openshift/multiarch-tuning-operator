@@ -297,8 +297,9 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 										"ALL",
 									},
 								},
-								Privileged:   utils.NewPtr(false),
-								RunAsNonRoot: utils.NewPtr(true),
+								Privileged:             utils.NewPtr(false),
+								ReadOnlyRootFilesystem: utils.NewPtr(true),
+								RunAsNonRoot:           utils.NewPtr(true),
 								SeccompProfile: &corev1.SeccompProfile{
 									Type: corev1.SeccompProfileTypeRuntimeDefault,
 								},
@@ -324,6 +325,12 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 					},
 					PriorityClassName:  priorityClassName,
 					ServiceAccountName: serviceAccount,
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot: utils.NewPtr(true),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
 					TopologySpreadConstraints: []corev1.TopologySpreadConstraint{
 						{
 							MaxSkew:           1,

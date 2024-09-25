@@ -70,7 +70,7 @@ if [ "${CLEANUP:-false}" == "false" ]; then
 fi
 
 set +e
-operator-sdk cleanup multiarch-tuning-operator -n ${NAMESPACE}
-make undeploy
+[[ "$USE_OLM" == "true" ]] && operator-sdk cleanup multiarch-tuning-operator -n ${NAMESPACE}
+[[ "$USE_OLM" == "false" ]] && make undeploy
 oc delete --ignore-not-found --force namespace ${NAMESPACE}
 exit 0

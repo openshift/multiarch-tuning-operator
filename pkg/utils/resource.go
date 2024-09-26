@@ -90,6 +90,14 @@ func ApplyResource(ctx context.Context, clientSet *kubernetes.Clientset, client 
 		return resourceapply.ApplyServiceMonitor(ctx, client, recorder, &unstructured.Unstructured{
 			Object: objMap,
 		})
+	case *monitoringv1.PrometheusRule:
+		objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(t)
+		if err != nil {
+			return nil, false, err
+		}
+		return resourceapply.ApplyPrometheusRule(ctx, client, recorder, &unstructured.Unstructured{
+			Object: objMap,
+		})
 	default:
 		return nil, false, fmt.Errorf("unhandled type %T", obj)
 	}

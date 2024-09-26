@@ -96,6 +96,7 @@ const (
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings/finalizers,verbs=update
 
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;update;patch;create;delete
 
 // Reconcile reconciles the ClusterPodPlacementConfig object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
@@ -340,6 +341,9 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 		}, utils.ToDeleteRef{
 			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "servicemonitors"}).Namespace(utils.Namespace())),
 			ObjName:               utils.PodPlacementControllerName,
+		}, utils.ToDeleteRef{
+			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "prometheusrules"}).Namespace(utils.Namespace())),
+			ObjName:               utils.OperatorName,
 		})
 	}
 
@@ -419,8 +423,11 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 	// If the servicemonitors.monitoring.coreos.com CRD is available, we create the ServiceMonitor objects
 	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
 		log.V(1).Info("Creating ServiceMonitors")
-		objects = append(objects, buildServiceMonitor(utils.PodPlacementControllerName))
-		objects = append(objects, buildServiceMonitor(utils.PodPlacementWebhookName))
+		objects = append(objects,
+			buildServiceMonitor(utils.PodPlacementControllerName),
+			buildServiceMonitor(utils.PodPlacementWebhookName),
+			buildAvailabilityAlertRule(),
+		)
 	} else {
 		log.V(1).Info("servicemonitoring.monitoring.coreos.com is not available. Skipping the creation of the ServiceMonitors")
 	}
@@ -517,7 +524,7 @@ func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager)
 		Owns(&admissionv1.MutatingWebhookConfiguration{})
 	if utils.IsResourceAvailable(context.Background(), r.DynamicClient,
 		monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
-		c = c.Owns(&monitoringv1.ServiceMonitor{})
+		c = c.Owns(&monitoringv1.ServiceMonitor{}).Owns(&monitoringv1.PrometheusRule{})
 	}
 	return c.Complete(r)
 }

@@ -613,3 +613,56 @@ func buildServiceMonitor(name string) *monitoringv1.ServiceMonitor {
 		},
 	}
 }
+
+func buildAvailabilityAlertRule() *monitoringv1.PrometheusRule {
+	return &monitoringv1.PrometheusRule{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: monitoringv1.SchemeGroupVersion.String(),
+			Kind:       monitoringv1.PrometheusRuleKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.OperatorName,
+			Namespace: utils.Namespace(),
+		},
+		Spec: monitoringv1.PrometheusRuleSpec{
+			Groups: []monitoringv1.RuleGroup{
+				{
+					Name: "multiarch-tuning-operator.rules",
+					Rules: []monitoringv1.Rule{
+						{
+							Alert: "PodPlacementControllerDown",
+							Expr:  intstr.FromString(fmt.Sprintf("kube_deployment_status_replicas_available{namespace=\"%s\", deployment=\"%s\"} == 0", utils.Namespace(), utils.PodPlacementControllerName)),
+							For:   utils.NewPtr[monitoringv1.Duration]("1m"),
+							Annotations: map[string]string{
+								"summary": "The pod placement controller should have at least 1 replica running and ready.",
+								"description": "The pod placement controller has been down for more than 1 minute. " +
+									"If the controller is not running, no architecture constraints can be set. " +
+									"The multiarch.openshift.io/scheduling-gate scheduling gate will not be " +
+									"automatically removed from gated pods, and pods may stuck in the Pending state.",
+								"runbook_url": "https://github.com/openshift/multiarch-tuning-operator/blob/main/docs/alerts/pod-placement-controller-down.md",
+							},
+							Labels: map[string]string{
+								"severity": "critical",
+							},
+						},
+						{
+							Alert: "PodPlacementWebhookDown",
+							Expr:  intstr.FromString(fmt.Sprintf("kube_deployment_status_replicas_available{namespace=\"%s\", deployment=\"%s\"} == 0", utils.Namespace(), utils.PodPlacementWebhookName)),
+							For:   utils.NewPtr[monitoringv1.Duration]("5m"),
+							Annotations: map[string]string{
+								"summary": "The pod placement webhook should have at least 1 replica running and ready.",
+								"description": "The pod placement webhook has been down for more than 5 minutes. Pods will not be gated. " +
+									"Therefore, the architecture-specific constraints will not be enforced and pods may be scheduled on nodes " +
+									"that are not supported by their images.",
+								"runbook_url": "https://github.com/openshift/multiarch-tuning-operator/blob/main/docs/alerts/pod-placement-webhook-down.md",
+							},
+							Labels: map[string]string{
+								"severity": "warning",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}

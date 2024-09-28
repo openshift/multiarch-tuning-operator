@@ -18,39 +18,66 @@ package image
 
 import (
 	"context"
-	"sync"
+	"encoding/hex"
+	"hash/fnv"
+	"time"
 
+	"github.com/openshift/multiarch-tuning-operator/pkg/image/metrics"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-//nolint:unused
 type cacheProxy struct {
-	registryInspector        IRegistryInspector
-	imageRefsArchitectureMap map[string]sets.Set[string]
-	mutex                    sync.Mutex
+	registryInspector IRegistryInspector
+	imageRefsCache    *expirable.LRU[string, sets.Set[string]] // LRU cache with expirable keys
 }
 
-//nolint:unused
 func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (sets.Set[string], error) {
-	if c.imageRefsArchitectureMap[imageReference] != nil {
-		return c.imageRefsArchitectureMap[imageReference], nil
+	metrics.InitCommonMetrics()
+	metrics.InspectionGauge.Set(float64(c.imageRefsCache.Len()))
+	now := time.Now()
+	authJson, err := marshaledImagePullSecrets(secrets)
+	if err != nil {
+		return nil, err
+	}
+
+	log := ctrllog.FromContext(ctx).WithValues("imageReference", imageReference)
+
+	if architectures, ok := c.imageRefsCache.Get(computeFNV128Hash(imageReference, authJson)); ok {
+		log.V(3).Info("Cache hit")
+		defer utils.HistogramObserve(now, metrics.TimeToInspectImageGivenHit)
+		return architectures, nil
 	}
 	architectures, err := c.registryInspector.GetCompatibleArchitecturesSet(ctx, imageReference, secrets)
 	if err != nil {
 		return nil, err
 	}
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.imageRefsArchitectureMap[imageReference] = architectures
+
+	log.V(3).Info("Cache miss...adding to cache")
+	c.imageRefsCache.Add(computeFNV128Hash(imageReference, authJson), architectures)
+	defer utils.HistogramObserve(now, metrics.TimeToInspectImageGivenMiss)
 	return architectures, nil
 }
 
-//nolint:unused
-func newCacheProxy() ICache {
+func (c *cacheProxy) GetRegistryInspector() IRegistryInspector {
+	return c.registryInspector
+}
+
+func newCacheProxy() *cacheProxy {
 	return &cacheProxy{
-		imageRefsArchitectureMap: map[string]sets.Set[string]{},
-		registryInspector:        newRegistryInspector(),
+		registryInspector: newRegistryInspector(),
+		imageRefsCache:    expirable.NewLRU[string, sets.Set[string]](256, nil, time.Hour*6),
 	}
 }
 
-// TODO: eviction policy
+func computeFNV128Hash(imageReference string, secrets []byte) string {
+	hash := fnv.New128()
+	hash.Write([]byte(imageReference)) // Add the image reference
+	hash.Write(secrets)                // Add the secrets
+
+	return hex.EncodeToString(hash.Sum(nil))
+}

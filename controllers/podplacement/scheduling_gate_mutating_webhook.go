@@ -63,7 +63,7 @@ func (a *PodSchedulingGateMutatingWebHook) patchedPodResponse(pod *corev1.Pod, r
 
 func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admission.Request) admission.Response {
 	responseTimeStart := time.Now()
-	defer metrics.HistogramObserve(responseTimeStart, metrics.ResponseTime)
+	defer utils.HistogramObserve(responseTimeStart, metrics.ResponseTime)
 	metrics.ProcessedPodsWH.Inc()
 	if a.decoder == nil {
 		a.decoder = admission.NewDecoder(a.scheme)

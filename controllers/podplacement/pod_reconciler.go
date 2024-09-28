@@ -65,7 +65,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// Lazy initialization of the metrics to support concurrent reconciles
 	metrics.InitPodPlacementControllerMetrics()
 	now := time.Now()
-	defer metrics.HistogramObserve(now, metrics.TimeToProcessPod)
+	defer utils.HistogramObserve(now, metrics.TimeToProcessPod)
 	log := ctrllog.FromContext(ctx)
 
 	pod := &Pod{
@@ -87,7 +87,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	// The scheduling gate is found.
 	metrics.ProcessedPodsCtrl.Inc()
-	defer metrics.HistogramObserve(now, metrics.TimeToProcessGatedPod)
+	defer utils.HistogramObserve(now, metrics.TimeToProcessGatedPod)
 	log.V(1).Info("Processing pod")
 
 	if !pod.shouldIgnorePod() {

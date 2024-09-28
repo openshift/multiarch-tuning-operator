@@ -199,14 +199,14 @@ func (pod *Pod) intersectImagesArchitecture(pullSecretDataList [][]byte) (suppor
 	// Iterate over the images, get their architectures and intersect (as in set intersection) them each other
 	var supportedArchitecturesSet sets.Set[string]
 	nowExternal := time.Now()
-	defer metrics.HistogramObserve(nowExternal, metrics.TimeToInspectPodImages)
+	defer utils.HistogramObserve(nowExternal, metrics.TimeToInspectPodImages)
 	for imageName := range imageNamesSet {
 		log.V(3).Info("Checking image", "imageName", imageName)
 		// We are collecting the time to inspect the image here to avoid implementing a metric in each of the
 		// cache implementations.
 		now := time.Now()
 		currentImageSupportedArchitectures, err := imageInspectionCache.GetCompatibleArchitecturesSet(pod.ctx, imageName, pullSecretDataList)
-		metrics.HistogramObserve(now, metrics.TimeToInspectImage)
+		utils.HistogramObserve(now, metrics.TimeToInspectImage)
 		if err != nil {
 			log.V(1).Error(err, "Error inspecting the image", "imageName", imageName)
 			return nil, err

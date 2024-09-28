@@ -3,6 +3,8 @@ package metrics
 import (
 	"sync"
 
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
+
 	metrics2 "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -39,7 +41,7 @@ func initWebhookMetrics() {
 		prometheus.HistogramOpts{
 			Name:    "mto_ppo_wh_response_time_seconds",
 			Help:    "The response time of the webhook",
-			Buckets: buckets(),
+			Buckets: utils.Buckets(),
 		},
 	)
 	metrics2.Registry.MustRegister(ProcessedPodsWH, GatedPods, ResponseTime)

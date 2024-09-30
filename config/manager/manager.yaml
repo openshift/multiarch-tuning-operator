@@ -41,6 +41,7 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
+      automountServiceAccountToken: true
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

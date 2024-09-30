@@ -201,6 +201,7 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 					},
 				},
 				Spec: corev1.PodSpec{
+					AutomountServiceAccountToken: utils.NewPtr(true),
 					Affinity: &corev1.Affinity{
 						NodeAffinity: &corev1.NodeAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
@@ -467,6 +468,7 @@ func buildServiceAccount(name string) *corev1.ServiceAccount {
 				utils.ControllerNameKey: name,
 			},
 		},
+		AutomountServiceAccountToken: utils.NewPtr(false),
 	}
 }
 

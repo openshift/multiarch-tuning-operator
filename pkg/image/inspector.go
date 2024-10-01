@@ -180,8 +180,7 @@ func (i *registryInspector) createAuthFile(secrets ...[]byte) (*os.File, error) 
 	if err != nil {
 		return nil, err
 	}
-	// TODO: constant-name-for-now is a placeholder. Do we need this parameter at all?
-	fd, err := writeMemFile("constant-name-for-now", authJson)
+	fd, err := writeMemFile("mto_ppc_inspector", authJson)
 	if err != nil {
 		return nil, err
 	}
@@ -217,22 +216,31 @@ func marshaledImagePullSecrets(secrets [][]byte) ([]byte, error) {
 // dropped it is automatically released. It is up to the caller
 // to close the returned descriptor.
 func writeMemFile(name string, b []byte) (int, error) {
-	fd, err := unix.MemfdCreate(name, 0)
+	fd, err := unix.MemfdCreate(name, unix.MFD_CLOEXEC|unix.MFD_ALLOW_SEALING)
 	if err != nil {
-		return 0, fmt.Errorf("MemfdCreate: %v", err)
+		_ = unix.Close(fd)
+		return 0, fmt.Errorf("MemfdCreate: %w", err)
 	}
 	err = unix.Ftruncate(fd, int64(len(b)))
 	if err != nil {
-		return 0, fmt.Errorf("Ftruncate: %v", err)
+		_ = unix.Close(fd)
+		return 0, fmt.Errorf("ftruncate: %w", err)
 	}
-	data, err := unix.Mmap(fd, 0, len(b), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	data, err := unix.Mmap(fd, 0, len(b), unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
-		return 0, fmt.Errorf("Mmap: %v", err)
+		_ = unix.Close(fd)
+		return 0, fmt.Errorf("mmap: %w", err)
 	}
 	copy(data, b)
 	err = unix.Munmap(data)
 	if err != nil {
-		return 0, fmt.Errorf("Munmap: %v", err)
+		_ = unix.Close(fd)
+		return 0, fmt.Errorf("munmap: %w", err)
+	}
+	_, err = unix.FcntlInt(uintptr(fd), unix.F_ADD_SEALS, unix.F_SEAL_WRITE|unix.F_SEAL_GROW|unix.F_SEAL_SHRINK)
+	if err != nil {
+		_ = unix.Close(fd)
+		return 0, fmt.Errorf("fcntl (add seals): %w", err)
 	}
 	return fd, nil
 }

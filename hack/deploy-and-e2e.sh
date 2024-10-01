@@ -5,9 +5,10 @@ trap debug ERR
 function debug() {
   echo "An error occurred in the script at line: ${BASH_LINENO[0]}."
   set +e
+  oc image info --show-multiarch "${OO_BUNDLE}" |& tee "${ARTIFACT_DIR}/image-info.txt"
   for r in pods deployments events subscriptions clusterserviceversions clusterpodplacementconfigs; do
     oc get ${r} -n "${NAMESPACE}" -o yaml > "${ARTIFACT_DIR}/${r}.yaml"
-    oc describe ${r} -n "${NAMESPACE}" | tee "${ARTIFACT_DIR}/${r}.txt"
+    oc describe ${r} -n "${NAMESPACE}" |& tee "${ARTIFACT_DIR}/${r}.txt"
     oc get ${r} -n "${NAMESPACE}" -o wide
   done
   echo "Exiting script."

@@ -178,7 +178,7 @@ goimports: ## Goimports against code
 	$(DOCKER_CMD) hack/goimports.sh .
 
 .PHONY: gosec
-gosec: ## Goimports against code
+gosec: ## Run gosec.sh script to run gosec command for all the repository source code
 	$(DOCKER_CMD) hack/gosec.sh ./...
 
 .PHONY: verify-diff

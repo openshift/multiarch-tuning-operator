@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"os"
@@ -22,6 +23,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	ocpconfigv1 "github.com/openshift/api/config/v1"
 
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -61,8 +64,14 @@ func NewRegistry(ns *corev1.Namespace, name, certConfigmapName, registryProxyUrl
 }
 
 func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig) error {
-	var registryLabel = map[string]string{"app": r.Name}
+	var (
+		registryLabel = map[string]string{"app": r.Name}
+		httpProxy     = ""
+		httpsProxy    = ""
+		noProxy       = ""
+	)
 	// Create service
+	log.Printf("create service for %s registry", r.Name)
 	service := NewService().
 		WithName(r.Name).
 		WithNamespace(r.Namespace.Name).
@@ -80,6 +89,7 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 	}
 
 	// Create secret
+	log.Printf("create secret for %s registry", r.Name)
 	tlsKeyData, err := os.ReadFile(r.KeyPath)
 	if err != nil {
 		return err
@@ -100,7 +110,43 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 		return err
 	}
 
+	// Create configmap for ca bundles for cluster-wide proxy
+	log.Printf("create configmap for ca bundles if cluster-wide proxy exist")
+	config := v1.ConfigMap{}
+	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "registry-trusted-ca",
+			Namespace: r.Namespace.Name,
+		},
+	}), &config)
+	if err != nil {
+		if runtimeclient.IgnoreNotFound(err) == nil {
+			configmap := NewConfigMap().
+				WithLabels(map[string]string{"config.openshift.io/inject-trusted-cabundle": "true"}).
+				WithName("registry-trusted-ca").
+				WithNamespace(r.Namespace.Name).
+				Build()
+			err = client.Create(ctx, &configmap)
+			if err != nil {
+				return err
+			}
+			config = configmap
+		} else {
+			return err
+		}
+	}
+	proxy, err := getClusterProxy(ctx, client)
+	if err != nil {
+		return err
+	}
+	if proxy != nil {
+		httpProxy = proxy.Spec.HTTPProxy
+		httpsProxy = proxy.Spec.HTTPSProxy
+		noProxy = proxy.Spec.NoProxy
+	}
+
 	// Create deployment
+	log.Printf("create deployment for %s registry", r.Name)
 	registryD := NewDeployment().
 		WithSelectorAndPodLabels(registryLabel).
 		WithPodSpec(
@@ -109,19 +155,26 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 					NewContainer().
 						WithImage("quay.io/openshifttest/registry:1.2.0").
 						WithVolumeMounts(NewVolumeMount().WithName("registry-storage").WithMountPath("/var/lib/registry").Build(),
-							NewVolumeMount().WithName("registry-secret").WithMountPath("/etc/secrets").Build()).
+							NewVolumeMount().WithName("registry-secret").WithMountPath("/etc/secrets").Build(),
+							NewVolumeMount().WithName("trusted-ca").WithMountPath("/etc/pki/ca-trust/extracted/pem").WithReadOnly().Build()).
 						WithEnv(NewContainerEnv().WithName("REGISTRY_HTTP_ADDR").WithValue(":5001").Build(),
 							NewContainerEnv().WithName("REGISTRY_HTTP_TLS_CERTIFICATE").WithValue("/etc/secrets/tls.crt").Build(),
 							NewContainerEnv().WithName("REGISTRY_HTTP_TLS_KEY").WithValue("/etc/secrets/tls.key").Build(),
 							NewContainerEnv().WithName("REGISTRY_STORAGE_DELETE_ENABLED").WithValue("true").Build(),
 							NewContainerEnv().WithName("REGISTRY_PROXY_REMOTEURL").WithValue(r.RegistryProxyUrl).Build(),
 							NewContainerEnv().WithName("REGISTRY_PROXY_USERNAME").WithValue(r.RegistryProxyUser).Build(),
-							NewContainerEnv().WithName("REGISTRY_PROXY_PASSWORD").WithValue(r.RegistryProxyPasswd).Build()).
+							NewContainerEnv().WithName("REGISTRY_PROXY_PASSWORD").WithValue(r.RegistryProxyPasswd).Build(),
+							NewContainerEnv().WithName("HTTP_PROXY").WithValue(httpProxy).Build(),
+							NewContainerEnv().WithName("HTTPS_PROXY").WithValue(httpsProxy).Build(),
+							NewContainerEnv().WithName("NO_PROXY").WithValue(noProxy).Build(),
+						).
 						WithPortsContainerPort(r.Port).
 						Build()).
 				WithVolumes(NewVolume().WithName("registry-storage").WithVolumeEmptyDir(&corev1.EmptyDirVolumeSource{}).Build(),
 					NewVolume().WithName("registry-secret").WithVolumeProjectedDefaultMode(utils.NewPtr(int32(420))).
-						WithVolumeProjectedSourcesSecretLocalObjectReference(secret.Name).Build()).
+						WithVolumeProjectedSourcesSecretLocalObjectReference(secret.Name).Build(),
+					NewVolume().WithVolumeSourceConfigmap(config.Name, v1.KeyToPath{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}).
+						WithName("trusted-ca").Build()).
 				Build()).
 		WithReplicas(utils.NewPtr(int32(1))).
 		WithName(r.Name).
@@ -191,6 +244,24 @@ func RemoveCertificateFromConfigmap(ctx context.Context, client runtimeclient.Cl
 		return err
 	}
 	return nil
+}
+
+func getClusterProxy(ctx context.Context, client runtimeclient.Client) (*ocpconfigv1.Proxy, error) {
+	proxy := ocpconfigv1.Proxy{}
+	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&ocpconfigv1.Proxy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+	}), &proxy)
+	if err != nil {
+		if runtimeclient.IgnoreNotFound(err) == nil {
+			log.Printf("No cluster-wide proxy found, return")
+			return nil, nil
+		} else {
+			return nil, err
+		}
+	}
+	return &proxy, nil
 }
 
 type registryTLSConfig struct {

@@ -24,6 +24,11 @@ func (v *VolumeMountBuilder) WithMountPath(path string) *VolumeMountBuilder {
 	return v
 }
 
+func (v *VolumeMountBuilder) WithReadOnly() *VolumeMountBuilder {
+	v.volumeMount.ReadOnly = true
+	return v
+}
+
 func (v *VolumeMountBuilder) Build() v1.VolumeMount {
 	return v.volumeMount
 }

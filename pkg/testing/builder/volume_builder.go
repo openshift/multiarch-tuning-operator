@@ -28,6 +28,17 @@ func (v *VolumeBuilder) WithVolumeSourceHostPath(path string, pathType *v1.HostP
 	return v
 }
 
+func (v *VolumeBuilder) WithVolumeSourceConfigmap(name string, values ...v1.KeyToPath) *VolumeBuilder {
+	if v.volume.VolumeSource.ConfigMap == nil {
+		v.volume.VolumeSource.ConfigMap = &v1.ConfigMapVolumeSource{}
+	}
+	v.volume.VolumeSource.ConfigMap.LocalObjectReference = v1.LocalObjectReference{
+		Name: name,
+	}
+	v.volume.VolumeSource.ConfigMap.Items = values
+	return v
+}
+
 func (v *VolumeBuilder) WithVolumeEmptyDir(value *v1.EmptyDirVolumeSource) *VolumeBuilder {
 	if v.volume.EmptyDir == nil {
 		v.volume.EmptyDir = &v1.EmptyDirVolumeSource{}

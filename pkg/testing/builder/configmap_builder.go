@@ -44,6 +44,17 @@ func (s *ConfigMapBuilder) WithBinaryData(entries map[string][]byte) *ConfigMapB
 	return s
 }
 
+func (s *ConfigMapBuilder) WithLabels(entries map[string]string) *ConfigMapBuilder {
+	if s.configmap.Labels == nil && len(entries) > 0 {
+		s.configmap.Labels = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		s.configmap.Labels[k] = v
+	}
+
+	return s
+}
+
 func (s *ConfigMapBuilder) Build() v1.ConfigMap {
 	return s.configmap
 }

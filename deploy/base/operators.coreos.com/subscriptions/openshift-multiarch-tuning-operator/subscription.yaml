@@ -4,7 +4,7 @@ metadata:
   name: openshift-multiarch-tuning-operator
   namespace: openshift-multiarch-tuning-operator
 spec:
-  channel: tech-preview
+  channel: stable
   name: multiarch-tuning-operator
   source: multiarch-tuning-operator-catalog
   sourceNamespace: openshift-marketplace

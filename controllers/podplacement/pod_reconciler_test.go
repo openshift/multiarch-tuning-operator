@@ -201,10 +201,11 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 		Context("with different image types", func() {
 			DescribeTable("handles correctly", func(bundleImageType string, secondImageType string, supportedArchitectures ...string) {
 				pod := NewPod().
-					WithContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
-						registry.PublicRepo, registry.ComputeNameByMediaType(bundleImageType, "bundle"))).
-					WithContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
-						registry.PublicRepo, registry.ComputeNameByMediaType(secondImageType, "ppc64le-s390x"))).
+					WithContainersImages(
+						fmt.Sprintf("%s/%s/%s:latest", registryAddress,
+							registry.PublicRepo, registry.ComputeNameByMediaType(bundleImageType, "bundle")),
+						fmt.Sprintf("%s/%s/%s:latest", registryAddress,
+							registry.PublicRepo, registry.ComputeNameByMediaType(secondImageType, "ppc64le-s390x"))).
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").Build()
 				err := k8sClient.Create(ctx, &pod)

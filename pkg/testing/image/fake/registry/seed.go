@@ -74,17 +74,23 @@ func GetMockImages() []MockImage {
 		}
 	}
 	mockImages = append(mockImages, MockImage{
-		Architectures: sets.New[string](utils.ArchitecturePpc64le, utils.ArchitectureS390x),
+		Architectures: sets.New[string](utils.ArchitecturePpc64le, utils.ArchitectureArm64),
 		MediaType:     imgspecv1.MediaTypeImageIndex,
 		Repository:    PublicRepo,
 		Name:          ComputeNameByMediaType(imgspecv1.MediaTypeImageIndex, "bundle"),
 		Tag:           "latest",
+		Labels: map[string]string{
+			"operators.operatorframework.io.metrics.builder": "",
+		},
 	}, MockImage{
 		Architectures: sets.New[string](utils.ArchitecturePpc64le),
 		MediaType:     imgspecv1.MediaTypeImageManifest,
 		Repository:    PublicRepo,
 		Name:          ComputeNameByMediaType(imgspecv1.MediaTypeImageManifest, "bundle"),
 		Tag:           "latest",
+		Labels: map[string]string{
+			"operators.operatorframework.io.metrics.builder": "",
+		},
 	}, MockImage{
 		Architectures: sets.New[string](utils.ArchitecturePpc64le, utils.ArchitectureS390x),
 		MediaType:     imgspecv1.MediaTypeImageIndex,

@@ -55,7 +55,7 @@ type registryInspector struct {
 // If the image is a manifest, it will return the architecture set in the manifest's config.
 // If the image is an operator bundle image, it will return an empty set. This is because operator bundle images
 // are not tied to a specific architecture, and we should not set any constraints based on the architecture they report.
-func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (supportedArchitectures sets.Set[string], err error) {
+func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, _ bool, secrets [][]byte) (supportedArchitectures sets.Set[string], err error) {
 	// Create the auth file
 	log := ctrllog.FromContext(ctx, "imageReference", imageReference)
 	i.mutex.RLock()

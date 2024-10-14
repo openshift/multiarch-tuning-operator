@@ -19,9 +19,9 @@ type Facade struct {
 	inspectionCache image.ICache
 }
 
-func (i *Facade) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string,
+func (i *Facade) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, skipCache bool,
 	secrets [][]byte) (architectures sets.Set[string], err error) {
-	return i.inspectionCache.GetCompatibleArchitecturesSet(ctx, imageReference, secrets)
+	return i.inspectionCache.GetCompatibleArchitecturesSet(ctx, imageReference, skipCache, secrets)
 }
 
 func newImageFacade() *Facade {

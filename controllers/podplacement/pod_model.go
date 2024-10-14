@@ -37,6 +37,11 @@ var (
 	imageInspectionCache image.ICache = image.FacadeSingleton()
 )
 
+type containerImage struct {
+	imageName string
+	skipCache bool
+}
+
 type Pod struct {
 	corev1.Pod
 	ctx      context.Context
@@ -181,10 +186,13 @@ func (pod *Pod) getArchitecturePredicate(pullSecretDataList [][]byte) (corev1.No
 	}, nil
 }
 
-func (pod *Pod) imagesNamesSet() sets.Set[string] {
-	imageNamesSet := sets.New[string]()
+func (pod *Pod) imagesNamesSet() sets.Set[containerImage] {
+	imageNamesSet := sets.New[containerImage]()
 	for _, container := range append(pod.Spec.Containers, pod.Spec.InitContainers...) {
-		imageNamesSet.Insert(fmt.Sprintf("//%s", container.Image))
+		imageNamesSet.Insert(containerImage{
+			imageName: fmt.Sprintf("//%s", container.Image),
+			skipCache: container.ImagePullPolicy == corev1.PullAlways,
+		})
 	}
 	return imageNamesSet
 }
@@ -200,15 +208,17 @@ func (pod *Pod) intersectImagesArchitecture(pullSecretDataList [][]byte) (suppor
 	var supportedArchitecturesSet sets.Set[string]
 	nowExternal := time.Now()
 	defer utils.HistogramObserve(nowExternal, metrics.TimeToInspectPodImages)
-	for imageName := range imageNamesSet {
-		log.V(3).Info("Checking image", "imageName", imageName)
+	for imageContainer := range imageNamesSet {
+		log.V(3).Info("Checking image", "imageName", imageContainer.imageName,
+			"skipCache (imagePullPolicy==Always)", imageContainer.skipCache)
 		// We are collecting the time to inspect the image here to avoid implementing a metric in each of the
 		// cache implementations.
 		now := time.Now()
-		currentImageSupportedArchitectures, err := imageInspectionCache.GetCompatibleArchitecturesSet(pod.ctx, imageName, pullSecretDataList)
+		currentImageSupportedArchitectures, err := imageInspectionCache.GetCompatibleArchitecturesSet(pod.ctx,
+			imageContainer.imageName, imageContainer.skipCache, pullSecretDataList)
 		utils.HistogramObserve(now, metrics.TimeToInspectImage)
 		if err != nil {
-			log.V(1).Error(err, "Error inspecting the image", "imageName", imageName)
+			log.V(1).Error(err, "Error inspecting the image", "imageName", imageContainer.imageName)
 			return nil, err
 		}
 		if supportedArchitecturesSet == nil {

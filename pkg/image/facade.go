@@ -34,8 +34,8 @@ type Facade struct {
 	storeGlobalPullSecret func(pullSecret []byte)
 }
 
-func (i *Facade) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (architectures sets.Set[string], err error) {
-	return i.inspectionCache.GetCompatibleArchitecturesSet(ctx, imageReference, secrets)
+func (i *Facade) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, skipCache bool, secrets [][]byte) (architectures sets.Set[string], err error) {
+	return i.inspectionCache.GetCompatibleArchitecturesSet(ctx, imageReference, skipCache, secrets)
 }
 
 func (i *Facade) StoreGlobalPullSecret(pullSecret []byte) {

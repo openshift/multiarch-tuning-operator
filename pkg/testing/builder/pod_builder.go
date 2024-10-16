@@ -1,8 +1,8 @@
 package builder
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
+	"hash/fnv"
 
 	v1 "k8s.io/api/core/v1"
 )
@@ -40,16 +40,29 @@ func (p *PodBuilder) WithSchedulingGates(schedulingGates ...string) *PodBuilder 
 }
 
 func (p *PodBuilder) WithContainersImages(images ...string) *PodBuilder {
-	p.pod.Spec.Containers = make([]v1.Container, len(images))
-	for i, image := range images {
-		// compute hash of the image name
-		hasher := sha256.New()
-		hasher.Write([]byte(image))
-		p.pod.Spec.Containers[i] = v1.Container{
-			Image: image,
-			Name:  hex.EncodeToString(hasher.Sum(nil))[:63], // hash of the image name (63 is max)
-		}
+	for _, image := range images {
+		p.WithContainer(image, v1.PullIfNotPresent)
 	}
+	return p
+}
+
+func (p *PodBuilder) WithContainerImagePullAlways(image string) *PodBuilder {
+	return p.WithContainer(image, v1.PullAlways)
+}
+
+func (p *PodBuilder) WithContainer(image string, imagePullPolicy v1.PullPolicy) *PodBuilder {
+	// compute hash of the image name
+	hasher := fnv.New128()
+	hasher.Write([]byte(image))
+	name := hex.EncodeToString(hasher.Sum(nil))
+	if len(name) > 63 {
+		name = name[:63]
+	}
+	p.pod.Spec.Containers = append(p.pod.Spec.Containers, v1.Container{
+		Image:           image,
+		Name:            name,
+		ImagePullPolicy: imagePullPolicy,
+	})
 	return p
 }
 

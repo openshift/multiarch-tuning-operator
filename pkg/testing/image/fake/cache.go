@@ -12,7 +12,7 @@ type cacheProxy struct {
 	imageRefsArchitectureMap map[string]sets.Set[string]
 }
 
-func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string,
+func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, skipCache bool,
 	secrets [][]byte) (supportedArchitectures sets.Set[string], err error) {
 	// we expect the imageReference to start with `//`. Let's remove it
 	imageReference = imageReference[2:]

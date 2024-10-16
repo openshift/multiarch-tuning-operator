@@ -167,7 +167,7 @@ func TestPod_imagesNamesSet(t *testing.T) {
 	tests := []struct {
 		name string
 		pod  v1.Pod
-		want sets.Set[string]
+		want sets.Set[containerImage]
 	}{
 		{
 			name: "pod with a single container",
@@ -180,18 +180,42 @@ func TestPod_imagesNamesSet(t *testing.T) {
 					},
 				},
 			},
-			want: sets.New[string]("//bar/foo:latest"),
+			want: sets.New[containerImage](containerImage{
+				imageName: "//bar/foo:latest",
+				skipCache: false,
+			}),
 		},
 		{
 			name: "pod with multiple containers, some with the same image",
 			pod:  NewPod().WithContainersImages("bar/foo:latest", "bar/baz:latest", "bar/foo:latest").Build(),
-			want: sets.New[string]("//bar/foo:latest", "//bar/baz:latest"),
+			want: sets.New[containerImage](containerImage{
+				imageName: "//bar/foo:latest",
+				skipCache: false,
+			}, containerImage{
+				imageName: "//bar/baz:latest",
+				skipCache: false,
+			}),
 		},
 		{
 			name: "pod with multiple containers and init containers",
 			pod: NewPod().WithInitContainersImages("foo/bar:latest").WithContainersImages(
 				"bar/foo:latest", "bar/baz:latest", "bar/foo:latest").Build(),
-			want: sets.New[string]("//bar/foo:latest", "//bar/baz:latest", "//foo/bar:latest"),
+			want: sets.New[containerImage](
+				containerImage{imageName: "//bar/foo:latest"},
+				containerImage{imageName: "//bar/baz:latest"},
+				containerImage{imageName: "//foo/bar:latest"}),
+		},
+		{
+			name: "pod with multiple containers, init containers, one image with imagePullPolicy Always",
+			pod: NewPod().WithInitContainersImages("foo/bar:latest").WithContainersImages(
+				"bar/foo:latest", "bar/baz:latest", "bar/foo:latest").
+				WithContainerImagePullAlways("foo/pull:always").Build(),
+			want: sets.New[containerImage](
+				containerImage{imageName: "//bar/foo:latest"},
+				containerImage{imageName: "//bar/baz:latest"},
+				containerImage{imageName: "//foo/bar:latest"},
+				containerImage{imageName: "//foo/pull:always", skipCache: true},
+			),
 		},
 	}
 	for _, tt := range tests {

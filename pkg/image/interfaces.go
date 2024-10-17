@@ -25,7 +25,7 @@ import (
 type ICache interface {
 	// GetCompatibleArchitecturesSet takes an image reference. a list of secrets and the client to the cluster and
 	// returns a set of architectures that are compatible with the image reference.
-	GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (sets.Set[string], error)
+	GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, skipCache bool, secrets [][]byte) (sets.Set[string], error)
 }
 
 type IRegistryInspector interface {

@@ -34,7 +34,7 @@ func MockImagesArchitectureMap() map[string]sets.Set[string] {
 }
 
 func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string,
-	secrets [][]byte) (supportedArchitectures sets.Set[string], err error) {
+	skipCache bool, secrets [][]byte) (supportedArchitectures sets.Set[string], err error) {
 	// we expect the imageReference to start with `//`. Let's remove it
 	imageReference = imageReference[2:]
 	if archSet, ok := MockImagesArchitectureMap()[imageReference]; ok {

@@ -79,6 +79,7 @@ func (i *MockImage) prepareSingleArchImage(ctx context.Context, dst *types.Image
 	arch, _ := i.Architectures.PopAny()
 	labelsJsonBytes, _ := json.Marshal(i.Labels)
 	configData := []byte(fmt.Sprintf(`{"architecture":"%s","os":"linux","config":{"Labels":%s}}`, arch, string(labelsJsonBytes)))
+	log.Info(fmt.Sprintf("%s (%s): %s", i.GetUrl(), arch, string(configData)))
 	configDataDigest, err := manifest.Digest(configData)
 	if err != nil {
 		log.Error(err, "Error computing the digest of the image config data")
@@ -140,6 +141,7 @@ func (i *MockImage) prepareManifestList(ctx context.Context, authFile string, ds
 			MediaType:     singleArchManifestMediaType,
 			Repository:    i.Repository,
 			Name:          i.Name,
+			Labels:        i.Labels,
 			Tag:           i.Tag,
 			partial:       true,
 			destination:   i.destination,

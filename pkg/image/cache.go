@@ -36,7 +36,8 @@ type cacheProxy struct {
 	imageRefsCache    *expirable.LRU[string, sets.Set[string]] // LRU cache with expirable keys
 }
 
-func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, secrets [][]byte) (sets.Set[string], error) {
+func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageReference string,
+	skipCache bool, secrets [][]byte) (sets.Set[string], error) {
 	metrics.InitCommonMetrics()
 	metrics.InspectionGauge.Set(float64(c.imageRefsCache.Len()))
 	now := time.Now()
@@ -46,19 +47,21 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 	}
 
 	log := ctrllog.FromContext(ctx).WithValues("imageReference", imageReference)
-
-	if architectures, ok := c.imageRefsCache.Get(computeFNV128Hash(imageReference, authJson)); ok {
-		log.V(3).Info("Cache hit")
+	hash := computeFNV128Hash(imageReference, authJson)
+	if architectures, ok := c.imageRefsCache.Get(hash); ok && !skipCache {
+		log.V(3).Info("Cache hit", "architectures", architectures, "hash", hash)
 		defer utils.HistogramObserve(now, metrics.TimeToInspectImageGivenHit)
 		return architectures, nil
 	}
-	architectures, err := c.registryInspector.GetCompatibleArchitecturesSet(ctx, imageReference, secrets)
+	architectures, err := c.registryInspector.GetCompatibleArchitecturesSet(ctx, imageReference, true, secrets)
 	if err != nil {
 		return nil, err
 	}
 
-	log.V(3).Info("Cache miss...adding to cache")
-	c.imageRefsCache.Add(computeFNV128Hash(imageReference, authJson), architectures)
+	log.V(3).Info("Cache miss...adding to cache", "architectures", architectures, "hash", hash)
+	if !skipCache {
+		c.imageRefsCache.Add(hash, architectures)
+	}
 	defer utils.HistogramObserve(now, metrics.TimeToInspectImageGivenMiss)
 	return architectures, nil
 }

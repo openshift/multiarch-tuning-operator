@@ -8,13 +8,13 @@ import (
 
 // StatefulSetBuilder is a builder for appsv1.StatefulSet objects to be used only in unit tests.
 type StatefulSetBuilder struct {
-	statefulset appsv1.StatefulSet
+	statefulset *appsv1.StatefulSet
 }
 
 // NewStatefulSet returns a new StatefulSetBuilder to build appsv1.StatefulSet objects. It is meant to be used only in unit tests.
 func NewStatefulSet() *StatefulSetBuilder {
 	return &StatefulSetBuilder{
-		statefulset: appsv1.StatefulSet{},
+		statefulset: &appsv1.StatefulSet{},
 	}
 }
 
@@ -55,6 +55,6 @@ func (s *StatefulSetBuilder) WithNamespace(namespace string) *StatefulSetBuilder
 	return s
 }
 
-func (s *StatefulSetBuilder) Build() appsv1.StatefulSet {
+func (s *StatefulSetBuilder) Build() *appsv1.StatefulSet {
 	return s.statefulset
 }

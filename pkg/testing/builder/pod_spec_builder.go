@@ -39,8 +39,13 @@ func (ps *PodSpecBuilder) WithSchedulingGates(schedulingGates ...string) *PodSpe
 	return ps
 }
 
-func (ps *PodSpecBuilder) WithContainers(containers ...v1.Container) *PodSpecBuilder {
-	ps.podspec.Containers = containers
+func (ps *PodSpecBuilder) WithContainers(containers ...*v1.Container) *PodSpecBuilder {
+	for i := range containers {
+		if containers[i] == nil {
+			panic("nil value passed to WithContainers")
+		}
+		ps.podspec.Containers = append(ps.podspec.Containers, *containers[i])
+	}
 	return ps
 }
 
@@ -80,8 +85,13 @@ func (ps *PodSpecBuilder) WithNodeName(nodeName string) *PodSpecBuilder {
 	return ps
 }
 
-func (ps *PodSpecBuilder) WithVolumes(volumes ...v1.Volume) *PodSpecBuilder {
-	ps.podspec.Volumes = volumes
+func (ps *PodSpecBuilder) WithVolumes(volumes ...*v1.Volume) *PodSpecBuilder {
+	for i := range volumes {
+		if volumes[i] == nil {
+			panic("nil value passed to WithVolumes")
+		}
+		ps.podspec.Volumes = append(ps.podspec.Volumes, *volumes[i])
+	}
 	return ps
 }
 

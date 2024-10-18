@@ -4,13 +4,13 @@ import v1 "k8s.io/api/core/v1"
 
 // ConfigMapBuilder is a builder for v1.ConfigMap objects to be used only in unit tests.
 type ConfigMapBuilder struct {
-	configmap v1.ConfigMap
+	configmap *v1.ConfigMap
 }
 
 // NewConfigMap returns a new ConfigMapBuilder to build v1.ConfigMap objects. It is meant to be used only in unit tests.
 func NewConfigMap() *ConfigMapBuilder {
 	return &ConfigMapBuilder{
-		configmap: v1.ConfigMap{},
+		configmap: &v1.ConfigMap{},
 	}
 }
 
@@ -55,6 +55,6 @@ func (s *ConfigMapBuilder) WithLabels(entries map[string]string) *ConfigMapBuild
 	return s
 }
 
-func (s *ConfigMapBuilder) Build() v1.ConfigMap {
+func (s *ConfigMapBuilder) Build() *v1.ConfigMap {
 	return s.configmap
 }

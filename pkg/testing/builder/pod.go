@@ -9,13 +9,13 @@ import (
 
 // PodBuilder is a builder for v1.Pod objects to be used only in unit tests.
 type PodBuilder struct {
-	pod v1.Pod
+	pod *v1.Pod
 }
 
 // NewPod returns a new PodBuilder to build v1.Pod objects. It is meant to be used only in unit tests.
 func NewPod() *PodBuilder {
 	return &PodBuilder{
-		pod: v1.Pod{},
+		pod: &v1.Pod{},
 	}
 }
 
@@ -160,6 +160,6 @@ func (p *PodBuilder) WithLabels(labelsKeyValuesPair ...string) *PodBuilder {
 	return p
 }
 
-func (p *PodBuilder) Build() v1.Pod {
+func (p *PodBuilder) Build() *v1.Pod {
 	return p.pod
 }

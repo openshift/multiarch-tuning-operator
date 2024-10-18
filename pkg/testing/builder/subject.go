@@ -6,13 +6,13 @@ import (
 
 // DeploymentBuilder is a builder for v1.Subject objects to be used only in unit tests.
 type SubjectBuilder struct {
-	subject v1.Subject
+	subject *v1.Subject
 }
 
 // NewSubject returns a new DeploymentBuilder to build v1.Subject objects. It is meant to be used only in unit tests.
 func NewSubject() *SubjectBuilder {
 	return &SubjectBuilder{
-		subject: v1.Subject{},
+		subject: &v1.Subject{},
 	}
 }
 
@@ -31,6 +31,6 @@ func (s *SubjectBuilder) WithNamespace(namespace string) *SubjectBuilder {
 	return s
 }
 
-func (s *SubjectBuilder) Build() v1.Subject {
+func (s *SubjectBuilder) Build() *v1.Subject {
 	return s.subject
 }

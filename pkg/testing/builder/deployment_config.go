@@ -7,13 +7,13 @@ import (
 
 // DeploymentConfigBuilder is a builder for ocpv1.DeploymentConfig objects to be usedc only in unit tests.
 type DeploymentConfigBuilder struct {
-	deploymentconfig ocpv1.DeploymentConfig
+	deploymentconfig *ocpv1.DeploymentConfig
 }
 
 // NewDeployment returns a new DeploymentConfigBuilder to buildc ocpv1.DeploymentConfig objects. It is meant to be usedc only in unit tests.
 func NewDeploymentConfig() *DeploymentConfigBuilder {
 	return &DeploymentConfigBuilder{
-		deploymentconfig: ocpv1.DeploymentConfig{},
+		deploymentconfig: &ocpv1.DeploymentConfig{},
 	}
 }
 
@@ -57,6 +57,6 @@ func (dc *DeploymentConfigBuilder) WithNamespace(namespace string) *DeploymentCo
 	return dc
 }
 
-func (dc *DeploymentConfigBuilder) Build() ocpv1.DeploymentConfig {
+func (dc *DeploymentConfigBuilder) Build() *ocpv1.DeploymentConfig {
 	return dc.deploymentconfig
 }

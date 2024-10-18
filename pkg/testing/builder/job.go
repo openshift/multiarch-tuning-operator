@@ -7,13 +7,13 @@ import (
 
 // Jobbuilder is a builder for batchv1.Job objects to be used only in unit tests.
 type Jobbuilder struct {
-	job batchv1.Job
+	job *batchv1.Job
 }
 
 // NewJob returns a new Jobbuilder to build batchv1.Job objects. It is meant to be used only in unit tests.
 func NewJob() *Jobbuilder {
 	return &Jobbuilder{
-		job: batchv1.Job{},
+		job: &batchv1.Job{},
 	}
 }
 
@@ -42,6 +42,6 @@ func (j *Jobbuilder) WithNamespace(namespace string) *Jobbuilder {
 	return j
 }
 
-func (j *Jobbuilder) Build() batchv1.Job {
+func (j *Jobbuilder) Build() *batchv1.Job {
 	return j.job
 }

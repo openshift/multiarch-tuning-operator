@@ -4,13 +4,13 @@ import v1 "k8s.io/api/core/v1"
 
 // VolumeBuilder is a builder for v1.Volume objects to be used only in unit tests.
 type VolumeBuilder struct {
-	volume v1.Volume
+	volume *v1.Volume
 }
 
 // NewVolume returns a new VolumeBuilder to build v1.Volume objects. It is meant to be used only in unit tests.
 func NewVolume() *VolumeBuilder {
 	return &VolumeBuilder{
-		volume: v1.Volume{},
+		volume: &v1.Volume{},
 	}
 }
 
@@ -72,6 +72,6 @@ func (v *VolumeBuilder) WithVolumeProjectedDefaultMode(value *int32) *VolumeBuil
 	return v
 }
 
-func (v *VolumeBuilder) Build() v1.Volume {
+func (v *VolumeBuilder) Build() *v1.Volume {
 	return v.volume
 }

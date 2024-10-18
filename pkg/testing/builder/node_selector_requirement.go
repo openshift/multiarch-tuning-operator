@@ -6,13 +6,13 @@ import (
 
 // NodeSelectorRequirementBuilder is a builder for v1.NodeSelectorRequirement objects to be used only in unit tests.
 type NodeSelectorRequirementBuilder struct {
-	nodeSelectorRequirement v1.NodeSelectorRequirement
+	nodeSelectorRequirement *v1.NodeSelectorRequirement
 }
 
 // NewNodeSelectorRequirement returns a new NodeSelectorRequirementBuilder to build v1.NodeSelectorRequirement objects. It is meant to be used only in unit tests.
 func NewNodeSelectorRequirement() *NodeSelectorRequirementBuilder {
 	return &NodeSelectorRequirementBuilder{
-		nodeSelectorRequirement: v1.NodeSelectorRequirement{},
+		nodeSelectorRequirement: &v1.NodeSelectorRequirement{},
 	}
 }
 
@@ -23,6 +23,6 @@ func (n *NodeSelectorRequirementBuilder) WithKeyAndValues(key string, operator v
 	return n
 }
 
-func (n *NodeSelectorRequirementBuilder) Build() v1.NodeSelectorRequirement {
+func (n *NodeSelectorRequirementBuilder) Build() *v1.NodeSelectorRequirement {
 	return n.nodeSelectorRequirement
 }

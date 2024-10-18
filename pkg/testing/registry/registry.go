@@ -105,20 +105,20 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 		WithName(r.Name).
 		WithNameSpace(r.Namespace.Name).
 		Build()
-	err = client.Create(ctx, &secret)
+	err = client.Create(ctx, secret)
 	if err != nil {
 		return err
 	}
 
 	// Create configmap for ca bundles for cluster-wide proxy
 	log.Printf("create configmap for ca bundles if cluster-wide proxy exist")
-	config := v1.ConfigMap{}
+	config := &v1.ConfigMap{}
 	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "registry-trusted-ca",
 			Namespace: r.Namespace.Name,
 		},
-	}), &config)
+	}), config)
 	if err != nil {
 		if runtimeclient.IgnoreNotFound(err) == nil {
 			configmap := NewConfigMap().
@@ -126,7 +126,7 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 				WithName("registry-trusted-ca").
 				WithNamespace(r.Namespace.Name).
 				Build()
-			err = client.Create(ctx, &configmap)
+			err = client.Create(ctx, configmap)
 			if err != nil {
 				return err
 			}
@@ -207,7 +207,7 @@ func AddCertificateToConfigmap(ctx context.Context, client runtimeclient.Client,
 				WithName(r.CertConfigmapName).
 				WithNamespace("openshift-config").
 				Build()
-			err = client.Create(ctx, &configmap)
+			err = client.Create(ctx, configmap)
 			if err != nil {
 				return err
 			}

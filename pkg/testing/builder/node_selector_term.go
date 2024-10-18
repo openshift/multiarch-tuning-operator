@@ -6,13 +6,13 @@ import (
 
 // NodeSelectorTermBuilder is a builder for v1.NodeSelectorTerm objects to be used only in unit tests.
 type NodeSelectorTermBuilder struct {
-	nodeSelectorTerm v1.NodeSelectorTerm
+	nodeSelectorTerm *v1.NodeSelectorTerm
 }
 
 // NewNodeSelectorTerm returns a new NodeSelectorTermBuilder to build v1.NodeSelectorTerm objects. It is meant to be used only in unit tests.
 func NewNodeSelectorTerm() *NodeSelectorTermBuilder {
 	return &NodeSelectorTermBuilder{
-		nodeSelectorTerm: v1.NodeSelectorTerm{},
+		nodeSelectorTerm: &v1.NodeSelectorTerm{},
 	}
 }
 
@@ -36,6 +36,6 @@ func (n *NodeSelectorTermBuilder) WithMatchFields(values ...*v1.NodeSelectorRequ
 	return n
 }
 
-func (n *NodeSelectorTermBuilder) Build() v1.NodeSelectorTerm {
+func (n *NodeSelectorTermBuilder) Build() *v1.NodeSelectorTerm {
 	return n.nodeSelectorTerm
 }

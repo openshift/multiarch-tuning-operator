@@ -3,12 +3,12 @@ package builder
 import v1 "k8s.io/api/admissionregistration/v1"
 
 type MutatingWebhookConfigurationBuilder struct {
-	mutatingWebhookConfiguration v1.MutatingWebhookConfiguration
+	mutatingWebhookConfiguration *v1.MutatingWebhookConfiguration
 }
 
 func NewMutatingWebhookConfiguration() *MutatingWebhookConfigurationBuilder {
 	return &MutatingWebhookConfigurationBuilder{
-		mutatingWebhookConfiguration: v1.MutatingWebhookConfiguration{},
+		mutatingWebhookConfiguration: &v1.MutatingWebhookConfiguration{},
 	}
 }
 
@@ -18,5 +18,5 @@ func (m *MutatingWebhookConfigurationBuilder) WithName(name string) *MutatingWeb
 }
 
 func (m *MutatingWebhookConfigurationBuilder) Build() *v1.MutatingWebhookConfiguration {
-	return &m.mutatingWebhookConfiguration
+	return m.mutatingWebhookConfiguration
 }

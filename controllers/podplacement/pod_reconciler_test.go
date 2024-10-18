@@ -30,7 +30,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").
 					Build()
-				err := k8sClient.Create(ctx, &pod)
+				err := k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				// Test the removal of the scheduling gate. However, since the pod is mutated and the reconciler
 				// removes the scheduling gate concurrently, we cannot ensure that the scheduling gate is added
@@ -39,7 +39,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 				// could have removed the scheduling gate before our check.
 				Eventually(func(g Gomega) {
 					// Get pod from the API server
-					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(pod), pod)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
 					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
 						Name: utils.SchedulingGateName,
@@ -48,7 +48,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 						"scheduling gate annotation not found")
 				}).Should(Succeed(), "failed to remove scheduling gate from pod")
 				Eventually(func(g Gomega) {
-					g.Expect(pod).To(HaveEquivalentNodeAffinity(
+					g.Expect(*pod).To(HaveEquivalentNodeAffinity(
 						&corev1.NodeAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 								NodeSelectorTerms: []corev1.NodeSelectorTerm{
@@ -103,12 +103,12 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").
 					Build()
-				err = k8sClient.Create(ctx, &pod)
+				err = k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				By("Waiting for the pod to be mutated and the scheduling gate to be removed")
 				Eventually(func(g Gomega) {
 					// Get pod from the API server
-					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(pod), pod)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
 					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
 						Name: utils.SchedulingGateName,
@@ -117,7 +117,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 						"scheduling gate annotation not found")
 				}).Should(Succeed(), "failed to remove scheduling gate from pod")
 				By("Checking that the pod has the correct node affinity")
-				Expect(pod).To(HaveEquivalentNodeAffinity(
+				Expect(*pod).To(HaveEquivalentNodeAffinity(
 					&corev1.NodeAffinity{
 						RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 							NodeSelectorTerms: []corev1.NodeSelectorTerm{
@@ -151,12 +151,12 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").
 					Build()
-				err = k8sClient.Create(ctx, &pod)
+				err = k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				By("Waiting for the pod to be mutated and the scheduling gate to be removed")
 				Eventually(func(g Gomega) {
 					// Get pod from the API server
-					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(pod), pod)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
 					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
 						Name: utils.SchedulingGateName,
@@ -165,7 +165,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 						"scheduling gate annotation not found")
 				}).Should(Succeed(), "failed to remove scheduling gate from pod")
 				By("Checking that the pod has the wrong, cached, node affinity [this proves we are not querying the remote registry]")
-				Expect(pod).To(HaveEquivalentNodeAffinity(
+				Expect(*pod).To(HaveEquivalentNodeAffinity(
 					&corev1.NodeAffinity{
 						RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 							NodeSelectorTerms: []corev1.NodeSelectorTerm{
@@ -202,12 +202,12 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").
 					Build()
-				err = k8sClient.Create(ctx, &pod)
+				err = k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				By("Waiting for the pod to be mutated and the scheduling gate to be removed")
 				Eventually(func(g Gomega) {
 					// Get pod from the API server
-					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(pod), pod)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
 					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
 						Name: utils.SchedulingGateName,
@@ -216,7 +216,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 						"scheduling gate annotation not found")
 				}).Should(Succeed(), "failed to remove scheduling gate from pod")
 				By("Checking that the pod has the correct node affinity")
-				Expect(pod).To(HaveEquivalentNodeAffinity(
+				Expect(*pod).To(HaveEquivalentNodeAffinity(
 					&corev1.NodeAffinity{
 						RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 							NodeSelectorTerms: []corev1.NodeSelectorTerm{
@@ -250,12 +250,12 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").
 					Build()
-				err = k8sClient.Create(ctx, &pod)
+				err = k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				By("Waiting for the pod to be mutated and the scheduling gate to be removed")
 				Eventually(func(g Gomega) {
 					// Get pod from the API server
-					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(pod), pod)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
 					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
 						Name: utils.SchedulingGateName,
@@ -264,7 +264,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 						"scheduling gate annotation not found")
 				}).Should(Succeed(), "failed to remove scheduling gate from pod")
 				By("Checking that the pod has the wrong, cached, node affinity [this proves we are not querying the remote registry]")
-				Expect(pod).To(HaveEquivalentNodeAffinity(
+				Expect(*pod).To(HaveEquivalentNodeAffinity(
 					&corev1.NodeAffinity{
 						RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 							NodeSelectorTerms: []corev1.NodeSelectorTerm{
@@ -307,7 +307,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 							registry.PublicRepo, registry.ComputeNameByMediaType(secondImageType, "ppc64le-s390x"))).
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").Build()
-				err := k8sClient.Create(ctx, &pod)
+				err := k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				// Test the removal of the scheduling gate. However, since the pod is mutated and the reconciler
 				// removes the scheduling gate concurrently, we cannot ensure that the scheduling gate is added
@@ -316,7 +316,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 				// could have removed the scheduling gate before our check.
 				Eventually(func(g Gomega) {
 					// Get pod from the API server
-					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&pod), &pod)
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(pod), pod)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
 					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
 						Name: utils.SchedulingGateName,
@@ -329,7 +329,7 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 						g.Expect(pod.Spec.Affinity.NodeAffinity).To(BeNil(), "unexpected node affinity")
 						return
 					}
-					g.Expect(pod).To(HaveEquivalentNodeAffinity(
+					g.Expect(*pod).To(HaveEquivalentNodeAffinity(
 						&corev1.NodeAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 								NodeSelectorTerms: []corev1.NodeSelectorTerm{

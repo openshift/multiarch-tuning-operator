@@ -8,13 +8,13 @@ import (
 
 // DaemonSetBuilder is a builder for appsv1.DaemonSet objects to be used only in unit tests.
 type DaemonSetBuilder struct {
-	daemonset appsv1.DaemonSet
+	daemonset *appsv1.DaemonSet
 }
 
 // NewDaemonSet returns a new DaemonSetBuilder to build appsv1.DaemonSet objects. It is meant to be used only in unit tests.
 func NewDaemonSet() *DaemonSetBuilder {
 	return &DaemonSetBuilder{
-		daemonset: appsv1.DaemonSet{},
+		daemonset: &appsv1.DaemonSet{},
 	}
 }
 
@@ -50,6 +50,6 @@ func (d *DaemonSetBuilder) WithNamespace(namespace string) *DaemonSetBuilder {
 	return d
 }
 
-func (d *DaemonSetBuilder) Build() appsv1.DaemonSet {
+func (d *DaemonSetBuilder) Build() *appsv1.DaemonSet {
 	return d.daemonset
 }

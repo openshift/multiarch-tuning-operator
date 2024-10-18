@@ -29,7 +29,7 @@ func init() {
 func TestPod_GetPodImagePullSecrets(t *testing.T) {
 	tests := []struct {
 		name string
-		pod  v1.Pod
+		pod  *v1.Pod
 		want []string
 	}{
 		{
@@ -51,7 +51,7 @@ func TestPod_GetPodImagePullSecrets(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := &Pod{
-				Pod: tt.pod,
+				Pod: *tt.pod,
 				ctx: ctx,
 			}
 			g := NewGomegaWithT(t)
@@ -63,7 +63,7 @@ func TestPod_GetPodImagePullSecrets(t *testing.T) {
 func TestPod_HasSchedulingGate(t *testing.T) {
 	tests := []struct {
 		name string
-		pod  v1.Pod
+		pod  *v1.Pod
 		want bool
 	}{
 		{
@@ -96,7 +96,7 @@ func TestPod_HasSchedulingGate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := &Pod{
-				Pod: tt.pod,
+				Pod: *tt.pod,
 				ctx: ctx,
 			}
 			g := NewGomegaWithT(t)
@@ -108,7 +108,7 @@ func TestPod_HasSchedulingGate(t *testing.T) {
 func TestPod_RemoveSchedulingGate(t *testing.T) {
 	tests := []struct {
 		name string
-		pod  v1.Pod
+		pod  *v1.Pod
 		want []v1.PodSchedulingGate
 	}{
 		{
@@ -153,7 +153,7 @@ func TestPod_RemoveSchedulingGate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := &Pod{
-				Pod: tt.pod,
+				Pod: *tt.pod,
 				ctx: ctx,
 			}
 			pod.RemoveSchedulingGate()
@@ -166,12 +166,12 @@ func TestPod_RemoveSchedulingGate(t *testing.T) {
 func TestPod_imagesNamesSet(t *testing.T) {
 	tests := []struct {
 		name string
-		pod  v1.Pod
+		pod  *v1.Pod
 		want sets.Set[containerImage]
 	}{
 		{
 			name: "pod with a single container",
-			pod: v1.Pod{
+			pod: &v1.Pod{
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
 						{
@@ -221,7 +221,7 @@ func TestPod_imagesNamesSet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := &Pod{
-				Pod: tt.pod,
+				Pod: *tt.pod,
 				ctx: ctx,
 			}
 			g := NewGomegaWithT(t)
@@ -233,7 +233,7 @@ func TestPod_imagesNamesSet(t *testing.T) {
 func TestPod_intersectImagesArchitecture(t *testing.T) {
 	tests := []struct {
 		name string
-		pod  v1.Pod
+		pod  *v1.Pod
 		// pullSecretDataList is a list of pull secrets in the form of a slice of bytes. It is not used in the unit
 		// tests. It is used in the integration tests.
 		pullSecretDataList         [][]byte
@@ -277,7 +277,7 @@ func TestPod_intersectImagesArchitecture(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			imageInspectionCache = fake.FacadeSingleton()
 			pod := &Pod{
-				Pod: tt.pod,
+				Pod: *tt.pod,
 				ctx: ctx,
 			}
 			gotSupportedArchitectures, err := pod.intersectImagesArchitecture(tt.pullSecretDataList)
@@ -299,7 +299,7 @@ func TestPod_intersectImagesArchitecture(t *testing.T) {
 func TestPod_getArchitecturePredicate(t *testing.T) {
 	tests := []struct {
 		name               string
-		pod                v1.Pod
+		pod                *v1.Pod
 		pullSecretDataList [][]byte
 		// Be aware that the values in the want.Values slice must be sorted alphabetically
 		want    v1.NodeSelectorRequirement
@@ -307,7 +307,7 @@ func TestPod_getArchitecturePredicate(t *testing.T) {
 	}{
 		{
 			name: "pod with several containers using multi-arch images",
-			pod: v1.Pod{
+			pod: &v1.Pod{
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
 						{
@@ -329,7 +329,7 @@ func TestPod_getArchitecturePredicate(t *testing.T) {
 		},
 		{
 			name: "pod with non-existing image",
-			pod: v1.Pod{
+			pod: &v1.Pod{
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
 						{
@@ -357,7 +357,7 @@ func TestPod_getArchitecturePredicate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			imageInspectionCache = fake.FacadeSingleton()
 			pod := &Pod{
-				Pod: tt.pod,
+				Pod: *tt.pod,
 				ctx: ctx,
 			}
 			got, err := pod.getArchitecturePredicate(tt.pullSecretDataList)
@@ -375,8 +375,8 @@ func TestPod_getArchitecturePredicate(t *testing.T) {
 func TestPod_setArchNodeAffinity(t *testing.T) {
 	tests := []struct {
 		name string
-		pod  v1.Pod
-		want v1.Pod
+		pod  *v1.Pod
+		want *v1.Pod
 	}{
 		{
 			name: "pod with empty node selector terms",
@@ -511,7 +511,7 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			imageInspectionCache = fake.FacadeSingleton()
 			pod := &Pod{
-				Pod: tt.pod,
+				Pod: *tt.pod,
 				ctx: ctx,
 			}
 			g := NewGomegaWithT(t)
@@ -528,8 +528,8 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 	tests := []struct {
 		name               string
 		pullSecretDataList [][]byte
-		pod                v1.Pod
-		want               v1.Pod
+		pod                *v1.Pod
+		want               *v1.Pod
 	}{
 		{
 			name: "pod with no node selector terms",
@@ -706,7 +706,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			imageInspectionCache = fake.FacadeSingleton()
 			pod := &Pod{
-				Pod: tt.pod,
+				Pod: *tt.pod,
 				ctx: ctx,
 			}
 			pod.SetNodeAffinityArchRequirement(tt.pullSecretDataList)
@@ -752,7 +752,7 @@ func TestEnsureLabel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := &Pod{
-				Pod: NewPod().WithLabels(tt.initialLabels...).Build(),
+				Pod: *NewPod().WithLabels(tt.initialLabels...).Build(),
 			}
 
 			pod.ensureLabel(tt.label, tt.value)
@@ -819,7 +819,7 @@ func TestEnsureArchitectureLabels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := &Pod{
-				Pod: NewPod().Build(),
+				Pod: *NewPod().Build(),
 			}
 
 			pod.ensureArchitectureLabels(tt.requirement)
@@ -898,7 +898,7 @@ func TestPod_EnsureSchedulingGate(t *testing.T) {
 
 func TestPod_hasControlPlaneNodeSelector(t *testing.T) {
 	type fields struct {
-		Pod      v1.Pod
+		Pod      *v1.Pod
 		ctx      context.Context
 		recorder record.EventRecorder
 	}
@@ -946,7 +946,7 @@ func TestPod_hasControlPlaneNodeSelector(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := &Pod{
-				Pod:      tt.fields.Pod,
+				Pod:      *tt.fields.Pod,
 				ctx:      tt.fields.ctx,
 				recorder: tt.fields.recorder,
 			}
@@ -959,7 +959,7 @@ func TestPod_hasControlPlaneNodeSelector(t *testing.T) {
 
 func TestPod_shouldIgnorePod(t *testing.T) {
 	type fields struct {
-		Pod      v1.Pod
+		Pod      *v1.Pod
 		ctx      context.Context
 		recorder record.EventRecorder
 	}
@@ -1007,7 +1007,7 @@ func TestPod_shouldIgnorePod(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := &Pod{
-				Pod:      tt.fields.Pod,
+				Pod:      *tt.fields.Pod,
 				ctx:      tt.fields.ctx,
 				recorder: tt.fields.recorder,
 			}

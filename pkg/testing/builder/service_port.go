@@ -4,13 +4,13 @@ import v1 "k8s.io/api/core/v1"
 
 // ServicePortBuilder is a builder for v1.ServicePort objects to be used only in unit tests.
 type ServicePortBuilder struct {
-	servicePort v1.ServicePort
+	servicePort *v1.ServicePort
 }
 
 // NewServicePort returns a new ServicePortBuilder to build v1.ServicePort objects. It is meant to be used only in unit tests.
 func NewServicePort() *ServicePortBuilder {
 	return &ServicePortBuilder{
-		servicePort: v1.ServicePort{},
+		servicePort: &v1.ServicePort{},
 	}
 }
 
@@ -34,6 +34,6 @@ func (s *ServicePortBuilder) WithTargetPort(value int32) *ServicePortBuilder {
 	return s
 }
 
-func (s *ServicePortBuilder) Build() v1.ServicePort {
+func (s *ServicePortBuilder) Build() *v1.ServicePort {
 	return s.servicePort
 }

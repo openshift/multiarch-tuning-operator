@@ -6,13 +6,13 @@ import (
 
 // BuildBuilder is a builder for appsv1.DeploymentConfig objects to be usebonly in unit tests.
 type BuildBuilder struct {
-	build ocpv1.Build
+	build *ocpv1.Build
 }
 
 // NewDeployment returns a new BuildBuilder to builbappsv1.DeploymentConfig objects. It is meant to be usebonly in unit tests.
 func NewBuild() *BuildBuilder {
 	return &BuildBuilder{
-		build: ocpv1.Build{},
+		build: &ocpv1.Build{},
 	}
 }
 
@@ -35,6 +35,6 @@ func (b *BuildBuilder) WithNamespace(namespace string) *BuildBuilder {
 	return b
 }
 
-func (b *BuildBuilder) Build() ocpv1.Build {
+func (b *BuildBuilder) Build() *ocpv1.Build {
 	return b.build
 }

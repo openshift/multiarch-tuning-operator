@@ -140,10 +140,10 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
-			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			//should handle the namespace
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
 		})
 	})
 	Context("The operator should respect to an opt-in namespaceSelector in ClusterPodPlacementConfig CR", func() {
@@ -212,10 +212,10 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
-			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(&archLabelNSR).Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			//should handle the namespace
 			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test", expectedNSTs)
+			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
 		})
 	})
 	Context("The webhook should not gate pods with node selectors that pin them to the control plane", func() {

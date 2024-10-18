@@ -30,8 +30,13 @@ func (c *ClusterRoleBindingBuilder) WithName(name string) *ClusterRoleBindingBui
 	return c
 }
 
-func (c *ClusterRoleBindingBuilder) WithSubjects(subjects ...v1.Subject) *ClusterRoleBindingBuilder {
-	c.clusterRoleBinding.Subjects = subjects
+func (c *ClusterRoleBindingBuilder) WithSubjects(subjects ...*v1.Subject) *ClusterRoleBindingBuilder {
+	for i := range subjects {
+		if subjects[i] == nil {
+			panic("nil value passed to WithSubjects")
+		}
+		c.clusterRoleBinding.Subjects = append(c.clusterRoleBinding.Subjects, *subjects[i])
+	}
 	return c
 }
 

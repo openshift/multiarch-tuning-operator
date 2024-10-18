@@ -23,7 +23,7 @@ var _ = Describe("Controllers/PodPlacement/scheduling_gate_mutating_webhook", fu
 					WithNamespace("test-namespace").
 					WithNodeName("test-node-name").
 					Build()
-				err := k8sClient.Create(ctx, &pod)
+				err := k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create the pod", err)
 			})
 		})

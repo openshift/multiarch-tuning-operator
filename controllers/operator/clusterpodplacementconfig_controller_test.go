@@ -351,12 +351,12 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 					WithSchedulingGates("different-scheduling-gate").
 					WithNamespace("test-namespace").
 					Build()
-				err := k8sClient.Create(ctx, &pod)
+				err := k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				err = k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
 				Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
 				Eventually(framework.ValidateDeletion(k8sClient, ctx)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
-				err = k8sClient.Delete(ctx, &pod)
+				err = k8sClient.Delete(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to delete pod", err)
 			})
 			It("Should not remove finalizers and not allow the collection of ClusterPodPlcementConfig and Pod placement controller deployment until pods with our scheduling gates are present", func() {
@@ -367,7 +367,7 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 					WithSchedulingGates(utils.SchedulingGateName).
 					WithNamespace("test-namespace").
 					Build()
-				err := k8sClient.Create(ctx, &pod)
+				err := k8sClient.Create(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
 				By("The pod has been created with our scheduling gate (the pod reconciler is not running in the integration test, therefore the scheduling gate will not be removed)")
 				err = k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
@@ -392,7 +392,7 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 					)
 				})
 				By("Manually delete the gated pod")
-				err = k8sClient.Delete(ctx, &pod)
+				err = k8sClient.Delete(ctx, pod)
 				Expect(err).NotTo(HaveOccurred(), "failed to delete pod", err)
 				By("The pod has been deleted and the ClusterPodPlacementConfig should now be collected")
 				Eventually(framework.ValidateDeletion(k8sClient, ctx)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")

@@ -24,13 +24,8 @@ func (s *ServiceBuilder) WithNamespace(namespace string) *ServiceBuilder {
 	return s
 }
 
-func (s *ServiceBuilder) WithPorts(values ...*v1.ServicePort) *ServiceBuilder {
-	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithPorts")
-		}
-		s.service.Spec.Ports = append(s.service.Spec.Ports, *values[i])
-	}
+func (s *ServiceBuilder) WithPorts(values ...v1.ServicePort) *ServiceBuilder {
+	s.service.Spec.Ports = append(s.service.Spec.Ports, values...)
 	return s
 }
 

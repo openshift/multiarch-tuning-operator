@@ -180,7 +180,7 @@ relatedImages:
     name: ""
 schema: olm.bundle
 ---
-image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:1a3cb62081d6e6c6ce874b861bf94906c6f18fae39e2ad85b7c4dba1481dddd5
+image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:c5f8a7b6369a7babde2c1d41cefef83f4232462989cf98eaadbf538c9f9e867b
 name: multiarch-tuning-operator.v1.0.0
 package: multiarch-tuning-operator
 properties:
@@ -225,8 +225,8 @@ properties:
         capabilities: Seamless Upgrades
         categories: OpenShift Optional, Other
         console.openshift.io/disable-operand-delete: "false"
-        containerImage: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:531048914f493b44f8b1c6f23adaf506c2a67bee23fb92eabc3d7938f5e5d56d
-        createdAt: "2024-09-30T12:29:39Z"
+        containerImage: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:5756908166dc82d006fec3d4ec0b34d6bfb9c985e5e8cc2989570e59ca0c8fd2
+        createdAt: "2024-10-16T20:07:51Z"
         features.operators.openshift.io/cnf: "false"
         features.operators.openshift.io/cni: "false"
         features.operators.openshift.io/csi: "false"
@@ -309,8 +309,8 @@ properties:
         name: Red Hat
         url: https://github.com/openshift/multiarch-tuning-operator
 relatedImages:
-  - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:1a3cb62081d6e6c6ce874b861bf94906c6f18fae39e2ad85b7c4dba1481dddd5
+  - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:c5f8a7b6369a7babde2c1d41cefef83f4232462989cf98eaadbf538c9f9e867b
     name: ""
-  - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:531048914f493b44f8b1c6f23adaf506c2a67bee23fb92eabc3d7938f5e5d56d
+  - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:5756908166dc82d006fec3d4ec0b34d6bfb9c985e5e8cc2989570e59ca0c8fd2
     name: ""
 schema: olm.bundle

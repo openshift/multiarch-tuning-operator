@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
@@ -76,6 +75,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 	})
 	Context("The webhook should get requests only for pods matching the namespaceSelector in the ClusterPodPlacementConfig CR", func() {
 		BeforeEach(func() {
+			By("set opt-out namespaceSelector for ClusterPodPlacementConfig")
 			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
@@ -93,6 +93,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 		})
 		It("should exclude namespaces that have the opt-out label", func() {
 			var err error
+			By("create namespace with opt-out label")
 			ns := framework.NewEphemeralNamespace()
 			ns.Labels = map[string]string{
 				"multiarch.openshift.io/exclude-pod-placement": "",
@@ -114,11 +115,14 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
-			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test")
+			By("The pod should not have been processed by the webhook and the scheduling gate label should not be set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Absent, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("should handle namespaces that do not have the opt-out label", func() {
 			var err error
+			By("create namespace without opt-out label")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
@@ -142,12 +146,23 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			//should handle the namespace
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set architecture label")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 	})
 	Context("The operator should respect to an opt-in namespaceSelector in ClusterPodPlacementConfig CR", func() {
 		BeforeEach(func() {
+			By("set opt-in namespaceSelector for ClusterPodPlacementConfig")
 			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
@@ -165,6 +180,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 		})
 		It("should exclude namespaces that do not match the opt-in configuration", func() {
 			var err error
+			By("create namespace without opt-in label")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
@@ -183,11 +199,14 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
-			verifyPodLabels(ns, "app", "test", e2e.Absent, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test")
+			By("The pod should not have been processed by the webhook and the scheduling gate label should not be set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Absent, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("should handle namespaces that match the opt-in configuration", func() {
 			var err error
+			By("create namespace with opt-in label")
 			ns := framework.NewEphemeralNamespace()
 			ns.Labels = map[string]string{
 				"multiarch.openshift.io/include-pod-placement": "",
@@ -214,8 +233,18 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			//should handle the namespace
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set architecture label")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 	})
 	Context("The webhook should not gate pods with node selectors that pin them to the control plane", func() {
@@ -257,64 +286,13 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			//should exclude the namespace
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
-			verifyPodNodeAffinity(ns, "app", "test")
+			By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		},
 			Entry(utils.ControlPlaneNodeSelectorLabel, utils.ControlPlaneNodeSelectorLabel),
 			Entry(utils.MasterNodeSelectorLabel, utils.MasterNodeSelectorLabel),
 		)
 	})
 })
-
-func verifyPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue string, nodeSelectorTerms ...corev1.NodeSelectorTerm) {
-	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
-	labelSelector := labels.NewSelector().Add(*r)
-	Expect(err).NotTo(HaveOccurred())
-	Eventually(func(g Gomega) {
-		pods := &corev1.PodList{}
-		err := client.List(ctx, pods, &runtimeclient.ListOptions{
-			Namespace:     ns.Name,
-			LabelSelector: labelSelector,
-		})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(pods.Items).NotTo(BeEmpty())
-		if len(nodeSelectorTerms) == 0 {
-			g.Expect(pods.Items).To(HaveEach(WithTransform(func(p corev1.Pod) *corev1.Affinity {
-				return p.Spec.Affinity
-			}, BeNil())))
-		} else {
-			g.Expect(pods.Items).To(HaveEach(framework.HaveEquivalentNodeAffinity(
-				&corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: nodeSelectorTerms,
-					},
-				})))
-		}
-	}, e2e.WaitShort).Should(Succeed())
-}
-
-func verifyPodLabels(ns *corev1.Namespace, labelKey string, labelInValue string, ifPresent bool, entries map[string]string) {
-	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
-	labelSelector := labels.NewSelector().Add(*r)
-	Expect(err).NotTo(HaveOccurred())
-	Eventually(func(g Gomega) {
-		pods := &corev1.PodList{}
-		err := client.List(ctx, pods, &runtimeclient.ListOptions{
-			Namespace:     ns.Name,
-			LabelSelector: labelSelector,
-		})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(pods.Items).NotTo(BeEmpty())
-		for k, v := range entries {
-			if ifPresent {
-				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
-					return p.Labels
-				}, And(Not(BeEmpty()), HaveKeyWithValue(k, v)))))
-			} else {
-				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
-					return p.Labels
-				}, Not(HaveKey(k)))))
-			}
-		}
-	}, e2e.WaitShort).Should(Succeed())
-}

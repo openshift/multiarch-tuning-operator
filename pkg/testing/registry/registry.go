@@ -236,7 +236,11 @@ func RemoveCertificateFromConfigmap(ctx context.Context, client runtimeclient.Cl
 		},
 	}), &c)
 	if err != nil {
-		return err
+		if runtimeclient.IgnoreNotFound(err) == nil {
+			return nil
+		} else {
+			return err
+		}
 	}
 	delete(c.Data, fmt.Sprintf("%s..%d", r.RegistryHost, r.Port))
 	err = client.Update(ctx, &c)

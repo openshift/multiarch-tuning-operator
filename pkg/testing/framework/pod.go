@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/onsi/gomega"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
@@ -15,24 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
-
-func VerifyPodsAreRunning(g Gomega, ctx context.Context, client runtimeclient.Client, ns *v1.Namespace, labelKey string, labelInValue string) {
-	r, err := labels.NewRequirement(labelKey, selection.In, []string{labelInValue})
-	labelSelector := labels.NewSelector().Add(*r)
-	g.Expect(err).NotTo(HaveOccurred())
-	pods := &v1.PodList{}
-	err = client.List(ctx, pods, &runtimeclient.ListOptions{
-		Namespace:     ns.Name,
-		LabelSelector: labelSelector,
-	})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(pods.Items).NotTo(BeEmpty())
-	g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p v1.Pod) v1.PodPhase {
-		return p.Status.Phase
-	}, Equal(v1.PodRunning))))
-}
 
 func GetPodsWithLabel(ctx context.Context, client runtimeclient.Client, namespace, labelKey, labelInValue string) (*v1.PodList, error) {
 	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
@@ -97,4 +83,138 @@ func StorePodsLog(ctx context.Context, clientset *kubernetes.Clientset, client r
 		}
 	}
 	return nil
+}
+
+func VerifyPodsAreRunning(ctx context.Context, client runtimeclient.Client, ns *v1.Namespace, labelKey string, labelInValue string) func(gomega.Gomega) {
+	return func(g gomega.Gomega) {
+		r, err := labels.NewRequirement(labelKey, selection.In, []string{labelInValue})
+		labelSelector := labels.NewSelector().Add(*r)
+		g.Expect(err).NotTo(HaveOccurred())
+		pods := &v1.PodList{}
+		err = client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p v1.Pod) v1.PodPhase {
+			return p.Status.Phase
+		}, Equal(v1.PodRunning))))
+	}
+}
+
+func VerifyPodNodeAffinity(ctx context.Context, client runtimeclient.Client, ns *v1.Namespace, labelKey string, labelInValue string, nodeSelectorTerms ...v1.NodeSelectorTerm) func(gomega.Gomega) {
+	return func(g gomega.Gomega) {
+		r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
+		labelSelector := labels.NewSelector().Add(*r)
+		g.Expect(err).NotTo(HaveOccurred())
+		pods := &v1.PodList{}
+		err = client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		if len(nodeSelectorTerms) == 0 {
+			g.Expect(pods.Items).To(HaveEach(WithTransform(func(p v1.Pod) *v1.Affinity {
+				return p.Spec.Affinity
+			}, BeNil())))
+		} else {
+			g.Expect(pods.Items).To(HaveEach(HaveEquivalentNodeAffinity(
+				&v1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
+						NodeSelectorTerms: nodeSelectorTerms,
+					},
+				})))
+		}
+	}
+}
+
+func VerifyDaemonSetPodNodeAffinity(ctx context.Context, client runtimeclient.Client, ns *v1.Namespace, labelKey string, labelInValue string, nodeSelectorRequirement *v1.NodeSelectorRequirement) func(g gomega.Gomega) {
+	return func(g gomega.Gomega) {
+		r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
+		labelSelector := labels.NewSelector().Add(*r)
+		g.Expect(err).NotTo(HaveOccurred())
+		pods := &v1.PodList{}
+		err = client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		for i := 0; i < len(pods.Items); i++ {
+			pod := pods.Items[i]
+			nodename := pod.Spec.NodeName
+			nodenameNSR := builder.NewNodeSelectorRequirement().
+				WithKeyAndValues("metadata.name", v1.NodeSelectorOpIn, nodename).
+				Build()
+			expectedNSTs := builder.NewNodeSelectorTerm().WithMatchExpressions(nodeSelectorRequirement).WithMatchFields(nodenameNSR).Build()
+			g.Expect([]v1.Pod{pod}).To(HaveEach(HaveEquivalentNodeAffinity(
+				&v1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
+						NodeSelectorTerms: []v1.NodeSelectorTerm{*expectedNSTs},
+					},
+				})))
+		}
+	}
+}
+
+func VerifyPodAnnotations(ctx context.Context, client runtimeclient.Client, ns *v1.Namespace, labelKey string, labelInValue string, entries map[string]string) func(g gomega.Gomega) {
+	return func(g gomega.Gomega) {
+		r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
+		labelSelector := labels.NewSelector().Add(*r)
+		g.Expect(err).NotTo(HaveOccurred())
+		pods := &v1.PodList{}
+		err = client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		for k, v := range entries {
+			g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p v1.Pod) map[string]string {
+				return p.Annotations
+			}, And(Not(BeEmpty()), HaveKeyWithValue(k, v)))))
+		}
+	}
+}
+
+func VerifyPodLabels(ctx context.Context, client runtimeclient.Client, ns *v1.Namespace, labelKey string, labelInValue string, ifPresent bool, entries map[string]string) func(g gomega.Gomega) {
+	return func(g gomega.Gomega) {
+		r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
+		labelSelector := labels.NewSelector().Add(*r)
+		g.Expect(err).NotTo(HaveOccurred())
+		pods := &v1.PodList{}
+		err = client.List(ctx, pods, &runtimeclient.ListOptions{
+			Namespace:     ns.Name,
+			LabelSelector: labelSelector,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(pods.Items).NotTo(BeEmpty())
+		for k, v := range entries {
+			if ifPresent {
+				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p v1.Pod) map[string]string {
+					return p.Labels
+				}, And(Not(BeEmpty()), HaveKeyWithValue(k, v)))))
+			} else {
+				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p v1.Pod) map[string]string {
+					return p.Labels
+				}, Not(HaveKey(k)))))
+			}
+		}
+	}
+}
+
+func VerifyPodLabelsAreSet(ctx context.Context, client runtimeclient.Client, ns *v1.Namespace, labelKey string, labelInValue string, labelsKeyValuePair ...string) func(g gomega.Gomega) {
+	return func(g gomega.Gomega) {
+		if len(labelsKeyValuePair)%2 != 0 {
+			// It's ok to panic as this is only used in unit tests.
+			panic("the number of arguments must be even")
+		}
+		entries := make(map[string]string)
+		for i := 0; i < len(labelsKeyValuePair); i += 2 {
+			entries[labelsKeyValuePair[i]] = labelsKeyValuePair[i+1]
+		}
+		VerifyPodLabels(ctx, client, ns, labelKey, labelInValue, true, entries)
+	}
 }

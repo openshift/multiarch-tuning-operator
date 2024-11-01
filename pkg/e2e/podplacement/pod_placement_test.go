@@ -10,9 +10,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/labels"
-
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
@@ -62,11 +59,13 @@ var _ = Describe("The Pod Placement Operand", func() {
 	Context("When a deployment is deployed with a single container and a public image", func() {
 		It("should set the node affinity", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a deployment using the single container with a public multiarch image")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				Build()
@@ -84,18 +83,22 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity on privileged deployments", func() {
 			var err error
+			By("Create an ephemeral namespace with security labels")
 			ns := framework.NewEphemeralNamespace()
 			ns.Labels = map[string]string{
 				"pod-security.kubernetes.io/audit":               "privileged",
@@ -109,6 +112,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			defer client.Delete(ctx, ns)
 			// Since the CRB to enable using SCCs is cluster-scoped, build its name based on the NS to
 			// ensure concurrency safety with other possible test cases
+			By("Create a clusterrolebinding to enable using scc")
 			ephemeralCRBName := framework.NormalizeNameString("priv-scc-" + ns.Name)
 			s := NewSubject().WithKind(rbacv1.ServiceAccountKind).WithName("default").WithNamespace(ns.Name).Build()
 			crb := NewClusterRoleBinding().
@@ -120,6 +124,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, crb)
+			By("Create a deployment using the container with security context setting")
 			sc := NewSecurityContext().WithPrivileged(utils.NewPtr(true)).
 				WithRunAsGroup(utils.NewPtr(int64(0))).
 				WithRunAsUSer(utils.NewPtr(int64(0))).
@@ -145,31 +150,36 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			// TODO: verify the pod has some scc label
+			By("Verify the pod has scc label")
 			sccAnnotation := map[string]string{"openshift.io/scc": "privileged"}
-			verifyPodAnnotations(ns, "app", "test", sccAnnotation)
+			Eventually(framework.VerifyPodAnnotations(ctx, client, ns, "app", "test", sccAnnotation), e2e.WaitShort).Should(Succeed())
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity when users node affinity do not conflict", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a deployment using the container with non-confliction node affinity")
 			hostnameLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.HostnameLabel, corev1.NodeSelectorOpExists).
 				Build()
@@ -192,23 +202,28 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(hostnameLabelNSR, archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should not set the node affinity when users node affinity conflicts", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a deployment using the container with conflicting node affinity")
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
 				Build()
@@ -225,16 +240,20 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
-			verifyPodNodeAffinity(ns, "app", "test", *archLabelNSTs)
+			By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should keep the same node affinity provided by the users. No node affinity is added by the controller.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *archLabelNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should check each matchExpressions when users node affinity has multiple matchExpressions", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a deployment using the container with multiple matchExpressions on node affinity set")
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
 				Build()
@@ -260,24 +279,29 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedHostnameNST := NewNodeSelectorTerm().WithMatchExpressions(hostnameLabelNSR, expectedArchLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedHostnameNST, *archLabelNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedHostnameNST, *archLabelNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should neither set the node affinity nor gate pods when nodeSelector exist", func() {
 			var err error
 			var nodeSelectors = map[string]string{utils.ArchLabel: utils.ArchitectureAmd64}
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a deployment using the container with a preset nodeSelector")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				WithNodeSelectors(nodeSelectors).
@@ -291,8 +315,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
-			verifyPodNodeAffinity(ns, "app", "test")
+			By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("should neither set the node affinity not gate pods when nodeName exist", func() {
 			var err error
@@ -320,24 +346,24 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			By("The pod should not have been processed by the webhook and the scheduling gate label should not be added")
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
+			By("The pod should not have been processed by the webhook and the scheduling gate label should set as not-set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should keep the same node affinity provided by the users. No node affinity is added by the controller.")
-			verifyPodNodeAffinity(ns, "app", "test")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 			By("The pod should be running and not gated")
-			Eventually(func(g Gomega) {
-				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
-			}, e2e.WaitShort).Should(Succeed())
+			Eventually(framework.VerifyPodsAreRunning(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 	})
 	Context("When a statefulset is deployed with single vs multi container images", func() {
 		It("should set the node affinity when with a single container and a singlearch image", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a statefulset using the container with a singlearch image")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicArmImage).
 				Build()
@@ -354,20 +380,25 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.SingleArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity when with a single container and a multiarch image", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a statefulset using the container with a multiarch image")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				Build()
@@ -385,23 +416,28 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity when with more containers some with singlearch image some with multiarch image", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a statefulset using more containers some with singlearch image some with multiarch image")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage, helloOpenshiftPublicArmImage).
 				Build()
@@ -418,16 +454,25 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
+				utils.SingleArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should not set the node affinity when more multiarch image-based containers and users set node affinity", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a statefulset using the containers with conflicting node affinity")
 			archLabelNSR := NewNodeSelectorRequirement().
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
 				Build()
@@ -445,16 +490,20 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, s)
 			Expect(err).NotTo(HaveOccurred())
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateNotSetLabel)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should keep the same node affinity provided by the users. No node affinity is added by the controller.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity when with more containers all with multiarch image", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a statefulset using more containers all with multiarch image")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage, helloOpenshiftPublicArmAmdImage, helloOpenshiftPublicArmPpcImage).
 				Build()
@@ -471,22 +520,27 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.SingleArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 	})
 	Context("PodPlacementOperand works with several high-level resources owning pods", func() {
 		It("should set the node affinity on DaemonSet owning pod", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a daemonset using the container with a multiarch image")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				Build()
@@ -502,23 +556,28 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyDaemonSetPodNodeAffinity(ns, "app", "test", archLabelNSR)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyDaemonSetPodNodeAffinity(ctx, client, ns, "app", "test", archLabelNSR), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity on Job owning pod", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a job using the container with a multiarch image")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				WithRestartPolicy("OnFailure").
@@ -536,23 +595,28 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity on Build owning pod", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a build using the container with a multiarch image")
 			b := NewBuild().
 				WithDockerImage(helloOpenshiftPublicMultiarchImage).
 				WithName("test-build").
@@ -565,23 +629,28 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "openshift.io/build.name", "test-build", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "openshift.io/build.name", "test-build",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "openshift.io/build.name", "test-build", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "openshift.io/build.name", "test-build",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "openshift.io/build.name", "test-build", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "openshift.io/build.name", "test-build", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity on DeploymentConfig owning pod", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a deploymentconfig using the container with a multiarch image")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				Build()
@@ -599,25 +668,30 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 	})
 	Context("When deploying workloads with public and private images", func() {
 		It("should not set the node affinity if missing a pull secret", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a deployment using the container with private images and do not configure pull secret for it")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPrivateMultiarchImageLocal).
 				Build()
@@ -630,16 +704,20 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodNodeAffinity(ns, "app", "test")
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have been set node affinity of arch info becasue pull secret is missing.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity in pods with images requiring credentials set in the global pull secret", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a deployment using the container with private images requiring credentials set in the global pull secret")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPrivateArmPpcImageGlobal).
 				Build()
@@ -656,21 +734,26 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity in pods with images requiring credentials set in pods imagePullSecrets", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create a secret for local pull secret")
 			secretData := map[string][]byte{
 				".dockerconfigjson": []byte(fmt.Sprintf(`{"auths":{"%s":{"auth":"%s"}}}`,
 					registryAddress, base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(
@@ -684,6 +767,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, secret)
 			Expect(err).NotTo(HaveOccurred())
+			By("Create a deployment using the container with images that requiring credentials set in pod imagePullSecrets")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPrivateMultiarchImageLocal).
 				WithImagePullSecrets(secret.Name).
@@ -702,23 +786,28 @@ var _ = Describe("The Pod Placement Operand", func() {
 					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity in pods with images that require both global and local pull secrets", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
+			By("Create secret for local pull secret")
 			secretData := map[string][]byte{
 				".dockerconfigjson": []byte(fmt.Sprintf(`{"auths":{"%s":{"auth":"%s"}}}`,
 					registryAddress, base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(
@@ -732,6 +821,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, secret)
 			Expect(err).NotTo(HaveOccurred())
+			By("Create a deployment using the containers with images that require both global and local pull secrets")
 			ps := NewPodSpec().
 				WithContainersImages(helloOpenshiftPrivateMultiarchImageGlobal, helloOpenshiftPrivateArmImageGlobal,
 					helloOpenshiftPrivateArmPpcImageLocal, helloOpenshiftPrivateArmImageLocal).
@@ -750,23 +840,27 @@ var _ = Describe("The Pod Placement Operand", func() {
 				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureArm64).
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
-			verifyPodLabelsAreSet(ns, "app", "test",
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.SingleArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
-			)
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 		})
 	})
 	Context("When deploying workloads that registry of image uses a self-signed certificate", Serial, func() {
 		It("should set the node affinity when registry url added to insecureRegistries list", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
-			By("Create deployment with image in insecure Registry")
+			By("Create a deployment using the container with image from registry added in insecure list")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
@@ -785,26 +879,27 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			By("The pod should get node affinity of arch info beucase registry is added in insecure list.")
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
-			By("The pod should have been set architecture label")
-			verifyPodLabelsAreSet(ns, "app", "test",
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
+			), e2e.WaitShort).Should(Succeed())
 		})
 		It("should not set the node affinity when registry certificate is not in the trusted anchors", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
-			By("Create deployment with image in untrusted Registry")
+			By("Create a deployment using the container with image from an untrusted Registry")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
@@ -818,18 +913,19 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should not get node affinity of arch info beucase registry certificate is not in the trusted anchors.")
-			verifyPodNodeAffinity(ns, "app", "test")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity when registry certificate is added in the trusted anchors", func() {
 			var err error
+			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
-			By("Create deployment with image in trusted Registry")
+			By("Create a deployment using the container with image from the registry its certificate added in the trusted Registry")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(
@@ -848,17 +944,17 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should get node affinity of arch info because registry certificate is added in the trusted anchors.")
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
-			By("The pod should have been set architecture label")
-			verifyPodLabelsAreSet(ns, "app", "test",
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
+			By("Verify arch label are set")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
+			), e2e.WaitShort).Should(Succeed())
 		})
 		It("should not set the node affinity when registry url added to blockedRegistries list", func() {
 			var err error
@@ -869,7 +965,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
 			// Check ppo will block image from registry in blocked registry list
-			By("Create deployment with image in blocked Registry")
+			By("Create a deployment using the container with image from registry which is added in blocked list")
 			d := NewDeployment().
 				WithSelectorAndPodLabels(map[string]string{"app": "test-block"}).
 				WithPodSpec(
@@ -883,9 +979,9 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			verifyPodLabels(ns, "app", "test-block", e2e.Present, schedulingGateLabel)
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test-block", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should not get node affinity of arch info beucase registry is in blocked list.")
-			verifyPodNodeAffinity(ns, "app", "test-block")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test-block"), e2e.WaitShort).Should(Succeed())
 		})
 	})
 	Context("When deploying workloads running images in registries that have mirrors configuration", func() {
@@ -916,21 +1012,19 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should get node affinity of arch info because the mirror registries are functional.")
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 			By("Verify arch label are set")
-			verifyPodLabelsAreSet(ns, "app", "test",
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
+			), e2e.WaitShort).Should(Succeed())
 			By("The pod should be running")
-			Eventually(func(g Gomega) {
-				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
-			}, e2e.WaitShort).Should(Succeed())
+			Eventually(framework.VerifyPodsAreRunning(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("Should set node affinity when source registry is unavailable, mirrors are working and NeverContactingSource enabled in a ImageDigestMirrorSet", func() {
 			var err error
@@ -959,21 +1053,19 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should get node affinity of arch info because the mirror registries are functional.")
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 			By("Verify arch label are set")
-			verifyPodLabelsAreSet(ns, "app", "test",
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
+			), e2e.WaitShort).Should(Succeed())
 			By("The pod should be running")
-			Eventually(func(g Gomega) {
-				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
-			}, e2e.WaitShort).Should(Succeed())
+			Eventually(framework.VerifyPodsAreRunning(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("Should set node affinity when source registry is working, mirrors are unavailable and AllowContactingSource enabled in a ImageTagMirrorSet", func() {
 			var err error
@@ -1002,21 +1094,19 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should get node affinity of arch info even if mirror registries down but AllowContactingSource enabled and source is functional.")
-			verifyPodNodeAffinity(ns, "app", "test", *expectedNSTs)
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 			By("Verify arch label are set")
-			verifyPodLabelsAreSet(ns, "app", "test",
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
 				utils.MultiArchLabel, "",
 				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
 				utils.ArchLabelValue(utils.ArchitectureArm64), "",
 				utils.ArchLabelValue(utils.ArchitectureS390x), "",
 				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			)
+			), e2e.WaitShort).Should(Succeed())
 			By("The pod should be running")
-			Eventually(func(g Gomega) {
-				framework.VerifyPodsAreRunning(g, ctx, client, ns, "app", "test")
-			}, e2e.WaitShort).Should(Succeed())
+			Eventually(framework.VerifyPodsAreRunning(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("Should not set node affinity when source registry is working, mirrors are unavailable and NeverContactingSource enabled in a ImageTagMirrorSet", func() {
 			var err error
@@ -1040,123 +1130,9 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			verifyPodLabels(ns, "app", "test", e2e.Present, schedulingGateLabel)
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should not get node affinity of arch info because mirror registries are down and NeverContactSource is enabled.")
-			verifyPodNodeAffinity(ns, "app", "test")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 	})
 })
-
-func verifyPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue string, nodeSelectorTerms ...corev1.NodeSelectorTerm) {
-	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
-	labelSelector := labels.NewSelector().Add(*r)
-	Expect(err).NotTo(HaveOccurred())
-	Eventually(func(g Gomega) {
-		pods := &corev1.PodList{}
-		err := client.List(ctx, pods, &runtimeclient.ListOptions{
-			Namespace:     ns.Name,
-			LabelSelector: labelSelector,
-		})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(pods.Items).NotTo(BeEmpty())
-		if len(nodeSelectorTerms) == 0 {
-			g.Expect(pods.Items).To(HaveEach(WithTransform(func(p corev1.Pod) *corev1.Affinity {
-				return p.Spec.Affinity
-			}, BeNil())))
-		} else {
-			g.Expect(pods.Items).To(HaveEach(framework.HaveEquivalentNodeAffinity(
-				&corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: nodeSelectorTerms,
-					},
-				})))
-		}
-	}, e2e.WaitShort).Should(Succeed())
-}
-
-func verifyDaemonSetPodNodeAffinity(ns *corev1.Namespace, labelKey string, labelInValue string, nodeSelectorRequirement *corev1.NodeSelectorRequirement) {
-	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
-	labelSelector := labels.NewSelector().Add(*r)
-	Expect(err).NotTo(HaveOccurred())
-	Eventually(func(g Gomega) {
-		pods := &corev1.PodList{}
-		err := client.List(ctx, pods, &runtimeclient.ListOptions{
-			Namespace:     ns.Name,
-			LabelSelector: labelSelector,
-		})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(pods.Items).NotTo(BeEmpty())
-		for i := 0; i < len(pods.Items); i++ {
-			pod := pods.Items[i]
-			nodename := pod.Spec.NodeName
-			nodenameNSR := NewNodeSelectorRequirement().
-				WithKeyAndValues("metadata.name", corev1.NodeSelectorOpIn, nodename).
-				Build()
-			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(nodeSelectorRequirement).WithMatchFields(nodenameNSR).Build()
-			g.Expect([]corev1.Pod{pod}).To(HaveEach(framework.HaveEquivalentNodeAffinity(
-				&corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: []corev1.NodeSelectorTerm{*expectedNSTs},
-					},
-				})))
-		}
-	}, e2e.WaitShort).Should(Succeed())
-}
-
-func verifyPodAnnotations(ns *corev1.Namespace, labelKey string, labelInValue string, entries map[string]string) {
-	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
-	labelSelector := labels.NewSelector().Add(*r)
-	Expect(err).NotTo(HaveOccurred())
-	Eventually(func(g Gomega) {
-		pods := &corev1.PodList{}
-		err := client.List(ctx, pods, &runtimeclient.ListOptions{
-			Namespace:     ns.Name,
-			LabelSelector: labelSelector,
-		})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(pods.Items).NotTo(BeEmpty())
-		for k, v := range entries {
-			g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
-				return p.Annotations
-			}, And(Not(BeEmpty()), HaveKeyWithValue(k, v)))))
-		}
-	}, e2e.WaitShort).Should(Succeed())
-}
-
-func verifyPodLabels(ns *corev1.Namespace, labelKey string, labelInValue string, ifPresent bool, entries map[string]string) {
-	r, err := labels.NewRequirement(labelKey, "in", []string{labelInValue})
-	labelSelector := labels.NewSelector().Add(*r)
-	Expect(err).NotTo(HaveOccurred())
-	Eventually(func(g Gomega) {
-		pods := &corev1.PodList{}
-		err := client.List(ctx, pods, &runtimeclient.ListOptions{
-			Namespace:     ns.Name,
-			LabelSelector: labelSelector,
-		})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(pods.Items).NotTo(BeEmpty())
-		for k, v := range entries {
-			if ifPresent {
-				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
-					return p.Labels
-				}, And(Not(BeEmpty()), HaveKeyWithValue(k, v)))))
-			} else {
-				g.Expect(pods.Items).Should(HaveEach(WithTransform(func(p corev1.Pod) map[string]string {
-					return p.Labels
-				}, Not(HaveKey(k)))))
-			}
-		}
-	}, e2e.WaitShort).Should(Succeed())
-}
-
-func verifyPodLabelsAreSet(ns *corev1.Namespace, labelKey string, labelInValue string, labelsKeyValuePair ...string) {
-	if len(labelsKeyValuePair)%2 != 0 {
-		// It's ok to panic as this is only used in unit tests.
-		panic("the number of arguments must be even")
-	}
-	entries := make(map[string]string)
-	for i := 0; i < len(labelsKeyValuePair); i += 2 {
-		entries[labelsKeyValuePair[i]] = labelsKeyValuePair[i+1]
-	}
-	verifyPodLabels(ns, labelKey, labelInValue, true, entries)
-}

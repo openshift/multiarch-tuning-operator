@@ -34,9 +34,8 @@ var (
 )
 
 type SystemConfigSyncer struct {
-	registriesConfContent registriesConf
-	policyConfContent     signature.Policy
-	registryCertTuples    []registryCertTuple
+	policyConfContent  signature.Policy
+	registryCertTuples []registryCertTuple
 
 	ch chan bool
 	mu sync.Mutex
@@ -56,39 +55,6 @@ func (s *SystemConfigSyncer) StoreImageRegistryConf(allowedRegistries []string, 
 	}
 	s.mu.Lock()
 	defer s.unlockAndSync()
-	// Ensure the previous state is reset
-	for _, rc := range s.registriesConfContent.Registries {
-		rc.Blocked = nil
-		rc.Insecure = nil
-	}
-	s.policyConfContent = defaultPolicy()
-	if len(allowedRegistries) > 0 {
-		// Set the default policy to reject
-		s.policyConfContent.Default = signature.PolicyRequirements{signature.NewPRReject()}
-	}
-
-	// At the time of writing, we don't see the need to generate multiple bool pointers. Keeping it the same, but at
-	// the registryConf level.
-	trueValue := true
-	for _, registry := range allowedRegistries {
-		rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
-		s.policyConfContent.Transports[dockerTransport][registry] = signature.PolicyRequirements{
-			signature.NewPRInsecureAcceptAnything(),
-		}
-		rc.Blocked = nil
-	}
-	for _, registry := range blockedRegistries {
-		rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
-		rc.Blocked = &trueValue
-		s.policyConfContent.Transports[dockerTransport][registry] = signature.PolicyRequirements{
-			signature.NewPRReject(),
-		}
-	}
-	for _, registry := range insecureRegistries {
-		rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
-		rc.Insecure = &trueValue
-	}
-	s.registriesConfContent.cleanupAllRegistryConfIfEmpty()
 	return nil
 }
 
@@ -107,37 +73,26 @@ func (s *SystemConfigSyncer) StoreRegistryCerts(registryCertTuples []registryCer
 func (s *SystemConfigSyncer) UpdateRegistryMirroringConfig(registry string, mirrors []string, pullType PullType) error {
 	s.mu.Lock()
 	defer s.unlockAndSync()
-	rc := s.registriesConfContent.getRegistryConfOrCreate(registry)
-	rc.Mirrors = mirrorsFor(mirrors, pullType)
 	return nil
 }
 
 func (s *SystemConfigSyncer) DeleteRegistryMirroringConfig(registry string) error {
 	s.mu.Lock()
 	defer s.unlockAndSync()
-	if rc, ok := s.registriesConfContent.getRegistryConf(registry); ok {
-		rc.Mirrors = nil
-		s.registriesConfContent.cleanupRegistryConfIfEmpty(registry)
-		return nil
-	}
 	return fmt.Errorf("registry %s not found", registry)
 }
 
 func (s *SystemConfigSyncer) CleanupRegistryMirroringConfig() error {
 	s.mu.Lock()
 	defer s.unlockAndSync()
-	for _, registry := range s.registriesConfContent.Registries {
-		registry.Mirrors = nil
-		s.registriesConfContent.cleanupRegistryConfIfEmpty(registry.Location)
-	}
 	return nil
 }
 
 func (s *SystemConfigSyncer) sync() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// marshall registries.conf and write to file
-	if err := s.registriesConfContent.writeToFile(); err != nil {
+	// create registries.conf file if it does not exist
+	if err := createTomlFile(RegistriesConfPath()); err != nil {
 		log.Error(err, "Error writing registries.conf")
 		return err
 	}
@@ -198,10 +153,9 @@ func (s *SystemConfigSyncer) Run(ctx context.Context) error {
 // newSystemConfigSyncer creates a new SystemConfigSyncer object
 func newSystemConfigSyncer() IConfigSyncer {
 	ic := &SystemConfigSyncer{
-		registriesConfContent: defaultRegistriesConf(),
-		policyConfContent:     defaultPolicy(),
-		registryCertTuples:    []registryCertTuple{},
-		ch:                    make(chan bool),
+		policyConfContent:  defaultPolicy(),
+		registryCertTuples: []registryCertTuple{},
+		ch:                 make(chan bool),
 	}
 	return ic
 }

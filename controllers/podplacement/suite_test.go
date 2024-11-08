@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,6 +30,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/BurntSushi/toml"
+	"github.com/openshift/multiarch-tuning-operator/pkg/image"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -86,6 +90,7 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(suiteLog)
 	SetDefaultEventuallyPollingInterval(5 * time.Millisecond)
 	SetDefaultEventuallyTimeout(5 * time.Second)
+
 	wg := &sync.WaitGroup{}
 	testingutils.DecorateWithWaitGroup(wg, startTestEnv)
 	testingutils.DecorateWithWaitGroup(wg, startRegistry)
@@ -102,9 +107,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("REGISTRIES_CERTS_DIR", filepath.Join(dir, "containers/registries.d"))
 	Expect(err).NotTo(HaveOccurred())
-	err = os.Setenv("REGISTRIES_CONF_PATH", filepath.Join("containers/registries.conf"))
+	err = os.Setenv("REGISTRIES_CONF_PATH", filepath.Join(dir, "containers/registries.conf"))
 	Expect(err).NotTo(HaveOccurred())
-	err = os.Setenv("POLICY_CONF_PATH", filepath.Join("containers/policy.json"))
+	err = os.Setenv("POLICY_CONF_PATH", filepath.Join(dir, "containers/policy.json"))
 	Expect(err).NotTo(HaveOccurred())
 
 	// TODO: should we continue running the manager in the BeforeSuite node?
@@ -191,7 +196,7 @@ func seedRegistry() {
 func seedK8S() {
 	var err error
 	By("Create internal namespaces")
-	testingutils.EnsureNamespaces(ctx, k8sClient, "openshift-image-registry", "openshift-config", "test-namespace")
+	testingutils.EnsureNamespaces(ctx, k8sClient, "openshift-config", "test-namespace")
 	By("Create the global pull secret")
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -206,19 +211,6 @@ func seedK8S() {
 		},
 	}
 	err = k8sClient.Create(ctx, secret)
-	Expect(err).NotTo(HaveOccurred())
-
-	By("Add the image registry certificate to the image-registry-certificates configmap")
-	registryCert := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "image-registry-certificates",
-			Namespace: "openshift-image-registry",
-		},
-		Data: map[string]string{
-			strings.Replace(registryAddress, ":", "..", 1): string(registryCert),
-		},
-	}
-	err = k8sClient.Create(ctx, registryCert)
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -254,14 +246,22 @@ func runManager() {
 		Handler: NewPodSchedulingGateMutatingWebHook(
 			mgr.GetClient(), clientset, mgr.GetScheme(), mgr.GetEventRecorderFor(utils.OperatorName), pool),
 	})
-	By("Setting up System Config Syncer")
-	err = mgr.Add(NewConfigSyncerRunnable())
-	Expect(err).NotTo(HaveOccurred())
 
-	By("Setting up Registry Certificates Syncer")
-	err = mgr.Add(NewRegistryCertificatesSyncer(clientset, "openshift-image-registry",
-		"image-registry-certificates"))
+	policyConfig := []byte(`{"default":[{"type":"insecureAcceptAnything"}],"transports":{"atomic":{},"docker":{},"docker-daemon":{"":[{"type":"insecureAcceptAnything"}]}}}`)
+	registryConfig, err := toml.Marshal(map[string]interface{}{
+		"unqualified-search-registries": []string{"registry.access.redhat.com", "docker.io"},
+		"short-name-mode":               "",
+		"registry":                      []string{},
+	})
+
 	Expect(err).NotTo(HaveOccurred())
+	By("Create containers/policy.json")
+	createFile(image.PolicyConfPath(), policyConfig)
+	By("Create containers/containers.conf")
+	createFile(image.RegistriesConfPath(), registryConfig)
+	By("Write fake image registry certificate to file")
+	createFile(filepath.Join(image.DockerCertsDir(),
+		strings.Replace(registryAddress, "..", ":", 1), "ca.crt"), registryCert)
 
 	By("Setting up Global Pull Secret Syncer")
 	err = mgr.Add(NewGlobalPullSecretSyncer(clientset, "openshift-config",
@@ -270,20 +270,6 @@ func runManager() {
 
 	err = mgr.AddReadyzCheck("readyz", healthz.Ping)
 	Expect(err).NotTo(HaveOccurred())
-
-	/***** TODO[OCP specific] ******
-	err = mgr.Add(openshiftsysconfig.NewICSPSyncer(mgr))
-	Expect(err).NotTo(HaveOccurred())
-
-	err = mgr.Add(openshiftsysconfig.NewIDMSSyncer(mgr))
-	 Expect(err).NotTo(HaveOccurred())
-
-	err = mgr.Add(openshiftsysconfig.NewITMSSyncer(mgr))
-	Expect(err).NotTo(HaveOccurred())
-
-	err = mgr.Add(openshiftsysconfig.NewImageRegistryConfigSyncer(mgr))
-	Expect(err).NotTo(HaveOccurred())
-	********/
 
 	By("Starting the manager")
 	go func() {
@@ -333,4 +319,17 @@ func getMutatingWebHook() *v1.MutatingWebhookConfiguration {
 			},
 		},
 	}
+}
+
+func createFile(path string, data []byte) {
+	err := os.MkdirAll(filepath.Dir(path), 0775)
+	Expect(err).NotTo(HaveOccurred())
+	f, err := os.Create(filepath.Clean(path))
+	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		err = f.Close()
+		Expect(err).NotTo(HaveOccurred())
+	}()
+	_, err = f.Write(data)
+	Expect(err).NotTo(HaveOccurred())
 }

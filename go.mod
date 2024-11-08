@@ -3,6 +3,7 @@ module github.com/openshift/multiarch-tuning-operator
 go 1.22.5
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/containers/image/v5 v5.32.1
 	github.com/distribution/distribution/v3 v3.0.0-beta.1
 	github.com/go-logr/logr v1.4.2

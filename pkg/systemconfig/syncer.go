@@ -18,7 +18,6 @@ package systemconfig
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 
@@ -49,15 +48,6 @@ func SystemConfigSyncerSingleton() IConfigSyncer {
 	return singletonSystemConfigInstance
 }
 
-func (s *SystemConfigSyncer) StoreImageRegistryConf(allowedRegistries []string, blockedRegistries []string, insecureRegistries []string) error {
-	if len(allowedRegistries) > 0 && len(blockedRegistries) > 0 {
-		return fmt.Errorf("only one of allowedRegistries and blockedRegistries can be set. Ignoring this event")
-	}
-	s.mu.Lock()
-	defer s.unlockAndSync()
-	return nil
-}
-
 func (s *SystemConfigSyncer) unlockAndSync() {
 	s.mu.Unlock()
 	s.ch <- true
@@ -67,24 +57,6 @@ func (s *SystemConfigSyncer) StoreRegistryCerts(registryCertTuples []registryCer
 	s.mu.Lock()
 	defer s.unlockAndSync()
 	s.registryCertTuples = registryCertTuples
-	return nil
-}
-
-func (s *SystemConfigSyncer) UpdateRegistryMirroringConfig(registry string, mirrors []string, pullType PullType) error {
-	s.mu.Lock()
-	defer s.unlockAndSync()
-	return nil
-}
-
-func (s *SystemConfigSyncer) DeleteRegistryMirroringConfig(registry string) error {
-	s.mu.Lock()
-	defer s.unlockAndSync()
-	return fmt.Errorf("registry %s not found", registry)
-}
-
-func (s *SystemConfigSyncer) CleanupRegistryMirroringConfig() error {
-	s.mu.Lock()
-	defer s.unlockAndSync()
 	return nil
 }
 

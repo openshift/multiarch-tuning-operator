@@ -710,6 +710,9 @@ var _ = Describe("The Pod Placement Operand", func() {
 			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity in pods with images requiring credentials set in the global pull secret", func() {
+			if len(masterNodes.Items) == 0 {
+				Skip("The current cluster is a hosted cluster, skipping global pull secret tests")
+			}
 			var err error
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
@@ -800,6 +803,9 @@ var _ = Describe("The Pod Placement Operand", func() {
 			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity in pods with images that require both global and local pull secrets", func() {
+			if len(masterNodes.Items) == 0 {
+				Skip("The current cluster is a hosted cluster, skipping global pull secret tests")
+			}
 			var err error
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
@@ -852,6 +858,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 	})
 	Context("When deploying workloads that registry of image uses a self-signed certificate", Serial, func() {
+		BeforeEach(func() {
+			if len(masterNodes.Items) == 0 {
+				Skip("The current cluster is a hosted cluster, skipping image config tests")
+			}
+		})
 		It("should set the node affinity when registry url added to insecureRegistries list", func() {
 			var err error
 			By("Create an ephemeral namespace")
@@ -985,6 +996,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 	})
 	Context("When deploying workloads running images in registries that have mirrors configuration", func() {
+		BeforeEach(func() {
+			if len(masterNodes.Items) == 0 {
+				Skip("The current cluster is a hosted cluster, skipping registry config tests")
+			}
+		})
 		It("Should set node affinity when source registry is unavailable, mirrors working and AllowContactingSource enabled in a ImageContentSourcePolicy", func() {
 			var err error
 			By("Create an ephemeral namespace")

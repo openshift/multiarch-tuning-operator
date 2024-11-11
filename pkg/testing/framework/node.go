@@ -3,6 +3,7 @@ package framework
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +13,21 @@ import (
 )
 
 func GetRandomNodeName(ctx context.Context, client runtimeclient.Client, labelKey string, labelInValue string) (string, error) {
+	nodes, err := GetNodesWithLabel(ctx, client, labelKey, labelInValue)
+	if err != nil {
+		return "", err
+	}
+	if len(nodes.Items) == 0 {
+		return "", fmt.Errorf("Got null nodes by key %s and value %s lable", labelKey, labelInValue)
+	}
+	randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(nodes.Items))))
+	if err != nil {
+		return "", err
+	}
+	return nodes.Items[randomIndex.Int64()].Name, nil
+}
+
+func GetNodesWithLabel(ctx context.Context, client runtimeclient.Client, labelKey string, labelInValue string) (*corev1.NodeList, error) {
 	var (
 		r   *labels.Requirement
 		err error
@@ -22,19 +38,15 @@ func GetRandomNodeName(ctx context.Context, client runtimeclient.Client, labelKe
 		r, err = labels.NewRequirement(labelKey, selection.In, []string{labelInValue})
 	}
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	labelSelector := labels.NewSelector().Add(*r)
-	workerNodes := &corev1.NodeList{}
-	err = client.List(ctx, workerNodes, &runtimeclient.ListOptions{
+	nodes := &corev1.NodeList{}
+	err = client.List(ctx, nodes, &runtimeclient.ListOptions{
 		LabelSelector: labelSelector,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(workerNodes.Items))))
-	if err != nil {
-		return "", err
-	}
-	return workerNodes.Items[randomIndex.Int64()].Name, nil
+	return nodes, nil
 }

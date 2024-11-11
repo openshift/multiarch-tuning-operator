@@ -624,23 +624,12 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, b)
 			Expect(err).NotTo(HaveOccurred())
-			archLabelNSR := NewNodeSelectorRequirement().
-				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
-					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
-				Build()
-			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
 			Eventually(framework.VerifyPodLabels(ctx, client, ns, "openshift.io/build.name", "test-build", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
-			By("Verify arch label are set")
+			By("Verify node affinity label are set")
 			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "openshift.io/build.name", "test-build",
-				utils.MultiArchLabel, "",
-				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
-				utils.ArchLabelValue(utils.ArchitectureArm64), "",
-				utils.ArchLabelValue(utils.ArchitectureS390x), "",
-				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+				utils.NodeAffinityLabel, utils.NodeAffinityLabelValueSet,
 			), e2e.WaitShort).Should(Succeed())
-			By("The pod should have been set node affinity of arch info.")
-			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "openshift.io/build.name", "test-build", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity on DeploymentConfig owning pod", func() {
 			var err error

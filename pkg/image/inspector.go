@@ -111,20 +111,6 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 		log.Error(err, "Error creating the PolicyContext")
 		return nil, err
 	}
-	if allowed, err := policyCtx.IsRunningImageAllowed(ctx, image.UnparsedInstance(src, nil)); !allowed {
-		// IsRunningImageAllowed returns true iff the policy allows running the image.
-		// If it returns false, err must be non-nil, and should be an PolicyRequirementError if evaluation
-		// succeeded but the result was rejection.
-		var e *signature.PolicyRequirementError
-		if errors.As(err, &e) {
-			// false and valid error
-			log.V(3).Info("The signature policy JSON file configuration does not allow inspecting this image",
-				"validationError", e)
-			return nil, e
-		}
-		log.Error(err, "Unable to perform the signature validation")
-		return nil, err
-	}
 
 	supportedArchitectures = sets.New[string]()
 	var instanceDigest *digest.Digest = nil
@@ -146,7 +132,23 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 		instanceDigest = &index.Manifests[0].Digest
 	}
 
-	parsedImage, err := image.FromUnparsedImage(ctx, sys, image.UnparsedInstance(src, instanceDigest))
+	unparsedImage := image.UnparsedInstance(src, instanceDigest)
+	if allowed, err := policyCtx.IsRunningImageAllowed(ctx, unparsedImage); !allowed {
+		// IsRunningImageAllowed returns true iff the policy allows running the image.
+		// If it returns false, err must be non-nil, and should be an PolicyRequirementError if evaluation
+		// succeeded but the result was rejection.
+		var e *signature.PolicyRequirementError
+		if errors.As(err, &e) {
+			// false and valid error
+			log.V(3).Info("The signature policy JSON file configuration does not allow inspecting this image",
+				"validationError", e)
+			return nil, e
+		}
+		log.Error(err, "Unable to perform the signature validation")
+		return nil, err
+	}
+
+	parsedImage, err := image.FromUnparsedImage(ctx, sys, unparsedImage)
 	if err != nil {
 		log.Error(err, "Error parsing the manifest of the image")
 		return nil, err

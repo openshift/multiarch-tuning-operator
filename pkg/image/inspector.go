@@ -29,6 +29,7 @@ import (
 	"github.com/containers/image/v5/docker"
 	"github.com/containers/image/v5/image"
 	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/pkg/sysregistriesv2"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
 	"github.com/opencontainers/go-digest"
@@ -72,6 +73,11 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 			}
 		}(authFile)
 	}
+	// Invalidate registry cache before calling image APIs to catch updates to registry configurations.
+	// TODO: watch ICSP/IDMS/ITMS for changes or alternatively invalidate only on MCP updates rather
+	// than do this everytime
+	sysregistriesv2.InvalidateCache()
+
 	// Check if the image is a manifest list
 	ref, err := docker.ParseReference(imageReference)
 	if err != nil {

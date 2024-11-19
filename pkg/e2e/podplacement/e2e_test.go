@@ -45,6 +45,7 @@ var (
 	trustedRegistryConfig    *registry.RegistryConfig
 	registryNS               *corev1.Namespace
 	imageForRemove           *ocpconfigv1.Image
+	masterNodes              *corev1.NodeList
 	certConfigmapName        = "registry-config"
 )
 
@@ -82,10 +83,16 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 	updateGlobalPullSecret()
-	By("Prepare registry config test data")
-	createRegistryConfigTestData()
-	By("Wait for machineconfig finishing updating")
-	framework.WaitForMCPComplete(ctx, client)
+	masterNodes, err = framework.GetNodesWithLabel(ctx, client, "node-role.kubernetes.io/master", "")
+	Expect(err).NotTo(HaveOccurred())
+	if len(masterNodes.Items) == 0 {
+		By("Skipping registry config setting because it is not supported on hosted clusters")
+	} else {
+		By("Prepare registry config test data")
+		createRegistryConfigTestData()
+		By("Wait for machineconfig finishing updating")
+		framework.WaitForMCPComplete(ctx, client)
+	}
 })
 
 var _ = AfterSuite(func() {
@@ -96,10 +103,14 @@ var _ = AfterSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(framework.ValidateDeletion(client, ctx)).Should(Succeed())
-	By("Clean up registry config test data")
-	deleteRegistryConfigTestData()
-	By("Wait for machineconfig finishing updating")
-	framework.WaitForMCPComplete(ctx, client)
+	if len(masterNodes.Items) == 0 {
+		By("Skipping registry config clean up because it is not supported on hosted clusters")
+	} else {
+		By("Clean up registry config test data")
+		deleteRegistryConfigTestData()
+		By("Wait for machineconfig finishing updating")
+		framework.WaitForMCPComplete(ctx, client)
+	}
 })
 
 // updateGlobalPullSecret patches the global pull secret to onboard the

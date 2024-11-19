@@ -624,23 +624,12 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, b)
 			Expect(err).NotTo(HaveOccurred())
-			archLabelNSR := NewNodeSelectorRequirement().
-				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
-					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
-				Build()
-			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
 			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
 			Eventually(framework.VerifyPodLabels(ctx, client, ns, "openshift.io/build.name", "test-build", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
-			By("Verify arch label are set")
+			By("Verify node affinity label are set")
 			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "openshift.io/build.name", "test-build",
-				utils.MultiArchLabel, "",
-				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
-				utils.ArchLabelValue(utils.ArchitectureArm64), "",
-				utils.ArchLabelValue(utils.ArchitectureS390x), "",
-				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+				utils.NodeAffinityLabel, utils.NodeAffinityLabelValueSet,
 			), e2e.WaitShort).Should(Succeed())
-			By("The pod should have been set node affinity of arch info.")
-			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "openshift.io/build.name", "test-build", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity on DeploymentConfig owning pod", func() {
 			var err error
@@ -710,6 +699,9 @@ var _ = Describe("The Pod Placement Operand", func() {
 			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity in pods with images requiring credentials set in the global pull secret", func() {
+			if len(masterNodes.Items) == 0 {
+				Skip("The current cluster is a hosted cluster, skipping global pull secret tests")
+			}
 			var err error
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
@@ -800,6 +792,9 @@ var _ = Describe("The Pod Placement Operand", func() {
 			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity in pods with images that require both global and local pull secrets", func() {
+			if len(masterNodes.Items) == 0 {
+				Skip("The current cluster is a hosted cluster, skipping global pull secret tests")
+			}
 			var err error
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
@@ -852,6 +847,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 	})
 	Context("When deploying workloads that registry of image uses a self-signed certificate", Serial, func() {
+		BeforeEach(func() {
+			if len(masterNodes.Items) == 0 {
+				Skip("The current cluster is a hosted cluster, skipping image config tests")
+			}
+		})
 		It("should set the node affinity when registry url added to insecureRegistries list", func() {
 			var err error
 			By("Create an ephemeral namespace")
@@ -985,6 +985,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 	})
 	Context("When deploying workloads running images in registries that have mirrors configuration", func() {
+		BeforeEach(func() {
+			if len(masterNodes.Items) == 0 {
+				Skip("The current cluster is a hosted cluster, skipping registry config tests")
+			}
+		})
 		It("Should set node affinity when source registry is unavailable, mirrors working and AllowContactingSource enabled in a ImageContentSourcePolicy", func() {
 			var err error
 			By("Create an ephemeral namespace")

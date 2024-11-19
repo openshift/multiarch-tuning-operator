@@ -44,6 +44,23 @@ This is done at the beginning of a release cycle.
 
 3. Update the tekton files in the newly created branch. An example can be found [here](https://github.com/openshift/multiarch-tuning-operator/commit/b31311f3e642b2ba4ac71b32a675395962d5dd38).
 
+4. Duplicate the prow config to target the new branch. Add
+   `ci-operator/config/openshift/multiarch-tuning-operator/openshift-multiarch-tuning-operator-<branchVersion>.yaml` by
+   copping `openshift-multiarch-tuning-operator-main.yaml` and updating references from `main` to the new branch name.
+   (ex. https://github.com/openshift/release/pull/56835)
+5. Create a new `ReleasePlanAdmission` file in the directory
+      `konflux-release-data/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope`,
+      naming it `multiarch-tuning-operator-<version>.yaml` where `<version>` is the `konfluxVersion` without the "
+      v" (e.g., for `v1-0`, name it `multiarch-tuning-operator-1-0.yaml`).
+      Duplicate the contents of the existing ReleasePlanAdmission from the `multiarch-tuning-operator.yaml` file, update
+      the
+    - tags
+    - set the appropriate release notes version
+    - change metadata name from `multiarch-tuning-operator` to `multiarch-tuning-operator-<version>`
+    - change the spec application name to `multiarch-tuning-operator-<version>`
+    - change the components to include `<version>`<br><br>
+      Run `build-manifests.sh` to generate auxiliary files. After making the changes, create a new pull request.
+
 ### Release the operator (for OCP)
 1. When planning to release a new version (e.g. v1.0) or a patch version (e.g., v1.0.z), select a snapshot from the
 corresponding Konflux application
@@ -88,26 +105,62 @@ and ensure all post-submit checks have successfully passed.
     find /tmp/operator_bundle -name "*.clusterserviceversion.yaml" -print
     yq '.spec.install.spec.deployments[0].spec.template.metadata.annotations."multiarch.openshift.io/image"' <file-from-above-command>
     ```
+9. Get the new snapshot triggered by the build of the merge commit at the previous point and check the build pipeline for errors and warnings.
 
+    ```shell
+    oc get snapshots --sort-by .metadata.creationTimestamp -l pac.test.appstudio.openshift.io/event-type=push,appstudio.openshift.io/application=fbc-v4-x
+    ```
 
-6. Duplicate the prow config to target the new branch. Add
-    `ci-operator/config/openshift/multiarch-tuning-operator/openshift-multiarch-tuning-operator-<branchVersion>.yaml` by
-    copping `openshift-multiarch-tuning-operator-main.yaml` and updating references from `main` to the new branch name.
-    (ex. https://github.com/openshift/release/pull/56835)
+10. Create a new Release for the operator snapshot in the previous step. 
+    - Update the [allowed tags](https://gitlab.cee.redhat.com/releng/konflux-release-data/-/blob/main/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope/multiarch-tuning-operator-1-0.yaml#L27-28) for the release plan admission 
+    ```yaml
+      ...
+      defaults:
+        tags:
+          - "1.0.0"
+          - "1.0.0-{{ timestamp }}"
+          - "add new tags"
+      ...
+    ```
+    - In [comet](https://comet.engineering.redhat.com/containers/repositories/6616582895a35187a06ba2ce) add the new tag in the content streams field
+    - Create a new release for the operator 
+    ```yaml
+    apiVersion: appstudio.redhat.com/v1alpha1
+    kind: Release
+    metadata:
+      generateName: release-1-0-0-
+      namespace: multiarch-tuning-ope-tenant
+    spec:
+      releasePlan: multiarch-tuning-operator-1-0-release-as-operator
+      snapshot: multiarch-tuning-operator-1-0-5lr4j
+      data:
+        releaseNotes:
+          type: RHEA
+          synopsis: Red Hat Multiarch Tuning 1.0.0
+          topic: >-
+            The 1.0.0 release of the Red Hat Multiarch Tuning Operator.
+            For more details, see [product documentation](https://docs.openshift.com/container-platform/4.17/post_installation_configuration/configuring-multi-arch-compute-machines/multiarch-tuning-operator.html).
+          description: >-
+            The Red Hat Multiarch Tuning Operator can be used with OpenShift Container Platform.
+            Enhancements:
+              - With this release, the Multiarch Tuning Operator supports custom network scenarios and cluster-wide custom registries configurations.
+              - With this release, you can identify pods based on their architecture compatibility by using the pod labels that the Operator adds to newly created pods.
+              - With this release, you can monitor the behavior of the Multiarch Tuning Operator by using the metrics and alerts registered in the cluster monitoring operator.
+          solution: >-
+            The Multiarch Tuning Operator optimizes workload management within multi-architecture clusters and in single-architecture clusters transitioning to multi-architecture environments.
+            This Operator is available in the Red Hat Operators catalog that is included with OpenShift Container Platform.
+            For more details, see [product documentation](https://docs.openshift.com/container-platform/4.17/post_installation_configuration/configuring-multi-arch-compute-machines/multiarch-tuning-operator.html).
+          references:
+            - https://docs.openshift.com/container-platform/4.17/post_installation_configuration/configuring-multi-arch-compute-machines/multiarch-tuning-operator.html
+            - https://github.com/openshift/multiarch-tuning-operator
+    ```
+11. Watch the `status` of the `Release` Object or look in the Konflux UI to confirm that images and bundle were published
+    as expected. Note that the peipeline is run in a different namespace (rhtap-releng-tenant).
 
-7. Create a new `ReleasePlanAdmission` file in the directory
-    `konflux-release-data/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope`,
-    naming it `multiarch-tuning-operator-<version>.yaml` where `<version>` is the `konfluxVersion` without the "
-    v" (e.g., for `v1-0`, name it `multiarch-tuning-operator-1-0.yaml`).
-    Duplicate the contents of the existing ReleasePlanAdmission from the `multiarch-tuning-operator.yaml` file, update
-    the
-    - tags
-    - set the appropriate release notes version
-    - change metadata name from `multiarch-tuning-operator` to `multiarch-tuning-operator-<version>`
-    - change the spec application name to `multiarch-tuning-operator-<version>`
-    - change the components to include `<version>`<br><br>
-    Run `build-manifests.sh` to generate auxiliary files. After making the changes, create a new pull request.
-8. Update the `fbc-4.x` branches to use the selected container image for both the bundle and operator.
+### Publish a released operator in the OCP's OperatorHub's FBCs
+Note: these steps need to be applied to each FBC
+
+1. Update the `fbc-4.x` branches to use the selected container image for both the bundle and operator.
     Example [commit](https://github.com/openshift/multiarch-tuning-operator/pull/341). The process will generate and render
     a new bundle—rather than modifying the existing reference, simply add a new bundle and introduce a new channel.
     When updating the version of `registry.redhat.io/openshift4/ose-operator-registry:v4.1X`, ensure that all bundles are
@@ -124,7 +177,8 @@ and ensure all post-submit checks have successfully passed.
     oc get snapshots --sort-by .metadata.creationTimestamp -l pac.test.appstudio.openshift.io/event-type=push,appstudio.openshift.io/application=fbc-v4-x
     ```
 
-10. Create a new Release for the fbc snapshot created after the commit in the previous step.
+10. Create a new Release for the fbc snapshot created after the commit in the previous step. 
+    Note that we can run a staging release to test the release pipeline
 
     ```yaml
     # oc create -f - <<EOF
@@ -156,17 +210,16 @@ as expected. Note that the peipeline is run in a different namespace (rhtap-rele
 ### Create a new FBC fragment for a new OCP release
 
 The current approach is that for every new OCP release, we will have to:
-1. Create New Konflux Application and Component for the FBC
+1. Create New Konflux Application and Component for the FBC  
+   https://gitlab.cee.redhat.com/releng/konflux-release-data/-/merge_requests/2515/diffs?commit_id=5af448016c0f5d65dd74ddffeafa27932fa9b252
 2. Create a new branch in this repo like `fbc-4.16`. E.g., `fbc-4.17` for OCP 4.17
-3. Create a new PR in https://gitlab.cee.redhat.com/releng/konflux-release-data/-/tree/main with ReleasePlanAdmission for the new File Based Catalog (FBC) fragment, based on
-   a. https://gitlab.cee.redhat.com/releng/konflux-release-data/-/blob/main/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope/multiarch-tuning-operator-fbc-prod-index.yaml
-   b. https://gitlab.cee.redhat.com/releng/konflux-release-data/-/blob/main/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope/multiarch-tuning-operator-fbc-staging-index.yaml
-4. Create a new PR in https://github.com/redhat-appstudio/tenants-config to add the ReleasePlan for the new FBC, based on
-   a. https://github.com/redhat-appstudio/tenants-config/tree/main/cluster/stone-prd-rh01/tenants/multiarch-tuning-ope-tenant/fbc_4_16/appstudio.redhat.com/releaseplans/fbc-v4-16-release-as-fbc
-   b. https://github.com/redhat-appstudio/tenants-config/tree/main/cluster/stone-prd-rh01/tenants/multiarch-tuning-ope-tenant/fbc_4_16/appstudio.redhat.com/releaseplans/fbc-v4-16-release-as-staging-fbc
-   c. https://github.com/redhat-appstudio/tenants-config/blob/main/cluster/stone-prd-rh01/tenants/multiarch-tuning-ope-tenant/fbc_4_16/kustomization.yaml
+3. Update the tekton files on the new branch
+   https://github.com/openshift/multiarch-tuning-operator/pull/350/commits/cf23045ba70e4806efc3690ebd786b717075a25b
+3. Create a new PR in https://gitlab.cee.redhat.com/releng/konflux-release-data/-/tree/main to add the new File Based Catalog (FBC) fragment to the ReleasePlanAdmission, based on  
+   a. https://gitlab.cee.redhat.com/releng/konflux-release-data/-/blob/main/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope/multiarch-tuning-operator-fbc-prod-index.yaml  
+   b. https://gitlab.cee.redhat.com/releng/konflux-release-data/-/blob/main/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope/multiarch-tuning-operator-fbc-staging-index.yaml  
+   Example PR: https://gitlab.cee.redhat.com/releng/konflux-release-data/-/merge_requests/3039
 5. Adjust the graphs as needed in the branches.
-ies
 
 If the release is a major version or introduced significant
 [architectural changes](https://docs.engineering.redhat.com/pages/viewpage.action?pageId=402429315),

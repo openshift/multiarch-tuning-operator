@@ -20,4 +20,5 @@ const (
 	ImageArchitectureInspectionErrorMsg = "Failed to retrieve the supported architectures: "
 	NoSupportedArchitecturesFoundMsg    = "Pod cannot be scheduled due to incompatible image architectures; container images have no supported architectures in common"
 	ArchitectureAwareGatedPodIgnoredMsg = "The gated pod has been modified and is no longer eligible for architecture-aware scheduling"
+	ImageInspectionErrorMaxRetriesMsg   = "Failed to retrieve the supported architectures after multiple retries"
 )

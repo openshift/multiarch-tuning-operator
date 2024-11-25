@@ -18,6 +18,7 @@ package podplacement
 
 import (
 	"context"
+	"fmt"
 	runtime2 "runtime"
 	"time"
 
@@ -77,52 +78,65 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.V(2).Info("Unable to fetch pod", "error", err)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
-	// verify whether the pod has the scheduling gate
+	// Pods without the scheduling gate should be ignored.
 	if !pod.HasSchedulingGate() {
 		log.V(2).Info("Pod does not have the scheduling gate. Ignoring...")
-		// if not, return
 		return ctrl.Result{}, nil
 	}
-
-	// The scheduling gate is found.
 	metrics.ProcessedPodsCtrl.Inc()
 	defer utils.HistogramObserve(now, metrics.TimeToProcessGatedPod)
-	log.V(1).Info("Processing pod")
+	r.processPod(ctx, pod)
+	err := r.Client.Update(ctx, &pod.Pod)
+	if err != nil {
+		log.Error(err, "Unable to update the pod")
+		pod.publishEvent(corev1.EventTypeWarning, ArchitectureAwareSchedulingGateRemovalFailure, SchedulingGateRemovalFailureMsg)
+		return ctrl.Result{}, err
+	}
+	if !pod.HasSchedulingGate() {
+		// Only publish the event if the scheduling gate has been removed and the pod has been updated successfully.
+		pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareSchedulingGateRemovalSuccess, SchedulingGateRemovalSuccessMsg)
+		metrics.GatedPodsGauge.Dec()
+	}
+	return ctrl.Result{}, nil
+}
 
-	if !pod.shouldIgnorePod() {
-		// Prepare the requirement for the node affinity.
-		psdl, err := r.pullSecretDataList(ctx, pod)
-		if err != nil {
-			log.Error(err, "Unable to retrieve the image pull secret data for the pod. "+
-				"The nodeAffinity for this pod will not be set.")
-			// we still need to remove the scheduling gate. Therefore, we do not return here.
-		} else {
-			pod.SetNodeAffinityArchRequirement(psdl)
-		}
-	} else {
+func (r *PodReconciler) processPod(ctx context.Context, pod *Pod) {
+	log := ctrllog.FromContext(ctx)
+	log.V(1).Info("Processing pod")
+	if pod.shouldIgnorePod() {
 		log.V(3).Info("A pod with the scheduling gate should be ignored. Ignoring...")
 		// We can reach this branch when:
 		// - The pod has been gated but not processed before the operator changed configuration such that the pod should be ignored.
 		// - The pod has got some other changes in the admission chain from another webhook that makes it not suitable for processing anymore
 		//	(for example another actor set the nodeAffinity already for the kubernetes.io/arch label).
 		// In both cases, we should just remove the scheduling gate.
-		r.Recorder.Event(&pod.Pod, corev1.EventTypeWarning, ArchitectureAwareGatedPodIgnored, ArchitectureAwareGatedPodIgnoredMsg)
+		log.V(1).Info("Removing the scheduling gate from pod.")
+		pod.RemoveSchedulingGate()
+		pod.publishEvent(corev1.EventTypeWarning, ArchitectureAwareGatedPodIgnored, ArchitectureAwareGatedPodIgnoredMsg)
+		return
 	}
-	// Remove the scheduling gate
-	log.V(1).Info("Removing the scheduling gate from pod.")
-	pod.RemoveSchedulingGate()
-
-	err := r.Client.Update(ctx, &pod.Pod)
-	if err != nil {
-		log.Error(err, "Unable to update the pod")
-		r.Recorder.Event(&pod.Pod, corev1.EventTypeWarning, ArchitectureAwareSchedulingGateRemovalFailure, SchedulingGateRemovalFailureMsg)
-		return ctrl.Result{}, err
+	// Prepare the requirement for the node affinity.
+	psdl, err := r.pullSecretDataList(ctx, pod)
+	pod.handleError(err, "Unable to retrieve the image pull secret data for the pod.")
+	// If no error occurred when retrieving the image pull secret data, set the node affinity.
+	if err == nil {
+		_, err = pod.SetNodeAffinityArchRequirement(psdl)
+		pod.handleError(err, "Unable to set the node affinity for the pod.")
 	}
-	r.Recorder.Event(&pod.Pod, corev1.EventTypeNormal, ArchitectureAwareSchedulingGateRemovalSuccess, SchedulingGateRemovalSuccessMsg)
-	metrics.GatedPodsGauge.Dec()
-
-	return ctrl.Result{}, nil
+	if pod.maxRetries() && err != nil {
+		// the number of retries is incremented in the handleError function when the error is not nil.
+		// If we enter this branch, the retries counter has been incremented and reached the max retries.
+		// The counter starts at 1 when the first error occurs. Therefore, when the reconciler tries maxRetries times,
+		// the counter is equal to the maxRetries value and the pod should not be processed again.
+		// Publish this event and remove the scheduling gate.
+		log.Info("Max retries Reached. The pod will not have the nodeAffinity set.")
+		pod.publishEvent(corev1.EventTypeWarning, ImageArchitectureInspectionError, fmt.Sprintf("%s: %s", ImageInspectionErrorMaxRetriesMsg, err.Error()))
+	}
+	// If the pod has been processed successfully or the max retries have been reached, remove the scheduling gate.
+	if err == nil || pod.maxRetries() {
+		log.V(1).Info("Removing the scheduling gate from pod.")
+		pod.RemoveSchedulingGate()
+	}
 }
 
 // pullSecretDataList returns the list of secrets data for the given pod given its imagePullSecrets field

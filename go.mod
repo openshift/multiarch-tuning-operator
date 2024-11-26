@@ -21,6 +21,7 @@ require (
 	golang.org/x/sys v0.24.0
 	k8s.io/api v0.30.4
 	k8s.io/apimachinery v0.30.4
+	k8s.io/apiserver v0.30.4
 	k8s.io/client-go v0.30.4
 	k8s.io/klog/v2 v2.130.1
 	sigs.k8s.io/controller-runtime v0.18.5
@@ -159,7 +160,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.30.4 // indirect
-	k8s.io/apiserver v0.30.4 // indirect
 	k8s.io/component-base v0.30.4 // indirect
 	k8s.io/kube-aggregator v0.30.4 // indirect
 	k8s.io/kube-openapi v0.0.0-20240816214639-573285566f34 // indirect

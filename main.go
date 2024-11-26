@@ -87,7 +87,8 @@ var (
 	enableLeaderElection,
 	enableClusterPodPlacementConfigOperandWebHook,
 	enableClusterPodPlacementConfigOperandControllers,
-	enableOperator bool
+	enableCPPCInformer bool
+	enableOperator  bool
 	initialLogLevel int
 	postFuncs       []func()
 )
@@ -188,7 +189,20 @@ func main() {
 func RunOperator(mgr ctrl.Manager) {
 	config := ctrl.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
+
+	if enableCPPCInformer {
+		cppcSyncer := podplacement.NewCPPCSyncer(mgr)
+		if err := mgr.Add(cppcSyncer); err != nil {
+			setupLog.Error(err, "unable to add CPPCSyncer")
+			os.Exit(1)
+		}
+		setupLog.Info("CPPCSyncer is enabled")
+	}
+
+	// Get GVK for ClusterPodPlacementConfig
 	gvk, _ := apiutil.GVKForObject(&multiarchv1beta1.ClusterPodPlacementConfig{}, mgr.GetScheme())
+
+	// Set up the reconciler
 	must((&operator.ClusterPodPlacementConfigReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
@@ -265,6 +279,7 @@ func bindFlags() {
 	flag.BoolVar(&enableClusterPodPlacementConfigOperandWebHook, "enable-ppc-webhook", false, "Enable the pod placement config operand webhook")
 	flag.BoolVar(&enableClusterPodPlacementConfigOperandControllers, "enable-ppc-controllers", false, "Enable the pod placement config operand controllers")
 	flag.BoolVar(&enableOperator, "enable-operator", false, "Enable the operator")
+	flag.BoolVar(&enableCPPCInformer, "enable-ppc-informer", false, "Enable informer for ClusterPodPlacementConfig")
 	// This may be deprecated in the future. It is used to support the current way of setting the log level for operands
 	// If operands will start to support a controller that watches the ClusterPodPlacementConfig, this flag may be removed
 	// and the log level will be set in the ClusterPodPlacementConfig at runtime (with no need for reconciliation)

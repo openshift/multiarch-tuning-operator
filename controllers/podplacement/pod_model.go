@@ -19,6 +19,7 @@ package podplacement
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +37,8 @@ var (
 	// imageInspectionCache is the facade singleton used to inspect images. It is defined here to facilitate testing.
 	imageInspectionCache image.ICache = image.FacadeSingleton()
 )
+
+const MaxRetryCount = 5
 
 type containerImage struct {
 	imageName string
@@ -96,16 +99,12 @@ func (pod *Pod) RemoveSchedulingGate() {
 // It verifies first that no nodeSelector field is set for the kubernetes.io/arch label.
 // Then, it computes the intersection of the architectures supported by the images used by the pod via pod.getArchitecturePredicate.
 // Finally, it initializes the nodeAffinity for the pod and set it to the computed requirement via the pod.setArchNodeAffinity method.
-func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
-	log := ctrllog.FromContext(pod.ctx)
+func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) (bool, error) {
 	requirement, err := pod.getArchitecturePredicate(pullSecretDataList)
 	if err != nil {
-		pod.ensureLabel(utils.ImageInspectionErrorLabel, "")
-		metrics.FailedInspectionCounter.Inc()
-		pod.publishEvent(corev1.EventTypeWarning, ImageArchitectureInspectionError, ImageArchitectureInspectionErrorMsg+err.Error())
-		log.Error(err, "Error getting the architecture predicate. The pod will not have the nodeAffinity set.")
-		return
+		return false, err
 	}
+	pod.ensureNoLabel(utils.ImageInspectionErrorLabel)
 	if len(requirement.Values) == 0 {
 		pod.publishEvent(corev1.EventTypeNormal, NoSupportedArchitecturesFound, NoSupportedArchitecturesFoundMsg)
 	}
@@ -124,6 +123,7 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) {
 	}
 
 	pod.setArchNodeAffinity(requirement)
+	return true, nil
 }
 
 // setArchNodeAffinity sets the node affinity for the pod to the given requirement based on the rules in
@@ -244,6 +244,50 @@ func (pod *Pod) ensureLabel(label string, value string) {
 	pod.Labels[label] = value
 }
 
+func (pod *Pod) ensureNoLabel(label string) {
+	if pod.Labels == nil {
+		return
+	}
+	delete(pod.Labels, label)
+}
+
+// ensureLabel ensures that the pod has the given label with the given value.
+func (pod *Pod) ensureAnnotation(annotation string, value string) {
+	if pod.Annotations == nil {
+		pod.Annotations = make(map[string]string)
+	}
+	pod.Annotations[annotation] = value
+}
+
+// ensureAndIncrementLabel ensures that the pod has the given label with the given value.
+// If the label is already set, it increments the value.
+func (pod *Pod) ensureAndIncrementLabel(label string) {
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	if _, ok := pod.Labels[label]; !ok {
+		pod.Labels[label] = "1"
+		return
+	}
+	cur, err := strconv.ParseInt(pod.Labels[label], 10, 32)
+	if err != nil {
+		pod.Labels[label] = "1"
+	} else {
+		pod.Labels[label] = fmt.Sprintf("%d", cur+1)
+	}
+}
+
+func (pod *Pod) maxRetries() bool {
+	if pod.Labels == nil {
+		return false
+	}
+	v, err := strconv.ParseInt(pod.Labels[utils.ImageInspectionErrorCountLabel], 10, 32)
+	if err != nil {
+		return true
+	}
+	return v >= MaxRetryCount
+}
+
 // ensureArchitectureLabels adds labels for the given requirement to the pod. Labels are added to indicate
 // the supported architectures and index pods by architecture or by whether they support more than one architecture.
 // In this case, single-architecture is meant as a pod that supports only one architecture: all the images in the pod
@@ -358,4 +402,17 @@ func (pod *Pod) publishIgnorePod() {
 	log.V(1).Info("The pod has the nodeSelector or all the nodeAffinityTerms set for the kubernetes.io/arch label. Ignoring the pod...")
 	pod.ensureLabel(utils.NodeAffinityLabel, utils.LabelValueNotSet)
 	pod.publishEvent(corev1.EventTypeNormal, ArchitecturePredicatesConflict, ArchitecturePredicatesConflictMsg)
+}
+
+func (pod *Pod) handleError(err error, s string) {
+	if err == nil {
+		return
+	}
+	log := ctrllog.FromContext(pod.ctx)
+	metrics.FailedInspectionCounter.Inc()
+	pod.ensureLabel(utils.ImageInspectionErrorLabel, "")
+	pod.ensureAnnotation(utils.ImageInspectionErrorLabel, err.Error())
+	pod.ensureAndIncrementLabel(utils.ImageInspectionErrorCountLabel)
+	pod.publishEvent(corev1.EventTypeWarning, ImageArchitectureInspectionError, ImageArchitectureInspectionErrorMsg+err.Error())
+	log.Error(err, s)
 }

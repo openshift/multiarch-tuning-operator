@@ -3,6 +3,7 @@ module github.com/openshift/multiarch-tuning-operator
 go 1.22.5
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/containers/image/v5 v5.32.1
 	github.com/distribution/distribution/v3 v3.0.0-beta.1
 	github.com/go-logr/logr v1.4.2
@@ -115,7 +116,7 @@ require (
 	github.com/sigstore/fulcio v1.6.2 // indirect
 	github.com/sigstore/rekor v1.3.6 // indirect
 	github.com/sigstore/sigstore v1.8.8 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect

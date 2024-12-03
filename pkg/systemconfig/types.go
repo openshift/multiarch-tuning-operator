@@ -21,18 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/BurntSushi/toml"
-	"github.com/containers/image/v5/signature"
-	"k8s.io/apimachinery/pkg/util/json"
-)
-
-type PullType string
-
-const (
-	dockerDaemonTransport = "docker-daemon"
-	dockerTransport       = "docker"
-	atomicTransport       = "atomic"
 )
 
 type registryCertTuple struct {
@@ -111,89 +99,9 @@ func (t registryCertTuple) getFolderName() string {
 	return strings.Replace(t.registry, "..", ":", 1)
 }
 
-func defaultPolicy() signature.Policy {
-	return signature.Policy{
-		Default: signature.PolicyRequirements{signature.NewPRInsecureAcceptAnything()},
-		Transports: map[string]signature.PolicyTransportScopes{
-			dockerTransport: {},
-			atomicTransport: {},
-			dockerDaemonTransport: {
-				"": {signature.NewPRInsecureAcceptAnything()},
-			},
-		},
-	}
-}
-
-func createTomlFile(path string) error {
-	createBaseDir(path)
-	f, err := os.Create(filepath.Clean(path))
-	if err != nil {
-		return err
-	}
-	defer close(f)
-	// Using an empty map to create an empty TOML structure
-	emptyData := map[string]interface{}{}
-	return toml.NewEncoder(f).Encode(emptyData)
-}
-
-func createBaseDir(path string) {
-	// create base dir if it doesn't exist
-	baseDir := filepath.Dir(filepath.Clean(path))
-	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
-		err := os.MkdirAll(baseDir, os.ModePerm)
-		if err != nil {
-			log.Error(err, "Unable to create the base dir", "path", path)
-		}
-	}
-}
-
-func writeJSONFile(path string, data interface{}) error {
-	createBaseDir(path)
-	f, err := os.Create(filepath.Clean(path))
-	if err != nil {
-		return err
-	}
-	defer close(f)
-	return json.NewEncoder(f).Encode(data)
-}
-
 func close(f *os.File) {
 	err := f.Close()
 	if err != nil {
 		log.Error(err, "When cosing fd")
 	}
 }
-
-/* example policy.json
-{
-  "default": [
-    {
-      "type": "insecureAcceptAnything"
-    }
-  ],
-  "transports": {
-    "atomic": {
-      "docker.io": [
-        {
-          "type": "reject"
-        }
-      ]
-    },
-    "docker": {
-      "docker.io": [
-        {
-          "type": "reject"
-        }
-      ]
-    },
-    "docker-daemon": {
-      "": [
-        {
-          "type": "insecureAcceptAnything"
-        }
-      ]
-    }
-  }
-}
-
-*/

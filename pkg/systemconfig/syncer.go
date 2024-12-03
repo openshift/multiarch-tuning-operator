@@ -21,8 +21,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/containers/image/v5/signature"
-
 	"github.com/go-logr/logr"
 )
 
@@ -33,7 +31,6 @@ var (
 )
 
 type SystemConfigSyncer struct {
-	policyConfContent  signature.Policy
 	registryCertTuples []registryCertTuple
 
 	ch chan bool
@@ -63,16 +60,6 @@ func (s *SystemConfigSyncer) StoreRegistryCerts(registryCertTuples []registryCer
 func (s *SystemConfigSyncer) sync() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// create registries.conf file if it does not exist
-	if err := createTomlFile(RegistriesConfPath()); err != nil {
-		log.Error(err, "Error writing registries.conf")
-		return err
-	}
-	// marshall policy.json and write to file
-	if err := writeJSONFile(PolicyConfPath(), s.policyConfContent); err != nil {
-		log.Error(err, "Error writing policy.json")
-		return err
-	}
 	// delete the certs.d content
 	if err := os.RemoveAll(DockerCertsDir()); err != nil {
 		log.Error(err, "Error deleting certs.d directory")
@@ -125,7 +112,6 @@ func (s *SystemConfigSyncer) Run(ctx context.Context) error {
 // newSystemConfigSyncer creates a new SystemConfigSyncer object
 func newSystemConfigSyncer() IConfigSyncer {
 	ic := &SystemConfigSyncer{
-		policyConfContent:  defaultPolicy(),
 		registryCertTuples: []registryCertTuple{},
 		ch:                 make(chan bool),
 	}

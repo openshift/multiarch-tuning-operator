@@ -55,8 +55,7 @@ spec:
                 type: string
             type: object
           spec:
-            description: ClusterPodPlacementConfigSpec defines the desired state of
-              ClusterPodPlacementConfig
+            description: ClusterPodPlacementConfigSpec defines the desired state of ClusterPodPlacementConfig
             properties:
               logVerbosity:
                 default: Normal
@@ -78,16 +77,14 @@ spec:
                   label "multiarch.openshift.io/exclude-pod-placement" exists.
                 properties:
                   matchExpressions:
-                    description: matchExpressions is a list of label selector requirements.
-                      The requirements are ANDed.
+                    description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
                     items:
                       description: |-
                         A label selector requirement is a selector that contains values, a key, and an operator that
                         relates the key and values.
                       properties:
                         key:
-                          description: key is the label key that the selector applies
-                            to.
+                          description: key is the label key that the selector applies to.
                           type: string
                         operator:
                           description: |-
@@ -120,17 +117,60 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-map-type: atomic
+              plugins:
+                description: |-
+                  Plugins selects the namespaces where the pod placement operand can process the nodeAffinityScoring
+                  of the pods. If left empty, all the namespaces are considered.
+                  The default sample allows to exclude all the namespaces where the
+                properties:
+                  nodeAffinityScoring:
+                    description: NodeAffinityScoring is the plugin that implements the ScorePlugin interface.
+                    properties:
+                      enabled:
+                        description: BasePlugin provides a default implementation for Enabled.
+                        type: boolean
+                      name:
+                        description: Name provides the Plugin name.
+                        type: string
+                      platforms:
+                        description: Platforms is a required field and must contain at least one entry.
+                        items:
+                          description: PlatformConfig holds configuration for specific platforms, with required fields validated.
+                          properties:
+                            architecture:
+                              description: Architecture must be a list of non-empty string of arch names.
+                              items:
+                                type: string
+                              type: array
+                            os:
+                              description: Operating system is an optional string field.
+                              type: string
+                            weight:
+                              description: |-
+                                weight associated with matching the corresponding NodeAffinityScoringPlatformTerm,
+                                in the range 1-100.
+                              format: int32
+                              minimum: 0
+                              type: integer
+                          required:
+                          - architecture
+                          - weight
+                          type: object
+                        type: array
+                    required:
+                    - enabled
+                    - name
+                    - platforms
+                    type: object
+                type: object
             type: object
           status:
-            description: ClusterPodPlacementConfigStatus defines the observed state
-              of ClusterPodPlacementConfig
+            description: ClusterPodPlacementConfigStatus defines the observed state of ClusterPodPlacementConfig
             properties:
               conditions:
-                description: Conditions represents the latest available observations
-                  of a ClusterPodPlacementConfig's current state.
+                description: Conditions represents the latest available observations of a ClusterPodPlacementConfig's current state.
                 items:
-                  description: Condition contains details for one aspect of the current
-                    state of this API Resource.
+                  description: Condition contains details for one aspect of the current state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -236,8 +276,7 @@ spec:
                 type: string
             type: object
           spec:
-            description: ClusterPodPlacementConfigSpec defines the desired state of
-              ClusterPodPlacementConfig
+            description: ClusterPodPlacementConfigSpec defines the desired state of ClusterPodPlacementConfig
             properties:
               logVerbosity:
                 default: Normal
@@ -259,16 +298,14 @@ spec:
                   label "multiarch.openshift.io/exclude-pod-placement" exists.
                 properties:
                   matchExpressions:
-                    description: matchExpressions is a list of label selector requirements.
-                      The requirements are ANDed.
+                    description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
                     items:
                       description: |-
                         A label selector requirement is a selector that contains values, a key, and an operator that
                         relates the key and values.
                       properties:
                         key:
-                          description: key is the label key that the selector applies
-                            to.
+                          description: key is the label key that the selector applies to.
                           type: string
                         operator:
                           description: |-
@@ -301,17 +338,60 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-map-type: atomic
+              plugins:
+                description: |-
+                  Plugins selects the namespaces where the pod placement operand can process the nodeAffinityScoring
+                  of the pods. If left empty, all the namespaces are considered.
+                  The default sample allows to exclude all the namespaces where the
+                properties:
+                  nodeAffinityScoring:
+                    description: NodeAffinityScoring is the plugin that implements the ScorePlugin interface.
+                    properties:
+                      enabled:
+                        description: BasePlugin provides a default implementation for Enabled.
+                        type: boolean
+                      name:
+                        description: Name provides the Plugin name.
+                        type: string
+                      platforms:
+                        description: Platforms is a required field and must contain at least one entry.
+                        items:
+                          description: PlatformConfig holds configuration for specific platforms, with required fields validated.
+                          properties:
+                            architecture:
+                              description: Architecture must be a list of non-empty string of arch names.
+                              items:
+                                type: string
+                              type: array
+                            os:
+                              description: Operating system is an optional string field.
+                              type: string
+                            weight:
+                              description: |-
+                                weight associated with matching the corresponding NodeAffinityScoringPlatformTerm,
+                                in the range 1-100.
+                              format: int32
+                              minimum: 0
+                              type: integer
+                          required:
+                          - architecture
+                          - weight
+                          type: object
+                        type: array
+                    required:
+                    - enabled
+                    - name
+                    - platforms
+                    type: object
+                type: object
             type: object
           status:
-            description: ClusterPodPlacementConfigStatus defines the observed state
-              of ClusterPodPlacementConfig
+            description: ClusterPodPlacementConfigStatus defines the observed state of ClusterPodPlacementConfig
             properties:
               conditions:
-                description: Conditions represents the latest available observations
-                  of a ClusterPodPlacementConfig's current state.
+                description: Conditions represents the latest available observations of a ClusterPodPlacementConfig's current state.
                 items:
-                  description: Condition contains details for one aspect of the current
-                    state of this API Resource.
+                  description: Condition contains details for one aspect of the current state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-

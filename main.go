@@ -191,7 +191,7 @@ func RunOperator(mgr ctrl.Manager) {
 	clientset := kubernetes.NewForConfigOrDie(config)
 
 	if enableCPPCInformer {
-		cppcSyncer := podplacement.NewCPPCSyncer(mgr)
+		cppcSyncer := podplacement.NewCPPCSyncer(mgr, clientset)
 		if err := mgr.Add(cppcSyncer); err != nil {
 			setupLog.Error(err, "unable to add CPPCSyncer")
 			os.Exit(1)

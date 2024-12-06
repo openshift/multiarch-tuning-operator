@@ -2,22 +2,19 @@ package informers
 
 import (
 	"encoding/json"
-
 	"sync"
 )
 
 var (
 	singletonSystemConfigInstance ICache
 	once                          sync.Once
-	//log                           logr.Logger
 )
 
 type ClusterPodPlacementConfigSyncer struct {
 	config        json.RawMessage // For raw JSON object
 	webhookConfig json.RawMessage // For raw JSON object
 
-	ch chan bool
-	mu sync.Mutex
+	configMu sync.Mutex // Mutex for `config`
 }
 
 func CacheSingleton() ICache {
@@ -30,29 +27,23 @@ func CacheSingleton() ICache {
 func newCache() ICache {
 	c := &ClusterPodPlacementConfigSyncer{
 		config:        json.RawMessage{},
-		webhookConfig: json.RawMessage{}, //Wrong type
-
-		ch: make(chan bool),
+		webhookConfig: json.RawMessage{},
 	}
 	return c
 }
 
-func (c *ClusterPodPlacementConfigSyncer) unlockAndSync() {
-	c.mu.Unlock()
-	c.ch <- true
-}
-
-func (c *ClusterPodPlacementConfigSyncer) StoreClusterPodPlacementConfig(CPPCconfig json.RawMessage, webhookConfig json.RawMessage) error {
-	c.mu.Lock()
-	defer c.unlockAndSync()
-	c.config = CPPCconfig
+func (c *ClusterPodPlacementConfigSyncer) StoreClusterPodPlacementConfig(config json.RawMessage, webhookConfig json.RawMessage) error {
+	c.configMu.Lock()
+	defer c.configMu.Unlock()
+	c.config = config
 	c.webhookConfig = webhookConfig
 	return nil
 }
 
-func (c *ClusterPodPlacementConfigSyncer) DeleteClusterPodPlacementConfig() {
-	c.mu.Lock()
-	defer c.unlockAndSync()
+func (c *ClusterPodPlacementConfigSyncer) DeleteClusterPodPlacementConfig() error {
+	c.configMu.Lock()
+	defer c.configMu.Unlock()
 	c.config = json.RawMessage{}
 	c.webhookConfig = json.RawMessage{}
+	return nil
 }

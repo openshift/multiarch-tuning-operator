@@ -23,7 +23,7 @@ import (
 type ICache interface {
 
 	// StoreClusterPodPlacementConfig stores the clusterpodplacementconfig and webhook in a struct
-	StoreClusterPodPlacementConfig(CPPCconfig json.RawMessage, webhookConfig json.RawMessage) error
+	StoreClusterPodPlacementConfig(config json.RawMessage, webhookConfig json.RawMessage) error
 
-	DeleteClusterPodPlacementConfig()
+	DeleteClusterPodPlacementConfig() error
 }

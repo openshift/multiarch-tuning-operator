@@ -2,13 +2,12 @@ package podplacement
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/go-logr/logr"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers"
-	"k8s.io/apiserver/pkg/apis/apiserver/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -32,6 +31,7 @@ func (s *CPPCSyncer) Start(ctx context.Context) error {
 	s.log = log.FromContext(ctx, "handler", "CPPCSyncer")
 	s.log.Info("Starting CPPC Syncer")
 	mgr := s.mgr
+
 	ic := informers.CacheSingleton()
 	// Get informer for ClusterPodPlacementConfig
 	CPPCInformer, err := mgr.GetCache().GetInformerForKind(ctx, multiarchv1beta1.GroupVersion.WithKind("ClusterPodPlacementConfig"))
@@ -57,36 +57,19 @@ func (s *CPPCSyncer) Start(ctx context.Context) error {
 // onAdd handles the addition of a ClusterPodPlacementConfig.
 func (s *CPPCSyncer) onAdd(ic informers.ICache) func(obj interface{}) {
 	return func(obj interface{}) {
-		CPPC, ok := obj.(*multiarchv1beta1.ClusterPodPlacementConfig)
+		CPPC, ok := obj.(multiarchv1beta1.ClusterPodPlacementConfig)
 		if !ok {
 			s.log.Error(errors.New("unexpected type, expected ClusterPodPlacementConfig"), "unexpected type",
 				"type", fmt.Sprintf("%T", obj))
 			return
 		}
 
-		CPPCWebhook, ok := obj.(*v1beta1.WebhookConfiguration)
-		if !ok {
-			s.log.Error(errors.New("unexpected type, expected WebhookConfiguration"), "unexpected type",
-				"type", fmt.Sprintf("%T", obj))
-			return
-		}
-
-		jsonCPPC, err := json.Marshal(CPPC)
+		err := ic.StoreClusterPodPlacementConfig(CPPC)
 		if err != nil {
-			s.log.Error(err, "Error marshalling ClusterPodPlacementConfig")
-		}
-
-		jsonCPPCWebhook, err := json.Marshal(CPPCWebhook)
-		if err != nil {
-			s.log.Error(err, "Error marshalling WebhookConfiguration")
-		}
-
-		err = ic.StoreClusterPodPlacementConfig(jsonCPPC, jsonCPPCWebhook)
-		if err != nil {
-			s.log.Error(err, "Error updating cluster pod placement config",
-				"name", CPPC.Name)
+			s.log.Error(err, "Error updating ClusterPodPlacementConfig",
+				"CPPC name", CPPC.Name)
 		} else {
-			s.log.Info("Added ClusterPodPlacementConfig", "name", CPPC.Name, "namespace", CPPC.Namespace)
+			s.log.Info("Added ClusterPodPlacementConfig", "CPPC name", CPPC.Name, "namespace", CPPC.Namespace)
 		}
 	}
 }
@@ -101,15 +84,38 @@ func (s *CPPCSyncer) onDelete(ic informers.ICache) func(obj interface{}) {
 				"type", fmt.Sprintf("%T", obj))
 			return
 		}
-		ic.DeleteClusterPodPlacementConfig()
-		s.log.Info("Deleted ClusterPodPlacementConfig", "name", CPPC.Name, "namespace", CPPC.Namespace)
+
+		err := ic.DeleteClusterPodPlacementConfig()
+		if err != nil {
+			s.log.Error(err, "Error deleting ClusterPodPlacementConfig",
+				"name", CPPC.Name)
+		} else {
+			s.log.Info("Deleted ClusterPodPlacementConfig", "name", CPPC.Name, "namespace", CPPC.Namespace)
+		}
 	}
 }
 
 // onUpdate handles updates to a ClusterPodPlacementConfig.
 func (s *CPPCSyncer) onUpdate(ic informers.ICache) func(oldObj, newObj interface{}) {
 	return func(oldobj, newobj interface{}) {
-		s.onDelete(ic)(oldobj)
+		oldConfig, ok := oldobj.(*multiarchv1beta1.ClusterPodPlacementConfig)
+
+		if !ok {
+			s.log.Error(errors.New("unexpected type, expected ClusterPodPlacementConfig"), "unexpected type",
+				"type", fmt.Sprintf("%T", oldobj))
+			return
+		}
+
+		newConfig, ok := newobj.(*multiarchv1beta1.ClusterPodPlacementConfig)
+		if !ok {
+			s.log.Error(errors.New("unexpected type, expected ClusterPodPlacementConfig"), "unexpected type",
+				"type", fmt.Sprintf("%T", newobj))
+			return
+		}
+
+		if oldConfig.ResourceVersion == newConfig.ResourceVersion {
+			return
+		}
 		s.onAdd(ic)(newobj)
 	}
 }

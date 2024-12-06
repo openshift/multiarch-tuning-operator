@@ -17,13 +17,13 @@ limitations under the License.
 package informers
 
 import (
-	"encoding/json"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 )
 
 type ICache interface {
 
 	// StoreClusterPodPlacementConfig stores the clusterpodplacementconfig and webhook in a struct
-	StoreClusterPodPlacementConfig(CPPCconfig json.RawMessage, webhookConfig json.RawMessage) error
+	StoreClusterPodPlacementConfig(config v1beta1.ClusterPodPlacementConfig) error
 
-	DeleteClusterPodPlacementConfig()
+	DeleteClusterPodPlacementConfig() error
 }

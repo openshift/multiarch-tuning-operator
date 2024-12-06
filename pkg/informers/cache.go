@@ -1,23 +1,19 @@
 package informers
 
 import (
-	"encoding/json"
-
 	"sync"
+
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 )
 
 var (
 	singletonSystemConfigInstance ICache
 	once                          sync.Once
-	//log                           logr.Logger
 )
 
-type ClusterPodPlacementConfigSyncer struct {
-	config        json.RawMessage // For raw JSON object
-	webhookConfig json.RawMessage // For raw JSON object
-
-	ch chan bool
-	mu sync.Mutex
+type ClusterPodPlacementConfig struct {
+	config v1beta1.ClusterPodPlacementConfig
+	mu     sync.Mutex // Mutex for `config`
 }
 
 func CacheSingleton() ICache {
@@ -28,31 +24,22 @@ func CacheSingleton() ICache {
 }
 
 func newCache() ICache {
-	c := &ClusterPodPlacementConfigSyncer{
-		config:        json.RawMessage{},
-		webhookConfig: json.RawMessage{}, //Wrong type
-
-		ch: make(chan bool),
+	c := &ClusterPodPlacementConfig{
+		config: v1beta1.ClusterPodPlacementConfig{},
 	}
 	return c
 }
 
-func (c *ClusterPodPlacementConfigSyncer) unlockAndSync() {
-	c.mu.Unlock()
-	c.ch <- true
-}
-
-func (c *ClusterPodPlacementConfigSyncer) StoreClusterPodPlacementConfig(CPPCconfig json.RawMessage, webhookConfig json.RawMessage) error {
+func (c *ClusterPodPlacementConfig) StoreClusterPodPlacementConfig(config v1beta1.ClusterPodPlacementConfig) error {
 	c.mu.Lock()
-	defer c.unlockAndSync()
-	c.config = CPPCconfig
-	c.webhookConfig = webhookConfig
+	defer c.mu.Unlock()
+	c.config = config
 	return nil
 }
 
-func (c *ClusterPodPlacementConfigSyncer) DeleteClusterPodPlacementConfig() {
+func (c *ClusterPodPlacementConfig) DeleteClusterPodPlacementConfig() error {
 	c.mu.Lock()
-	defer c.unlockAndSync()
-	c.config = json.RawMessage{}
-	c.webhookConfig = json.RawMessage{}
+	defer c.mu.Unlock()
+	c.config = v1beta1.ClusterPodPlacementConfig{}
+	return nil
 }

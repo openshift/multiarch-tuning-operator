@@ -29,6 +29,7 @@ const (
 	MultiArchLabel                  = "multiarch.openshift.io/multi-arch"
 	NoSupportedArchLabel            = "multiarch.openshift.io/no-supported-arch"
 	ImageInspectionErrorLabel       = "multiarch.openshift.io/image-inspect-error"
+	ImageInspectionErrorCountLabel  = "multiarch.openshift.io/image-inspect-error-count"
 	LabelGroup                      = "multiarch.openshift.io"
 )
 

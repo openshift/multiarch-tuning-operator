@@ -47,16 +47,6 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - config.openshift.io
-  resources:
-  - imagedigestmirrorsets
-  - images
-  - imagetagmirrorsets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - ""
   resources:
   - configmaps
@@ -162,14 +152,6 @@ rules:
   - get
   - patch
   - update
-- apiGroups:
-  - operator.openshift.io
-  resources:
-  - imagecontentsourcepolicies
-  verbs:
-  - get
-  - list
-  - watch
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:

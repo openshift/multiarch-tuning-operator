@@ -267,15 +267,6 @@ func runManager() {
 	createFile("containers/policy.json", policyConfig)
 	createtolmFile("containers/registries.conf", registryConfig)
 
-	By("Setting up System Config Syncer")
-	err = mgr.Add(NewConfigSyncerRunnable())
-	Expect(err).NotTo(HaveOccurred())
-
-	By("Setting up Registry Certificates Syncer")
-	err = mgr.Add(NewRegistryCertificatesSyncer(clientset, "openshift-image-registry",
-		"image-registry-certificates"))
-	Expect(err).NotTo(HaveOccurred())
-
 	By("Setting up Global Pull Secret Syncer")
 	err = mgr.Add(NewGlobalPullSecretSyncer(clientset, "openshift-config",
 		"pull-secret"))

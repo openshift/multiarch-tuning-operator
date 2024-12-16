@@ -51,6 +51,14 @@ type Pod struct {
 	recorder record.EventRecorder
 }
 
+//#kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch,resourceNames=image-registry-certificates,namespace="openshift-image-registry"
+
+//+kubebuilder:rbac:groups=config.openshift.io,resources=images,verbs=get;list;watch
+//+kubebuilder:rbac:groups=config.openshift.io,resources=imagedigestmirrorsets,verbs=get;list;watch
+//+kubebuilder:rbac:groups=config.openshift.io,resources=imagetagmirrorsets,verbs=get;list;watch
+
+//+kubebuilder:rbac:groups=operator.openshift.io,resources=imagecontentsourcepolicies,verbs=get;list;watch
+
 func (pod *Pod) GetPodImagePullSecrets() []string {
 	if pod.Spec.ImagePullSecrets == nil {
 		// If the imagePullSecrets array is nil, return emptylist

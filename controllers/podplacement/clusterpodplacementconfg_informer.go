@@ -34,7 +34,7 @@ func (s *CPPCSyncer) Start(ctx context.Context) error {
 
 	ic := informers.CacheSingleton()
 	// Get informer for ClusterPodPlacementConfig
-	CPPCInformer, err := mgr.GetCache().GetInformerForKind(ctx, multiarchv1beta1.GroupVersion.WithKind("ClusterPodPlacementConfig"))
+	CPPCInformer, err := mgr.GetCache().GetInformerForKind(ctx, multiarchv1beta1.GroupVersion.WithKind(multiarchv1beta1.ClusterPodPlacementConfigKind))
 	if err != nil {
 		s.log.Error(err, "Error getting informer for ClusterPodPlacementConfig")
 		return err

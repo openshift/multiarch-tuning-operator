@@ -530,6 +530,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 		pullSecretDataList [][]byte
 		pod                *v1.Pod
 		want               *v1.Pod
+		expectErr          bool
 	}{
 		{
 			name: "pod with no node selector terms",
@@ -685,9 +686,10 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 				}).Build(),
 		},
 		{
-			name: "should not modify the pod if unable to inspect the images",
-			pod:  NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
-			want: NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
+			name:      "should not modify the pod if unable to inspect the images",
+			pod:       NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
+			want:      NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
+			expectErr: true,
 		},
 		{
 			name: "should prevent the pod from being scheduled when no common architecture is found",
@@ -709,8 +711,13 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 				Pod: *tt.pod,
 				ctx: ctx,
 			}
-			pod.SetNodeAffinityArchRequirement(tt.pullSecretDataList)
+			_, err := pod.SetNodeAffinityArchRequirement(tt.pullSecretDataList)
 			g := NewGomegaWithT(t)
+			if tt.expectErr {
+				g.Expect(err).Should(HaveOccurred())
+			} else {
+				g.Expect(err).ShouldNot(HaveOccurred())
+			}
 			g.Expect(pod.Spec.Affinity).Should(Equal(tt.want.Spec.Affinity))
 			imageInspectionCache = mmoimage.FacadeSingleton()
 		})

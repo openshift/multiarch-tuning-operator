@@ -36,3 +36,4 @@ var (
 )
 
 const ClusterPodPlacementConfigResource = "clusterpodplacementconfigs"
+const ClusterPodPlacementConfigKind = "ClusterPodPlacementConfig"

@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BurntSushi/toml"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -254,14 +256,16 @@ func runManager() {
 		Handler: NewPodSchedulingGateMutatingWebHook(
 			mgr.GetClient(), clientset, mgr.GetScheme(), mgr.GetEventRecorderFor(utils.OperatorName), pool),
 	})
-	By("Setting up System Config Syncer")
-	err = mgr.Add(NewConfigSyncerRunnable())
-	Expect(err).NotTo(HaveOccurred())
 
-	By("Setting up Registry Certificates Syncer")
-	err = mgr.Add(NewRegistryCertificatesSyncer(clientset, "openshift-image-registry",
-		"image-registry-certificates"))
-	Expect(err).NotTo(HaveOccurred())
+	policyConfig := `{"default":[{"type":"insecureAcceptAnything"}],"transports":{"atomic":{},"docker":{},"docker-daemon":{"":[{"type":"insecureAcceptAnything"}]}}}`
+	registryConfig := map[string]interface{}{
+		"unqualified-search-registries": []string{"registry.access.redhat.com", "docker.io"},
+		"short-name-mode":               "",
+		"registry":                      []string{},
+	}
+
+	createFile("containers/policy.json", policyConfig)
+	createtolmFile("containers/registries.conf", registryConfig)
 
 	By("Setting up Global Pull Secret Syncer")
 	err = mgr.Add(NewGlobalPullSecretSyncer(clientset, "openshift-config",
@@ -332,5 +336,53 @@ func getMutatingWebHook() *v1.MutatingWebhookConfiguration {
 				SideEffects: utils.NewPtr(v1.SideEffectClassNone),
 			},
 		},
+	}
+}
+
+func createBaseDir(path string) {
+	// create base dir if it doesn't exist
+	baseDir := filepath.Dir(filepath.Clean(path))
+	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
+		err := os.MkdirAll(baseDir, os.ModePerm)
+		if err != nil {
+			suiteLog.Error(err, "Failed to create directory", "path", path)
+		}
+	}
+}
+
+func createtolmFile(path string, data interface{}) {
+	createBaseDir(path)
+	f, err := os.Create(filepath.Clean(path))
+	if err != nil {
+		suiteLog.Error(err, "Unable to create file", "path", path)
+		return
+	}
+	defer close(f)
+
+	err = toml.NewEncoder(f).Encode(data)
+	if err != nil {
+		suiteLog.Error(err, "Unable to write file", "path", path)
+	}
+}
+
+func createFile(path string, data string) {
+	createBaseDir(path)
+	f, err := os.Create(filepath.Clean(path))
+	if err != nil {
+		suiteLog.Error(err, "Unable to create file", "path", path)
+		return
+	}
+	defer close(f)
+
+	_, err = f.WriteString(data)
+	if err != nil {
+		suiteLog.Error(err, "Unable to write file", "path", path)
+	}
+}
+
+func close(f *os.File) {
+	err := f.Close()
+	if err != nil {
+		suiteLog.Error(err, "When cosing fd")
 	}
 }

@@ -3,7 +3,6 @@ module github.com/openshift/multiarch-tuning-operator
 go 1.22.5
 
 require (
-	github.com/BurntSushi/toml v1.4.0
 	github.com/containers/image/v5 v5.32.1
 	github.com/distribution/distribution/v3 v3.0.0-beta.1
 	github.com/go-logr/logr v1.4.2
@@ -29,6 +28,7 @@ require (
 )
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

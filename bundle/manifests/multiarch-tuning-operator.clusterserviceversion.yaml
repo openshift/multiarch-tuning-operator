@@ -27,7 +27,7 @@ metadata:
     categories: OpenShift Optional, Other
     console.openshift.io/disable-operand-delete: "false"
     containerImage: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
-    createdAt: "2024-10-16T20:07:51Z"
+    createdAt: "2024-12-05T13:46:24Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -38,12 +38,10 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
-    operator.openshift.io/uninstall-message: You must remove all Operands before uninstalling
-      the operator.
+    operator.openshift.io/uninstall-message: You must remove all Operands before uninstalling the operator.
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: openshift-multiarch-tuning-operator
-    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
-      Container Platform", "OpenShift Platform Plus"]'
+    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift Container Platform", "OpenShift Platform Plus"]'
     operators.operatorframework.io/builder: operator-sdk-v1.31.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/openshift/multiarch-tuning-operator
@@ -59,16 +57,12 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: ClusterPodPlacementConfig defines the configuration for the architecture
-        aware pod placement operand. Users can only deploy a single object named "cluster".
-        Creating the object enables the operand.
+    - description: ClusterPodPlacementConfig defines the configuration for the architecture aware pod placement operand. Users can only deploy a single object named "cluster". Creating the object enables the operand.
       displayName: Cluster Pod Placement Config
       kind: ClusterPodPlacementConfig
       name: clusterpodplacementconfigs.multiarch.openshift.io
       version: v1alpha1
-    - description: ClusterPodPlacementConfig defines the configuration for the architecture
-        aware pod placement operand. Users can only deploy a single object named "cluster".
-        Creating the object enables the operand.
+    - description: ClusterPodPlacementConfig defines the configuration for the architecture aware pod placement operand. Users can only deploy a single object named "cluster". Creating the object enables the operand.
       displayName: Cluster Pod Placement Config
       kind: ClusterPodPlacementConfig
       name: clusterpodplacementconfigs.multiarch.openshift.io

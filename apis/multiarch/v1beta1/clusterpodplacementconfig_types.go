@@ -25,6 +25,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common/plugins"
 )
 
 // ClusterPodPlacementConfigSpec defines the desired state of ClusterPodPlacementConfig
@@ -42,6 +43,12 @@ type ClusterPodPlacementConfigSpec struct {
 	// label "multiarch.openshift.io/exclude-pod-placement" exists.
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+
+	// Plugins selects the namespaces where the pod placement operand can process the nodeAffinityScoring
+	// of the pods. If left empty, all the namespaces are considered.
+	// The default sample allows to exclude all the namespaces where the
+	// +optional
+	Plugins plugins.Plugins `json:"plugins,omitempty"`
 }
 
 // ClusterPodPlacementConfigStatus defines the observed state of ClusterPodPlacementConfig

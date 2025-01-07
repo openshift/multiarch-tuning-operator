@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openshift/multiarch-tuning-operator/pkg/informers"
+
 	"sigs.k8s.io/kustomize/api/resmap"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -58,6 +60,7 @@ import (
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	podplacement "github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
@@ -201,6 +204,13 @@ func runManager() {
 		WebhookServer:          webhookServer,
 	})
 	Expect(err).NotTo(HaveOccurred())
+
+	By("Setting up Cluster Podplacement Config informer")
+	err = mgr.Add(podplacement.NewCPPCSyncer(mgr))
+	Expect(err).NotTo(HaveOccurred())
+	ic := informers.CacheSingleton()
+	Expect(ic.GetClusterPodPlacementConfig()).To(BeNil())
+
 	suiteLog.Info("Manager created")
 
 	clientset := kubernetes.NewForConfigOrDie(cfg)

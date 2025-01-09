@@ -19,6 +19,8 @@ package operator
 import (
 	"fmt"
 
+	"github.com/openshift/multiarch-tuning-operator/pkg/informers"
+
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -550,6 +552,32 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 					framework.NewConditionTypeStatusTuple(v1beta1.MutatingWebhookConfigurationNotAvailable, corev1.ConditionFalse),
 					framework.NewConditionTypeStatusTuple(v1beta1.DeprovisioningType, corev1.ConditionFalse),
 				)).Should(Succeed(), "the ClusterPodPlacementConfig should converge to normal conditions")
+			})
+			It("should cache the ClusterPodPlacementConfig", func() {
+				By("%%%%%%Checking initialization of the cache with the ClusterPodPlacementConfig")
+				ic := informers.CacheSingleton()
+				ppc := &v1beta1.ClusterPodPlacementConfig{}
+				err := k8sClient.Get(ctx, crclient.ObjectKey{
+					Name: common.SingletonResourceObjectName,
+				}, ppc)
+				Expect(err).NotTo(HaveOccurred(), "failed to get ClusterPodPlacementConfig", err)
+				Expect(ic.GetClusterPodPlacementConfig()).To(Equal(ppc))
+
+				By("%%%%%%Updating the cache with the ClusterPodPlacementConfig")
+				ppc.Spec.LogVerbosity = common.LogVerbosityLevelTraceAll
+				err = k8sClient.Update(ctx, ppc)
+				Expect(err).NotTo(HaveOccurred(), "failed to update ClusterPodPlacementConfig", err)
+				Expect(ic.GetClusterPodPlacementConfig()).To(Equal(ppc))
+
+				By("Deleting the cache by deleting the ClusterPodPlacementConfig")
+				err = k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
+				Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
+				Eventually(framework.ValidateDeletion(k8sClient, ctx)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
+				Expect(ic.GetClusterPodPlacementConfig()).To(BeNil())
+
+				err = k8sClient.Create(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
+				Expect(err).NotTo(HaveOccurred(), "failed to create ClusterPodPlacementConfig", err)
+				validateReconcile()
 			})
 		})
 		AfterAll(func() {

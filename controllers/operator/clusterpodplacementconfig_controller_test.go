@@ -554,7 +554,7 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 				)).Should(Succeed(), "the ClusterPodPlacementConfig should converge to normal conditions")
 			})
 			It("should cache the ClusterPodPlacementConfig", func() {
-				By("%%%%%%Checking initialization of the cache with the ClusterPodPlacementConfig")
+				By("Checking initialization of the cache with the ClusterPodPlacementConfig")
 				ic := informers.CacheSingleton()
 				ppc := &v1beta1.ClusterPodPlacementConfig{}
 				err := k8sClient.Get(ctx, crclient.ObjectKey{
@@ -563,7 +563,7 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 				Expect(err).NotTo(HaveOccurred(), "failed to get ClusterPodPlacementConfig", err)
 				Expect(ic.GetClusterPodPlacementConfig()).To(Equal(ppc))
 
-				By("%%%%%%Updating the cache with the ClusterPodPlacementConfig")
+				By("Updating the cache with the ClusterPodPlacementConfig")
 				ppc.Spec.LogVerbosity = common.LogVerbosityLevelTraceAll
 				err = k8sClient.Update(ctx, ppc)
 				Expect(err).NotTo(HaveOccurred(), "failed to update ClusterPodPlacementConfig", err)

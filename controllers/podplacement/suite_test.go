@@ -264,8 +264,8 @@ func runManager() {
 		"registry":                      []string{},
 	}
 
-	createFile("containers/policy.json", policyConfig)
-	createtolmFile("containers/registries.conf", registryConfig)
+	createFile(os.Getenv("POLICY_CONF_PATH"), policyConfig)
+	createtolmFile(os.Getenv("REGISTRIES_CONF_PATH"), registryConfig)
 
 	By("Setting up Global Pull Secret Syncer")
 	err = mgr.Add(NewGlobalPullSecretSyncer(clientset, "openshift-config",

@@ -193,7 +193,7 @@ func seedRegistry() {
 func seedK8S() {
 	var err error
 	By("Create internal namespaces")
-	testingutils.EnsureNamespaces(ctx, k8sClient, "openshift-image-registry", "openshift-config", "test-namespace")
+	testingutils.EnsureNamespaces(ctx, k8sClient, "openshift-config", "test-namespace")
 	By("Create the global pull secret")
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -210,18 +210,25 @@ func seedK8S() {
 	err = k8sClient.Create(ctx, secret)
 	Expect(err).NotTo(HaveOccurred())
 
+	By("Wright image registry certificate to file")
+	folderName := strings.Replace(registryAddress, ":", "..", 1)
+	absoluteFolderPath := fmt.Sprintf("%s/%s", os.Getenv("DOCKER_CERTS_DIR"), folderName)
+
+	err = writeToFile(absoluteFolderPath, string(registryCert))
+	Expect(err).NotTo(HaveOccurred())
+	//}
 	By("Add the image registry certificate to the image-registry-certificates configmap")
 	registryCert := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "image-registry-certificates",
-			Namespace: "openshift-image-registry",
+			Name: "image-registry-certificates",
 		},
 		Data: map[string]string{
-			strings.Replace(registryAddress, ":", "..", 1): string(registryCert),
+			folderName: string(registryCert),
 		},
 	}
 	err = k8sClient.Create(ctx, registryCert)
 	Expect(err).NotTo(HaveOccurred())
+
 }
 
 func runManager() {
@@ -378,6 +385,28 @@ func createFile(path string, data string) {
 	if err != nil {
 		suiteLog.Error(err, "Unable to write file", "path", path)
 	}
+}
+
+func writeToFile(path string, cert string) error {
+	// create folder if it doesn't exist
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		err = os.MkdirAll(path, 0700)
+		if err != nil {
+			return err
+		}
+	}
+	// write cert to file
+	absoluteFilePath := fmt.Sprintf("%s/ca.crt", path)
+	f, err := os.Create(filepath.Clean(absoluteFilePath))
+	if err != nil {
+		return err
+	}
+	defer close(f)
+	_, err = f.WriteString(cert)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func close(f *os.File) {

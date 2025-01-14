@@ -82,7 +82,6 @@ var (
 	certDir,
 	globalPullSecretNamespace,
 	globalPullSecretName,
-	registryCertificatesConfigMapNamespace,
 	registryCertificatesConfigMapName string
 	enableLeaderElection,
 	enableClusterPodPlacementConfigOperandWebHook,
@@ -274,7 +273,6 @@ func bindFlags() {
 	// TODO: Change the defaults to match a local secret; the OCP specific settings will be provided by the operator
 	flag.StringVar(&globalPullSecretNamespace, "global-pull-secret-namespace", "openshift-config", "The namespace where the global pull secret is stored")
 	flag.StringVar(&globalPullSecretName, "global-pull-secret-name", "pull-secret", "The name of the global pull secret")
-	flag.StringVar(&registryCertificatesConfigMapNamespace, "registry-certificates-configmap-namespace", "openshift-image-registry", "The namespace where the configmap that contains the registry certificates is stored")
 	flag.StringVar(&registryCertificatesConfigMapName, "registry-certificates-configmap-name", "image-registry-certificates", "The name of the configmap that contains the registry certificates")
 	flag.BoolVar(&enableClusterPodPlacementConfigOperandWebHook, "enable-ppc-webhook", false, "Enable the pod placement config operand webhook")
 	flag.BoolVar(&enableClusterPodPlacementConfigOperandControllers, "enable-ppc-controllers", false, "Enable the pod placement config operand controllers")

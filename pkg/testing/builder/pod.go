@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // PodBuilder is a builder for v1.Pod objects to be used only in unit tests.
@@ -127,6 +128,16 @@ func (p *PodBuilder) WithNodeSelectors(kv ...string) *PodBuilder {
 	}
 	for i := 0; i < len(kv); i += 2 {
 		p.pod.Spec.NodeSelector[kv[i]] = kv[i+1]
+	}
+	return p
+}
+
+func (p *PodBuilder) WithOwnerReferences(values ...*metav1.OwnerReference) *PodBuilder {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithOwnerReferences")
+		}
+		p.pod.OwnerReferences = append(p.pod.OwnerReferences, *values[i])
 	}
 	return p
 }

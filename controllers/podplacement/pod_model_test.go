@@ -1010,6 +1010,35 @@ func TestPod_shouldIgnorePod(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "pod with DaemonSet ownerReference and Controller is true",
+			fields: fields{
+				Pod: NewPod().WithOwnerReferences(
+					NewOwnerReferenceBuilder().WithKind("DaemonSet").
+						WithController(utils.NewPtr(true)).Build()).
+					Build(),
+			},
+			want: true,
+		},
+		{
+			name: "pod with DaemonSet ownerReference but Controller is false",
+			fields: fields{
+				Pod: NewPod().WithOwnerReferences(
+					NewOwnerReferenceBuilder().WithKind("DaemonSet").
+						WithController(utils.NewPtr(false)).Build()).
+					Build(),
+			},
+			want: false,
+		},
+		{
+			name: "pod with DaemonSet ownerReference but Controller is nil",
+			fields: fields{
+				Pod: NewPod().WithOwnerReferences(
+					NewOwnerReferenceBuilder().WithKind("DaemonSet").Build()).
+					Build(),
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

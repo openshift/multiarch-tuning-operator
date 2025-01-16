@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/distribution/distribution/v3/configuration"
@@ -34,7 +35,10 @@ type registryTLSConfig struct {
 	caCertBytes     []byte
 }
 
-var perRegistryCertDirPath string
+var (
+	perRegistryCertDirPath string
+	mu                     sync.Mutex
+)
 
 const (
 	// TODO: Port 5001 could be busy, we might set this to 0 to get an ephemeral port, but the Registry object
@@ -189,4 +193,14 @@ func buildRegistryTLSConfig() (*registryTLSConfig, error) {
 	}
 
 	return &tlsTestCfg, nil
+}
+
+func SetCertPath(path string) {
+	mu.Lock()
+	defer mu.Unlock()
+	perRegistryCertDirPath = path
+}
+
+func GetCertPath() string {
+	return perRegistryCertDirPath
 }

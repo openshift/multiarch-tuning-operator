@@ -36,7 +36,6 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/openshift/multiarch-tuning-operator/pkg/systemconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -48,6 +47,48 @@ type registryInspector struct {
 	globalPullSecret []byte
 	// mutex is used to protect the globalPullSecret field of the singletonImageFacade from concurrent write access
 	mutex sync.RWMutex
+}
+
+var (
+	dockerCertsDir,
+	registriesCertsDir,
+	registriesConfPath,
+	policyConfPath string
+)
+
+func DockerCertsDir() string {
+	if dockerCertsDir == "" {
+		dockerCertsDir = lookupEnvOr("DOCKER_CERTS_DIR", "/etc/docker/certs.d")
+	}
+	return dockerCertsDir
+}
+
+func RegistryCertsDir() string {
+	if registriesCertsDir == "" {
+		registriesCertsDir = lookupEnvOr("REGISTRIES_CERTS_DIR", "/etc/containers/registries.d")
+	}
+	return registriesCertsDir
+}
+
+func RegistriesConfPath() string {
+	if registriesConfPath == "" {
+		registriesConfPath = lookupEnvOr("REGISTRIES_CONF_PATH", "/etc/containers/registries.conf")
+	}
+	return registriesConfPath
+}
+
+func PolicyConfPath() string {
+	if policyConfPath == "" {
+		policyConfPath = lookupEnvOr("POLICY_CONF_PATH", "/etc/containers/policy.json")
+	}
+	return policyConfPath
+}
+
+func lookupEnvOr(key, defaultValue string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return defaultValue
 }
 
 // GetCompatibleArchitecturesSet returns the set of compatibles architectures given an imageReference and a list of secrets.
@@ -86,10 +127,10 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	}
 	sys := &types.SystemContext{
 		AuthFilePath:                authFile.Name(),
-		SystemRegistriesConfPath:    systemconfig.RegistriesConfPath(),
-		SystemRegistriesConfDirPath: systemconfig.RegistryCertsDir(),
-		SignaturePolicyPath:         systemconfig.PolicyConfPath(),
-		DockerPerHostCertDirPath:    systemconfig.DockerCertsDir(),
+		SystemRegistriesConfPath:    RegistriesConfPath(),
+		SystemRegistriesConfDirPath: RegistryCertsDir(),
+		SignaturePolicyPath:         PolicyConfPath(),
+		DockerPerHostCertDirPath:    DockerCertsDir(),
 	}
 	src, err := ref.NewImageSource(ctx, sys)
 	if err != nil {

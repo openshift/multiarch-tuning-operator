@@ -332,9 +332,11 @@ func (pod *Pod) hasControlPlaneNodeSelector() bool {
 // - the pod is in the kube-* namespace
 // - the pod has a node name set
 // - the pod has a node selector that matches the control plane nodes
+// - the pod is owned by a daemonset
 func (pod *Pod) shouldIgnorePod() bool {
 	return utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "kube-") ||
-		pod.Spec.NodeName != "" || pod.hasControlPlaneNodeSelector() || pod.isNodeSelectorConfiguredForArchitecture()
+		pod.Spec.NodeName != "" || pod.hasControlPlaneNodeSelector() ||
+		pod.isNodeSelectorConfiguredForArchitecture() || pod.isFromDaemonSet()
 }
 
 // ensureSchedulingGate ensures that the pod has the scheduling gate utils.SchedulingGateName.
@@ -395,6 +397,17 @@ func (pod *Pod) isNodeSelectorConfiguredForArchitecture() bool {
 
 	// If all NodeSelectorTerms contain the architecture label, return true
 	return true
+}
+
+// isPodFromDaemonSet returns true if the pod is from a daemonSet.
+func (pod *Pod) isFromDaemonSet() bool {
+	// Check all ownerRef
+	for _, ownerRef := range pod.OwnerReferences {
+		if ownerRef.Kind == "DaemonSet" && ownerRef.Controller != nil && *ownerRef.Controller {
+			return true
+		}
+	}
+	return false
 }
 
 func (pod *Pod) publishIgnorePod() {

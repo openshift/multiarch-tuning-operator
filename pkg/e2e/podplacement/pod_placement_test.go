@@ -532,7 +532,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 	})
 	Context("PodPlacementOperand works with several high-level resources owning pods", func() {
-		It("should set the node affinity on DaemonSet owning pod", func() {
+		It("should neither set the node affinity or gate pod for DaemonSet owning pod", func() {
 			var err error
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
@@ -552,22 +552,10 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			archLabelNSR := NewNodeSelectorRequirement().
-				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
-					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
-				Build()
-			By("The pod should have been processed by the webhook and the scheduling gate label should be added")
-			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
-			By("Verify arch label are set")
-			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
-				utils.MultiArchLabel, "",
-				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
-				utils.ArchLabelValue(utils.ArchitectureArm64), "",
-				utils.ArchLabelValue(utils.ArchitectureS390x), "",
-				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
-			), e2e.WaitShort).Should(Succeed())
-			By("The pod should have been set node affinity of arch info.")
-			Eventually(framework.VerifyDaemonSetPodNodeAffinity(ctx, client, ns, "app", "test", archLabelNSR), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have been processed by the webhook and the scheduling gate label should set as not-set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should only have metadata.name provided by the DaemonSet. No node affinity is added by the controller.")
+			Eventually(framework.VerifyDaemonSetPodNodeAffinity(ctx, client, ns, "app", "test", nil), e2e.WaitShort).Should(Succeed())
 		})
 		It("should set the node affinity on Job owning pod", func() {
 			var err error

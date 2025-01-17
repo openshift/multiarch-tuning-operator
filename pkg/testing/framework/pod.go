@@ -148,7 +148,13 @@ func VerifyDaemonSetPodNodeAffinity(ctx context.Context, client runtimeclient.Cl
 			nodenameNSR := builder.NewNodeSelectorRequirement().
 				WithKeyAndValues("metadata.name", v1.NodeSelectorOpIn, nodename).
 				Build()
-			expectedNSTs := builder.NewNodeSelectorTerm().WithMatchExpressions(nodeSelectorRequirement).WithMatchFields(nodenameNSR).Build()
+			var expectedNSTs *v1.NodeSelectorTerm
+			if nodeSelectorRequirement == nil {
+				expectedNSTs = builder.NewNodeSelectorTerm().WithMatchFields(nodenameNSR).Build()
+			} else {
+				expectedNSTs = builder.NewNodeSelectorTerm().WithMatchExpressions(nodeSelectorRequirement).WithMatchFields(nodenameNSR).Build()
+			}
+
 			g.Expect([]v1.Pod{pod}).To(HaveEach(HaveEquivalentNodeAffinity(
 				&v1.NodeAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{

@@ -38,9 +38,12 @@ import (
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,6 +55,7 @@ import (
 
 	"github.com/panjf2000/ants/v2"
 
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake/registry"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -73,6 +77,13 @@ var (
 	suiteLog = ctrl.Log.WithName("setup")
 )
 
+type sharedData struct {
+	Kubeconfig       api.Config `json:"kubeconfig"`
+	RegistryAddress  string     `json:"registryAddress"`
+	RegistryCert     []byte     `json:"registryCert"`
+	RegistryCertPath string     `json:"registryCertpath"`
+}
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controllers Integration Suite", Label("integration"))
@@ -80,12 +91,13 @@ func TestAPIs(t *testing.T) {
 
 var _ = BeforeAll
 
-var _ = BeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func() []byte {
 	suiteLog = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
 
 	logf.SetLogger(suiteLog)
 	SetDefaultEventuallyPollingInterval(5 * time.Millisecond)
 	SetDefaultEventuallyTimeout(5 * time.Second)
+	By("Set up a shared test environment and local registry for testing on process 1 node")
 	wg := &sync.WaitGroup{}
 	testingutils.DecorateWithWaitGroup(wg, startTestEnv)
 	testingutils.DecorateWithWaitGroup(wg, startRegistry)
@@ -93,7 +105,6 @@ var _ = BeforeSuite(func() {
 	testingutils.DecorateWithWaitGroup(wg, seedRegistry)
 	testingutils.DecorateWithWaitGroup(wg, seedK8S)
 	wg.Wait()
-
 	var err error
 	dir, err = os.MkdirTemp("", "multiarch-tuning-operator")
 	Expect(err).NotTo(HaveOccurred())
@@ -109,9 +120,50 @@ var _ = BeforeSuite(func() {
 
 	// TODO: should we continue running the manager in the BeforeSuite node?
 	runManager()
+
+	By("Prepare shared data and Pass to all processes")
+	// Get cluster info and share with all processes
+	kc := framework.FromEnvTestConfig(cfg)
+	// The registry.perRegistryCertDirPath is used by registry.PushMockImage,
+	// need to pass to all processes
+	registryCertPath := registry.GetCertPath()
+	data := sharedData{
+		Kubeconfig:       kc,
+		RegistryAddress:  registryAddress,
+		RegistryCert:     registryCert,
+		RegistryCertPath: registryCertPath,
+	}
+	jsonData, err := json.Marshal(data)
+	Expect(err).NotTo(HaveOccurred(), "failed to marshal sharedData")
+	return jsonData
+}, func(data []byte) {
+	suiteLog = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
+
+	logf.SetLogger(suiteLog)
+	SetDefaultEventuallyPollingInterval(5 * time.Millisecond)
+	SetDefaultEventuallyTimeout(5 * time.Second)
+	var err error
+	By("Get shared data to all processes")
+	var sharedData sharedData
+	err = json.Unmarshal(data, &sharedData)
+	Expect(err).NotTo(HaveOccurred(), "failed to unmarshal sharedData")
+	// Sync registry.perRegistryCertDirPath for registry.PushMockImage
+	registryCertPath := sharedData.RegistryCertPath
+	registry.SetCertPath(registryCertPath)
+	// Sync registryAddress and registryCert
+	registryAddress = sharedData.RegistryAddress
+	registryCert = sharedData.RegistryCert
+	// Sync test cluster environment
+	kc := sharedData.Kubeconfig
+	ocg := clientcmd.NewDefaultClientConfig(kc, &clientcmd.ConfigOverrides{})
+	cfg, err = ocg.ClientConfig()
+	Expect(err).NotTo(HaveOccurred(), "Error loading kubeconfig")
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
 })
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func() {}, func() {
 	By("tearing down the test environment")
 	stopMgr()
 	// TODO: we miss a way to gracefully shutdown the registry server in the AfterSuite fixture.

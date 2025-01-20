@@ -18,6 +18,7 @@ package operator
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -40,6 +41,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -61,6 +64,7 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	podplacement "github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
+	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
@@ -85,7 +89,7 @@ func TestOperator(t *testing.T) {
 
 var _ = BeforeAll
 
-var _ = BeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func() []byte {
 	suiteLog = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
 	ctx = context.TODO()
 	logf.SetLogger(suiteLog)
@@ -94,9 +98,39 @@ var _ = BeforeSuite(func() {
 	startTestEnv()
 	testingutils.EnsureNamespaces(ctx, k8sClient, "test-namespace")
 	runManager()
+	kc := framework.FromEnvTestConfig(cfg)
+	data, err := json.Marshal(kc)
+	Expect(err).NotTo(HaveOccurred(), "failed to marshal sharedData")
+	return data
+}, func(data []byte) {
+	var err error
+	var kc api.Config
+	err = json.Unmarshal(data, &kc)
+	Expect(err).NotTo(HaveOccurred(), "failed to unmarshal sharedData")
+	// Sync test cluster environment
+	ocg := clientcmd.NewDefaultClientConfig(kc, &clientcmd.ConfigOverrides{})
+	cfg, err = ocg.ClientConfig()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(cfg).NotTo(BeNil())
+	err = corev1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = appsv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = v1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = v1beta1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = admissionv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = monitoringv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
 })
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func() {}, func() {
 	By("tearing down the test environment")
 	stopMgr()
 	// wait for the manager to stop. FIXME: this is a hack, not sure what is the right way to do it.

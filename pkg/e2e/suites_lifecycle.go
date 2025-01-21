@@ -29,14 +29,14 @@ func CommonInit() {
 func CommonBeforeSuite() (client runtimeclient.Client, clientset *kubernetes.Clientset,
 	ctx context.Context, suiteLog logr.Logger) {
 	var err error
-	suiteLog = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
-	logf.SetLogger(suiteLog)
-
 	client, err = framework.LoadClient()
 	Expect(err).ToNot(HaveOccurred())
 
 	clientset, err = framework.LoadClientset()
 	Expect(err).ToNot(HaveOccurred())
+
+	suiteLog = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
+	logf.SetLogger(suiteLog)
 
 	ctx = context.Background()
 

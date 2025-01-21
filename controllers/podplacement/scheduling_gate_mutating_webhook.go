@@ -18,7 +18,6 @@ package podplacement
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"net/http"
@@ -49,7 +48,6 @@ type PodSchedulingGateMutatingWebHook struct {
 	client     client.Client
 	clientSet  *kubernetes.Clientset
 	decoder    admission.Decoder
-	once       sync.Once
 	scheme     *runtime.Scheme
 	recorder   record.EventRecorder
 	workerPool *ants.MultiPool
@@ -67,9 +65,9 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	responseTimeStart := time.Now()
 	defer utils.HistogramObserve(responseTimeStart, metrics.ResponseTime)
 	metrics.ProcessedPodsWH.Inc()
-	a.once.Do(func() {
+	if a.decoder == nil {
 		a.decoder = admission.NewDecoder(a.scheme)
-	})
+	}
 	pod := &Pod{
 		ctx:      ctx,
 		recorder: nil, // do we want to publish events if the pod is ignored?

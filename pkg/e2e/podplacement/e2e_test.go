@@ -58,7 +58,7 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "Multiarch Tuning Operator Suite (PodPlacementOperand E2E)", Label("e2e", "pod-placement-operand"))
 }
 
-var _ = SynchronizedBeforeSuite(func() []byte {
+var _ = BeforeSuite(func() {
 	client, clientset, ctx, suiteLog = e2e.CommonBeforeSuite()
 	err := ocpappsv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -93,30 +93,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		By("Wait for machineconfig finishing updating")
 		framework.WaitForMCPComplete(ctx, client)
 	}
-	return nil
-}, func(data []byte) {
-	var err error
-	client, clientset, ctx, suiteLog = e2e.CommonBeforeSuite()
-	err = ocpappsv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = ocpbuildv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = ocpconfigv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = ocpmachineconfigurationv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = ocpoperatorv1alpha1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	masterNodes, err = framework.GetNodesWithLabel(ctx, client, "node-role.kubernetes.io/master", "")
-	Expect(err).NotTo(HaveOccurred())
 })
 
-var _ = SynchronizedAfterSuite(func() {}, func() {
+var _ = AfterSuite(func() {
 	err := client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",

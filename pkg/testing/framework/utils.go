@@ -20,8 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd/api"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -58,34 +56,6 @@ func EnsureNamespaces(ctx context.Context, client client.Client, namespaces ...s
 		err = client.Create(ctx, namespace)
 		Expect(err).NotTo(HaveOccurred())
 	}
-}
-
-func FromEnvTestConfig(cfg *rest.Config) api.Config {
-	clusterName := "envtest"
-	contextName := fmt.Sprintf("%s@%s", cfg.Username, clusterName)
-	c := api.Config{
-		Clusters: map[string]*api.Cluster{
-			clusterName: {
-				Server:                   cfg.Host,
-				CertificateAuthorityData: cfg.CAData,
-			},
-		},
-		Contexts: map[string]*api.Context{
-			contextName: {
-				Cluster:  clusterName,
-				AuthInfo: cfg.Username,
-			},
-		},
-		AuthInfos: map[string]*api.AuthInfo{
-			cfg.Username: {
-				ClientKeyData:         cfg.KeyData,
-				ClientCertificateData: cfg.CertData,
-			},
-		},
-		CurrentContext: contextName,
-	}
-
-	return c
 }
 
 // LoadClient returns a new controller-runtime client.

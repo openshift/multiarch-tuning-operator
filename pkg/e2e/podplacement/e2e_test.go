@@ -14,15 +14,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	ocpappsv1 "github.com/openshift/api/apps/v1"
-	ocpbuildv1 "github.com/openshift/api/build/v1"
 	ocpconfigv1 "github.com/openshift/api/config/v1"
-	ocpmachineconfigurationv1 "github.com/openshift/api/machineconfiguration/v1"
 	ocpoperatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
@@ -58,23 +54,9 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "Multiarch Tuning Operator Suite (PodPlacementOperand E2E)", Label("e2e", "pod-placement-operand"))
 }
 
-var _ = BeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func() []byte {
+	var err error
 	client, clientset, ctx, suiteLog = e2e.CommonBeforeSuite()
-	err := ocpappsv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = ocpbuildv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = ocpconfigv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = ocpmachineconfigurationv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = ocpoperatorv1alpha1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
 	err = client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
@@ -93,9 +75,16 @@ var _ = BeforeSuite(func() {
 		By("Wait for machineconfig finishing updating")
 		framework.WaitForMCPComplete(ctx, client)
 	}
+	return nil
+}, func(data []byte) {
+	var err error
+	client, clientset, ctx, suiteLog = e2e.CommonBeforeSuite()
+
+	masterNodes, err = framework.GetNodesWithLabel(ctx, client, "node-role.kubernetes.io/master", "")
+	Expect(err).NotTo(HaveOccurred())
 })
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func() {}, func() {
 	err := client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",

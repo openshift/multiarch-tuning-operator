@@ -36,7 +36,6 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/openshift/multiarch-tuning-operator/pkg/systemconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -86,10 +85,10 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	}
 	sys := &types.SystemContext{
 		AuthFilePath:                authFile.Name(),
-		SystemRegistriesConfPath:    systemconfig.RegistriesConfPath(),
-		SystemRegistriesConfDirPath: systemconfig.RegistryCertsDir(),
-		SignaturePolicyPath:         systemconfig.PolicyConfPath(),
-		DockerPerHostCertDirPath:    systemconfig.DockerCertsDir(),
+		SystemRegistriesConfPath:    RegistriesConfPath(),
+		SystemRegistriesConfDirPath: RegistryCertsDir(),
+		SignaturePolicyPath:         PolicyConfPath(),
+		DockerPerHostCertDirPath:    DockerCertsDir(),
 	}
 	src, err := ref.NewImageSource(ctx, sys)
 	if err != nil {

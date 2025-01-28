@@ -493,16 +493,6 @@ func buildClusterRoleController() *rbacv1.ClusterRole {
 			Verbs:     []string{LIST, WATCH, GET},
 		},
 		{
-			APIGroups: []string{"operator.openshift.io"},
-			Resources: []string{"imagecontentsourcepolicies"},
-			Verbs:     []string{LIST, WATCH, GET},
-		},
-		{
-			APIGroups: []string{"config.openshift.io"},
-			Resources: []string{"imagetagmirrorsets", "imagedigestmirrorsets", "images"},
-			Verbs:     []string{LIST, WATCH, GET},
-		},
-		{
 			APIGroups: []string{"authentication.k8s.io"},
 			Resources: []string{"tokenreviews"},
 			Verbs:     []string{CREATE},

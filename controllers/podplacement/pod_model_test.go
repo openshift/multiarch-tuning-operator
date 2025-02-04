@@ -14,6 +14,7 @@ import (
 
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	mmoimage "github.com/openshift/multiarch-tuning-operator/pkg/image"
+	"github.com/openshift/multiarch-tuning-operator/pkg/informers"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 
@@ -517,7 +518,7 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 			g := NewGomegaWithT(t)
 			pred, err := pod.getArchitecturePredicate(nil)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			pod.setArchNodeAffinity(pred)
+			pod.setRequiredArchNodeAffinity(pred)
 			g.Expect(pod.Spec.Affinity).Should(Equal(tt.want.Spec.Affinity))
 			imageInspectionCache = mmoimage.FacadeSingleton()
 		})
@@ -704,6 +705,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 		},
 	}
 	metrics.InitPodPlacementControllerMetrics()
+	cache := informers.CacheSingleton()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			imageInspectionCache = fake.FacadeSingleton()
@@ -711,7 +713,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 				Pod: *tt.pod,
 				ctx: ctx,
 			}
-			_, err := pod.SetNodeAffinityArchRequirement(tt.pullSecretDataList)
+			_, err := pod.SetNodeAffinityArchRequirement(cache, tt.pullSecretDataList)
 			g := NewGomegaWithT(t)
 			if tt.expectErr {
 				g.Expect(err).Should(HaveOccurred())

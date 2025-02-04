@@ -166,6 +166,52 @@ func (pod *Pod) setRequiredArchNodeAffinity(requirement corev1.NodeSelectorRequi
 		ArchitecturePredicateSetupMsg+fmt.Sprintf("{%s}", strings.Join(requirement.Values, ", ")))
 }
 
+// SetPreferredArchNodeAffinity sets the node affinity for the pod to the preferences given in the ClusterPodPlacementConfig.
+// TODO[Tori]: Missing unit tests for this method.
+func (pod *Pod) SetPreferredArchNodeAffinity(cppc *v1beta1.ClusterPodPlacementConfig) {
+	// Prevent overriding of user-provided kubernetes.io/arch preferred affinities
+	if pod.isPreferredAffinityConfiguredForArchitecture() {
+		pod.ensureLabel(utils.PreferredNodeAffinityLabel, utils.LabelValueNotSet)
+		pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
+			ArchitecturePreferredPredicateSkippedMsg)
+		return
+	}
+
+	if pod.Spec.Affinity == nil {
+		pod.Spec.Affinity = &corev1.Affinity{}
+	}
+
+	if pod.Spec.Affinity.NodeAffinity == nil {
+		pod.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
+	}
+
+	if pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution == nil {
+		pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm{}
+	}
+
+	for _, nodeAffinityScoringPlatformTerm := range cppc.Spec.Plugins.NodeAffinityScoring.Platforms {
+		preferredSchedulingTerm := corev1.PreferredSchedulingTerm{
+			Weight: nodeAffinityScoringPlatformTerm.Weight,
+			Preference: corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      utils.ArchLabel,
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{nodeAffinityScoringPlatformTerm.Architecture},
+					},
+				},
+			},
+		}
+		pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
+			pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution, preferredSchedulingTerm)
+	}
+
+	// if the nodeSelectorTerms were patched at least once, we set the nodeAffinity label to the set value, to keep
+	// track of the fact that the nodeAffinity was patched by the operator.
+	pod.ensureLabel(utils.PreferredNodeAffinityLabel, utils.NodeAffinityLabelValueSet)
+	pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet, ArchitecturePreferredPredicateSetupMsg)
+}
+
 func (pod *Pod) getArchitecturePredicate(pullSecretDataList [][]byte) (corev1.NodeSelectorRequirement, error) {
 	architectures, err := pod.intersectImagesArchitecture(pullSecretDataList)
 	// if an error occurs, we return an empty NodeSelectorRequirement and the error.

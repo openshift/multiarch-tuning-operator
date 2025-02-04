@@ -140,6 +140,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	By("Creating the ClusterPodPlacementConfig")
 	err = k8sClient.Create(ctx, builder.NewClusterPodPlacementConfig().
 		WithName(common.SingletonResourceObjectName).
+		WithPlugins().
+		WithNodeAffinityScoring(true).
+		WithNodeAffinityScoringTerm(utils.ArchitectureArm64, 50).
 		Build())
 	Expect(err).NotTo(HaveOccurred(), "failed to create ClusterPodPlacementConfig")
 

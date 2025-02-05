@@ -16,38 +16,78 @@ limitations under the License.
 
 package image
 
-import "os"
+import (
+	"os"
+	"sync"
+)
 
 var (
 	dockerCertsDir,
 	registriesCertsDir,
 	registriesConfPath,
 	policyConfPath string
+	rwMutex sync.RWMutex
 )
 
 func DockerCertsDir() string {
+	rwMutex.RLock()
+	if dockerCertsDir != "" {
+		defer rwMutex.RUnlock()
+		return dockerCertsDir
+	}
+	rwMutex.RUnlock()
+	rwMutex.Lock()
+	defer rwMutex.Unlock()
 	if dockerCertsDir == "" {
+		// avoid race condition in-between rwMutex.RUnlock and rwMutex.Lock
 		dockerCertsDir = lookupEnvOr("DOCKER_CERTS_DIR", "/etc/docker/certs.d")
 	}
 	return dockerCertsDir
 }
 
 func RegistryCertsDir() string {
+	rwMutex.RLock()
+	if registriesCertsDir != "" {
+		defer rwMutex.RUnlock()
+		return registriesCertsDir
+	}
+	rwMutex.RUnlock()
+	rwMutex.Lock()
+	defer rwMutex.Unlock()
 	if registriesCertsDir == "" {
+		// avoid race condition in-between rwMutex.RUnlock and rwMutex.Lock
 		registriesCertsDir = lookupEnvOr("REGISTRIES_CERTS_DIR", "/etc/containers/registries.d")
 	}
 	return registriesCertsDir
 }
 
 func RegistriesConfPath() string {
+	rwMutex.RLock()
+	if registriesConfPath != "" {
+		defer rwMutex.RUnlock()
+		return registriesConfPath
+	}
+	rwMutex.RUnlock()
+	rwMutex.Lock()
+	defer rwMutex.Unlock()
 	if registriesConfPath == "" {
+		// avoid race condition in-between rwMutex.RUnlock and rwMutex.Lock
 		registriesConfPath = lookupEnvOr("REGISTRIES_CONF_PATH", "/etc/containers/registries.conf")
 	}
 	return registriesConfPath
 }
 
 func PolicyConfPath() string {
+	rwMutex.RLock()
+	if policyConfPath != "" {
+		defer rwMutex.RUnlock()
+		return policyConfPath
+	}
+	rwMutex.RUnlock()
+	rwMutex.Lock()
+	defer rwMutex.Unlock()
 	if policyConfPath == "" {
+		// avoid race condition in-between rwMutex.RUnlock and rwMutex.Lock
 		policyConfPath = lookupEnvOr("POLICY_CONF_PATH", "/etc/containers/policy.json")
 	}
 	return policyConfPath

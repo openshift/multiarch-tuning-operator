@@ -23,7 +23,7 @@ const (
 	helloOpenshiftPublicMultiarchImage = "quay.io/openshifttest/hello-openshift:1.2.0"
 )
 
-var _ = Describe("The Multiarch Tuning Operator", func() {
+var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 	var (
 		podLabel                  = map[string]string{"app": "test"}
 		schedulingGateLabel       = map[string]string{utils.SchedulingGateLabel: utils.SchedulingGateLabelValueRemoved}

@@ -18,11 +18,13 @@ package operator
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers"
 
 	"sigs.k8s.io/kustomize/api/resmap"
@@ -33,13 +35,12 @@ import (
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 
-	admissionv1 "k8s.io/api/admissionregistration/v1"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -56,10 +57,6 @@ import (
 
 	"github.com/openshift/library-go/pkg/operator/events"
 
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	podplacement "github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -78,6 +75,10 @@ var (
 	suiteLog  = ctrl.Log.WithName("setup")
 )
 
+func init() {
+	e2e.CommonInit()
+}
+
 func TestOperator(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Operator Integration Suite", Label("integration", "operator"))
@@ -85,7 +86,7 @@ func TestOperator(t *testing.T) {
 
 var _ = BeforeAll
 
-var _ = BeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func() []byte {
 	suiteLog = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
 	ctx = context.TODO()
 	logf.SetLogger(suiteLog)
@@ -94,9 +95,32 @@ var _ = BeforeSuite(func() {
 	startTestEnv()
 	testingutils.EnsureNamespaces(ctx, k8sClient, "test-namespace")
 	runManager()
+	kc := testingutils.FromEnvTestConfig(cfg)
+	data, err := json.Marshal(kc)
+	Expect(err).NotTo(HaveOccurred(), "failed to marshal sharedData")
+	return data
+}, func(data []byte) {
+	suiteLog = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
+	ctx = context.TODO()
+	logf.SetLogger(suiteLog)
+	SetDefaultEventuallyPollingInterval(5 * time.Millisecond)
+	SetDefaultEventuallyTimeout(5 * time.Second)
+	var err error
+	var kc api.Config
+	err = json.Unmarshal(data, &kc)
+	Expect(err).NotTo(HaveOccurred(), "failed to unmarshal sharedData")
+	// Sync test cluster environment
+	ocg := clientcmd.NewDefaultClientConfig(kc, &clientcmd.ConfigOverrides{})
+	cfg, err = ocg.ClientConfig()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(cfg).NotTo(BeNil())
+
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
 })
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func() {}, func() {
 	By("tearing down the test environment")
 	stopMgr()
 	// wait for the manager to stop. FIXME: this is a hack, not sure what is the right way to do it.
@@ -112,23 +136,10 @@ func startTestEnv() {
 		ErrorIfCRDPathMissing: true,
 	}
 	var err error
-
 	// cfg is defined in this file globally.
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
-	err = corev1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = appsv1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = v1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = v1beta1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = admissionv1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = monitoringv1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())

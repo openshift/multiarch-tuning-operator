@@ -38,7 +38,7 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfigReconciler", Ordered, func() {
+var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfigReconciler", Serial, Ordered, func() {
 	When("The ClusterPodPlacementConfig", func() {
 		Context("is handling the lifecycle of the operand", func() {
 			BeforeEach(func() {

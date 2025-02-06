@@ -20,9 +20,19 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd/api"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
+	ocpappsv1 "github.com/openshift/api/apps/v1"
+	ocpbuildv1 "github.com/openshift/api/build/v1"
+	ocpconfigv1 "github.com/openshift/api/config/v1"
+	ocpmachineconfigurationv1 "github.com/openshift/api/machineconfiguration/v1"
+	ocpoperatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
@@ -58,6 +68,34 @@ func EnsureNamespaces(ctx context.Context, client client.Client, namespaces ...s
 	}
 }
 
+func FromEnvTestConfig(cfg *rest.Config) api.Config {
+	clusterName := "envtest"
+	contextName := fmt.Sprintf("%s@%s", cfg.Username, clusterName)
+	c := api.Config{
+		Clusters: map[string]*api.Cluster{
+			clusterName: {
+				Server:                   cfg.Host,
+				CertificateAuthorityData: cfg.CAData,
+			},
+		},
+		Contexts: map[string]*api.Context{
+			contextName: {
+				Cluster:  clusterName,
+				AuthInfo: cfg.Username,
+			},
+		},
+		AuthInfos: map[string]*api.AuthInfo{
+			cfg.Username: {
+				ClientKeyData:         cfg.KeyData,
+				ClientCertificateData: cfg.CertData,
+			},
+		},
+		CurrentContext: contextName,
+	}
+
+	return c
+}
+
 // LoadClient returns a new controller-runtime client.
 func LoadClient() (client.Client, error) {
 	cfg, err := config.GetConfig()
@@ -84,6 +122,12 @@ func RegisterScheme(s *runtime.Scheme) error {
 	errs = append(errs, appsv1.AddToScheme(s))
 	errs = append(errs, v1alpha1.AddToScheme(s))
 	errs = append(errs, v1beta1.AddToScheme(s))
+	errs = append(errs, monitoringv1.AddToScheme(s))
+	errs = append(errs, ocpappsv1.Install(s))
+	errs = append(errs, ocpbuildv1.Install(s))
+	errs = append(errs, ocpconfigv1.Install(s))
+	errs = append(errs, ocpmachineconfigurationv1.Install(s))
+	errs = append(errs, ocpoperatorv1alpha1.Install(s))
 	if len(errs) > 0 {
 		return errors.NewAggregate(errs)
 	}

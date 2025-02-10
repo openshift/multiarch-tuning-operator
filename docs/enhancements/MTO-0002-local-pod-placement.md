@@ -132,7 +132,7 @@ deploys the validating webhook for the cluster-scoped `ClusterPodPlacementConfig
 #### Changes to the Pod Placement Controller
 
 In order to apply the configurations defined by the namespace-scoped `PodPlacementConfig` CRD, the pod placement controller will be changed such that it applies any
-matching namespace-scoped `PodPlacementConfig` CRD to the pods in the selected namespaces, sorted by ascending priority, before applying the cluster-scoped
+matching namespace-scoped `PodPlacementConfig` CRD to the pods in the selected namespaces, sorted by descending priority, before applying the cluster-scoped
 `ClusterPodPlacementConfig` configuration.
 
 Given a pod hitting the pod reconciliation loop:
@@ -241,7 +241,8 @@ All the RBAC rules for the local pod placement controller and the local mutating
 
 - The priority field is an 8-bit unsigned integer, ranging from 0 to 255. The higher the value, the higher the priority.
 - When a Pod Placement Config is created, the operator will validate the priority field to ensure it is within the valid range and that no other Pod Placement Config in the same namespace has the same priority.
-- If the `priority` field is omitted, the operator will default to `255` or the lowest priority among the existing Pod Placement Configs in the same namespace decreased by 1.
+- If the `priority` field is omitted, the operator will default to `0` or the highest priority among the existing Pod Placement Configs in the same namespace increased by 1. I.e., the newest Pod Placement Config will have the highest priority among the existing ones in the same namespace, unless specified otherwise.
+- If the highest priority among the existing Pod Placement Configs in the same namespace is `255`, the operator rejects the creation of the new Pod Placement Config.
 
 ### Risks and Mitigations
 
@@ -268,7 +269,8 @@ All the RBAC rules for the local pod placement controller and the local mutating
 - The pod placement controller should apply the configuration defined by the namespace-scoped `PodPlacementConfig` CRD to the pods in the selected namespaces, and the cluster-scoped `ClusterPodPlacementConfig` configuration for preferred affinities should be ignored
 - The pod placement controller should apply the configuration defined by the highest-priority namespace-scoped `PodPlacementConfig` CRD to pods matching multiple `PodPlacementConfig` CRDs in the same namespace
 - No PPC with the same priority should be allowed in the same namespace
-- When no priority is set in the `PodPlacementConfig`, the operator should default to the lowest priority among the existing Pod Placement Configs in the same namespace decreased by 1
+- If the `priority` field is omitted, the operator should default to `0` when no priority is set in the `PodPlacementConfig`, or the highest priority among the existing Pod Placement Configs in the same namespace increased by 1
+- When the highest priority among the existing Pod Placement Configs in the same namespace is `255`, the operator should reject the creation of the new Pod Placement Config
 - The pod placement controller should not process a pod with the configuration of the namespace-scoped `PodPlacementConfig` CRD if the pod does not match its label selector
 
 ##### Phase 2

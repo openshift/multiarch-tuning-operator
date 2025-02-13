@@ -54,7 +54,7 @@ func (v *ClusterPodPlacementConfigValidator) validate(obj runtime.Object) (warni
 	if !ok {
 		return nil, errors.New("not a ClusterPodPlacementConfig")
 	}
-	if cppc.Spec.Plugins.NodeAffinityScoring == nil {
+	if cppc.Spec.Plugins == nil || cppc.Spec.Plugins.NodeAffinityScoring == nil {
 		return nil, nil
 	}
 	// Verify unique Architecture terms

@@ -43,7 +43,7 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				Name: "cluster",
 			},
 		})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(runtimeclient.IgnoreNotFound(err)).NotTo(HaveOccurred())
 		Eventually(framework.ValidateDeletion(client, ctx)).Should(Succeed())
 	})
 	Context("When the operator is running and a pod placement config is created", func() {
@@ -315,6 +315,7 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				},
 			}), ppc)
 			Expect(err).NotTo(HaveOccurred(), "failed to get the v1beta1 ClusterPodPlacementConfig", err)
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 			By("Validate the plugins stanza is set")
 			Expect(ppc.Spec.Plugins).NotTo(BeNil())
 			Expect(ppc.Spec.Plugins.NodeAffinityScoring.IsEnabled()).To(BeTrue())
@@ -334,6 +335,7 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred(), "failed to create the v1alpha1 version of the ClusterPodPlacementConfig", err)
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 			// Get the details
 			By("Get the v1beta1 version of the ClusterPodPlacementConfig")
 			ppc := &v1beta1.ClusterPodPlacementConfig{}

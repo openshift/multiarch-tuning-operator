@@ -25,6 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
+// +kubebuilder:webhook:path=/validate-multiarch-openshift-io-v1beta1-clusterpodplacementconfig,mutating=false,failurePolicy=fail,sideEffects=None,groups=multiarch.openshift.io,resources=clusterpodplacementconfigs,verbs=create;update,versions=v1beta1,name=validate-clusterpodplacementconfig.multiarch.openshift.io,admissionReviewVersions=v1
+
 func (c *ClusterPodPlacementConfig) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(c).
@@ -59,7 +61,7 @@ func (v *ClusterPodPlacementConfigValidator) validate(obj runtime.Object) (warni
 	platforms := make(map[string]struct{})
 	for _, term := range cppc.Spec.Plugins.NodeAffinityScoring.Platforms {
 		if _, ok := platforms[term.Architecture]; ok {
-			return nil, errors.New("duplicate architecture in the platforms list")
+			return nil, errors.New("duplicate architecture in the .spec.plugins.nodeAffinityScoring.platforms list")
 		}
 		platforms[term.Architecture] = struct{}{}
 	}

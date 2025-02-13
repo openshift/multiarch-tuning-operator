@@ -7,7 +7,7 @@ metadata:
     build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main"  && ("bundle/***".pathChanged() || ".tekton/multiarch-tuning-operator-bundle-pull-request.yaml".pathChanged() || "bundle.konflux.Dockerfile".pathChanged() || "trigger-konflux-builds.txt".pathChanged() )
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main"  && ("bundle/***".pathChanged() || ".tekton/***".pathChanged() || "bundle.konflux.Dockerfile".pathChanged() || "trigger-konflux-builds.txt".pathChanged() )
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: multiarch-tuning-operator

@@ -91,7 +91,7 @@ spec:
       - name: git-auth
         optional: true
   pipelineRef:
-    name: multiarch-tuning-operator-build-pipeline
+    name: docker-build-multi-platform-oci-ta
   workspaces:
     - name: workspace
       volumeClaimTemplate:

@@ -32,6 +32,10 @@ spec:
     - name: build-platforms
       value:
         - linux/amd64
+    - name: hermetic
+      value: "true"
+    - name: prefetch-input
+      value: '{"packages": [{"type": "gomod"}], "flags": ["gomod-vendor-check"]}'
   pipelineSpec:
     finally:
       - name: show-sbom

@@ -37,6 +37,10 @@ spec:
         - linux/arm64
         - linux/ppc64le
         - linux/s390x
+    - name: hermetic
+      value: "true"
+    - name: prefetch-input
+      value: '{"packages": [{"type": "gomod"}], "flags": ["gomod-vendor-check"]}'
   pipelineSpec:
     finally:
       - name: show-sbom

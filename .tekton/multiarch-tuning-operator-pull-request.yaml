@@ -41,6 +41,8 @@ spec:
       value: "true"
     - name: prefetch-input
       value: '{"packages": [{"type": "gomod"}], "flags": ["gomod-vendor-check"]}'
+    - name: build-source-image
+      value: "true"
   pipelineSpec:
     finally:
       - name: show-sbom

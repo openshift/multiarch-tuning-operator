@@ -36,6 +36,8 @@ spec:
       value: "true"
     - name: prefetch-input
       value: '{"packages": [{"type": "gomod"}], "flags": ["gomod-vendor-check"]}'
+    - name: build-source-image
+      value: "true"
   pipelineSpec:
     finally:
       - name: show-sbom
@@ -70,34 +72,6 @@ spec:
             - name: kind
               value: task
           resolver: bundles
-    params:
-      - default: "false"
-        description: Skip checks against built image
-        name: skip-checks
-        type: string
-      - default: "true"
-        description: Skip optional checks, set false if you want to run optional checks
-        name: skip-optional
-        type: string
-      - default: "true"
-        description: Execute the build with network isolation
-        name: hermetic
-        type: string
-      - default: ""
-        description: Build dependencies to be prefetched by Cachi2
-        name: prefetch-input
-        type: string
-      - default: "false"
-        description: Java build
-        name: java
-        type: string
-      - default: ""
-        description: Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
-        name: image-expires-after
-      - default: "true"
-        description: Build a source image.
-        name: build-source-image
-        type: string
     results:
       - description: ""
         name: IMAGE_URL

@@ -27,7 +27,7 @@ metadata:
     categories: OpenShift Optional, Other
     console.openshift.io/disable-operand-delete: "false"
     containerImage: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
-    createdAt: "2025-01-14T00:47:27Z"
+    createdAt: "2025-02-13T19:35:46Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -479,3 +479,23 @@ spec:
     targetPort: 9443
     type: ConversionWebhook
     webhookPath: /convert
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: multiarch-tuning-operator-controller-manager
+    failurePolicy: Fail
+    generateName: validate-clusterpodplacementconfig.multiarch.openshift.io
+    rules:
+    - apiGroups:
+      - multiarch.openshift.io
+      apiVersions:
+      - v1beta1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - clusterpodplacementconfigs
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-multiarch-openshift-io-v1beta1-clusterpodplacementconfig

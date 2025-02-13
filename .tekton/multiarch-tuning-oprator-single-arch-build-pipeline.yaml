@@ -109,7 +109,7 @@ spec:
           value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
         - name: CACHI2_ARTIFACT
           value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
-    - name: build-source-image
+    - name: source-build-oci-ta
       taskRef:
         resolver: bundles
         params:

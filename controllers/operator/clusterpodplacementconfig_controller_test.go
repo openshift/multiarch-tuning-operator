@@ -18,8 +18,7 @@ package operator
 
 import (
 	"fmt"
-
-	"github.com/openshift/multiarch-tuning-operator/pkg/informers"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common/plugins"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -555,7 +555,7 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 			})
 			It("should cache the ClusterPodPlacementConfig", func() {
 				By("Checking initialization of the cache with the ClusterPodPlacementConfig")
-				ic := informers.CacheSingleton()
+				ic := podplacement.CacheSingleton()
 				ppc := &v1beta1.ClusterPodPlacementConfig{}
 				err := k8sClient.Get(ctx, crclient.ObjectKey{
 					Name: common.SingletonResourceObjectName,
@@ -584,6 +584,42 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 			err := k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
 			Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
 			Eventually(framework.ValidateDeletion(k8sClient, ctx)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
+		})
+	})
+	Context("When a v1beta1 pod placement config is created", func() {
+		BeforeAll(func() {
+			err := k8sClient.Create(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
+			Expect(err).NotTo(HaveOccurred(), "failed to create ClusterPodPlacementConfig", err)
+			validateReconcile()
+		})
+		AfterEach(func() {
+			By("Restoring the status of the deployments")
+			setDeploymentReady(utils.PodPlacementControllerName, NewGomegaWithT(GinkgoT()))
+			setDeploymentReady(utils.PodPlacementWebhookName, NewGomegaWithT(GinkgoT()))
+		})
+		It("should create a v1beta1 CPPC omitting the plugins key and successfully", func() {
+			By("Creating a v1beta1 ClusterPodPlacementConfig")
+			ppc := &v1beta1.ClusterPodPlacementConfig{}
+			err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(&v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      common.SingletonResourceObjectName,
+					Namespace: utils.Namespace(),
+				},
+				Spec: v1beta1.ClusterPodPlacementConfigSpec{
+					LogVerbosity: "Normal",
+					Plugins: plugins.Plugins{
+						NodeAffinityScoring: &plugins.NodeAffinityScoring{
+							BasePlugin: plugins.BasePlugin{
+								Enabled: true,
+							},
+							Platforms: []plugins.NodeAffinityScoringPlatformTerm{
+								{Architecture: utils.ArchitectureArm64, Weight: 50},
+							},
+						},
+					},
+				},
+			}), ppc)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })

@@ -28,8 +28,9 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o ma
 FROM registry.redhat.io/rhel9-2-els/rhel:9.2
 WORKDIR /
 COPY --from=builder /workspace/manager .
-USER 65532:65532
+COPY LICENSE /licenses/license.txt
 
+USER 65532:65532
 LABEL com.redhat.component="Multiarch Tuning Operator"
 LABEL distribution-scope="public"
 LABEL name="multiarch-tuning-operator"

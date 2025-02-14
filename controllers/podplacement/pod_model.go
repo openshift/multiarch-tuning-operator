@@ -180,7 +180,7 @@ func (pod *Pod) setPreferredArchNodeAffinity() {
 		return
 	}
 
-	if !cppc.Spec.Plugins.NodeAffinityScoring.IsEnabled() && len(cppc.Spec.Plugins.NodeAffinityScoring.Platforms) > 0 {
+	if cppc.Spec.Plugins != nil && !cppc.Spec.Plugins.NodeAffinityScoring.IsEnabled() && len(cppc.Spec.Plugins.NodeAffinityScoring.Platforms) > 0 {
 		return
 	}
 

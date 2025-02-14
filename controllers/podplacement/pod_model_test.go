@@ -626,7 +626,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 				}).Build(),
 		},
 		{
-			name: "other affinity types should not be modified",
+			name: "other affinity types should not be modified without node affinity plugins enabled",
 			pod: NewPod().WithContainersImages(fake.MultiArchImage).WithAffinity(&v1.Affinity{
 				PodAffinity: &v1.PodAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
@@ -686,6 +686,66 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 				}).Build(),
 		},
 		{
+			name: "preferred affinity should not be modified with preexisting archlable",
+			pod: NewPod().WithContainersImages(fake.MultiArchImage).WithAffinity(&v1.Affinity{
+				PodAffinity: &v1.PodAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
+						{
+							TopologyKey: "foo",
+						},
+					},
+				},
+				NodeAffinity: &v1.NodeAffinity{
+					PreferredDuringSchedulingIgnoredDuringExecution: []v1.PreferredSchedulingTerm{
+						{
+							Weight: 1,
+							Preference: v1.NodeSelectorTerm{
+								MatchExpressions: []v1.NodeSelectorRequirement{
+									{
+										Key:      utils.ArchLabel,
+										Operator: v1.NodeSelectorOpIn,
+										Values:   []string{utils.ArchitectureAmd64},
+									},
+								},
+							},
+						},
+					},
+				},
+			}).Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithAffinity(&v1.Affinity{
+				PodAffinity: &v1.PodAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
+						{
+							TopologyKey: "foo",
+						},
+					},
+				},
+				NodeAffinity: &v1.NodeAffinity{
+					PreferredDuringSchedulingIgnoredDuringExecution: []v1.PreferredSchedulingTerm{
+						{
+							Weight: 1,
+							Preference: v1.NodeSelectorTerm{
+								MatchExpressions: []v1.NodeSelectorRequirement{
+									{
+										Key:      utils.ArchLabel,
+										Operator: v1.NodeSelectorOpIn,
+										Values:   []string{utils.ArchitectureAmd64},
+									},
+								},
+							},
+						},
+					},
+				},
+			}).WithNodeSelectorTermsMatchExpressions(
+				[]v1.NodeSelectorRequirement{
+					{
+						Key:      utils.ArchLabel,
+						Operator: v1.NodeSelectorOpIn,
+						Values:   []string{utils.ArchitectureAmd64, utils.ArchitectureArm64},
+					},
+				}).Build(),
+		},
+		{
 			name:      "should not modify the pod if unable to inspect the images",
 			pod:       NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
 			want:      NewPod().WithContainersImages(fake.MultiArchImage, "non-readable-image").Build(),
@@ -704,7 +764,6 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 		},
 	}
 	metrics.InitPodPlacementControllerMetrics()
-	cache := CacheSingleton()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			imageInspectionCache = fake.FacadeSingleton()
@@ -712,7 +771,7 @@ func TestPod_SetNodeAffinityArchRequirement(t *testing.T) {
 				Pod: *tt.pod,
 				ctx: ctx,
 			}
-			_, err := pod.SetNodeAffinityArchRequirement(cache, tt.pullSecretDataList)
+			_, err := pod.SetNodeAffinityArchRequirement(tt.pullSecretDataList)
 			g := NewGomegaWithT(t)
 			if tt.expectErr {
 				g.Expect(err).Should(HaveOccurred())

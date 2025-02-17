@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 
@@ -42,7 +43,7 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				Name: "cluster",
 			},
 		})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(runtimeclient.IgnoreNotFound(err)).NotTo(HaveOccurred())
 		Eventually(framework.ValidateDeletion(client, ctx)).Should(Succeed())
 	})
 	Context("When the operator is running and a pod placement config is created", func() {
@@ -294,5 +295,70 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			Entry(utils.ControlPlaneNodeSelectorLabel, utils.ControlPlaneNodeSelectorLabel),
 			Entry(utils.MasterNodeSelectorLabel, utils.MasterNodeSelectorLabel),
 		)
+	})
+	Context("When a pod placement config is created", func() {
+		It("should create a v1beta1 CPPC with plugins and succeed getting the v1alpha1 version of the CPPC", func() {
+			By("Creating the ClusterPodPlacementConfig")
+			err := client.Create(ctx,
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm(utils.ArchitectureArm64, 50).
+					Build(),
+			)
+			Expect(err).NotTo(HaveOccurred(), "failed to create the v1beta1 ClusterPodPlacementConfig", err)
+			By("Get the v1beta1 version of the CPPC")
+			ppc := &v1beta1.ClusterPodPlacementConfig{}
+			err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: common.SingletonResourceObjectName,
+				},
+			}), ppc)
+			Expect(err).NotTo(HaveOccurred(), "failed to get the v1beta1 ClusterPodPlacementConfig", err)
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
+			By("Validate the plugins stanza is set")
+			Expect(ppc.Spec.Plugins).NotTo(BeNil())
+			Expect(ppc.Spec.Plugins.NodeAffinityScoring.IsEnabled()).To(BeTrue())
+			// Get v1alpha1 ClusterPodPlacementConfig
+			By("Get the v1alpha1 version of the ClusterPodPlacementConfig")
+			v1alpha1obj := &v1alpha1.ClusterPodPlacementConfig{}
+			err = client.Get(ctx, runtimeclient.ObjectKey{
+				Name: common.SingletonResourceObjectName,
+			}, v1alpha1obj)
+			Expect(err).NotTo(HaveOccurred(), "failed to get the v1alpha1 version of the ClusterPodPlacementConfig", err)
+		})
+		It("should succeed creating a v1alpha1 CPPC and get the v1beta1 version with no plugins field", func() {
+			By("Creating a v1alpha1 ClusterPodPlacementConfig")
+			err := client.Create(ctx, &v1alpha1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: common.SingletonResourceObjectName,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to create the v1alpha1 version of the ClusterPodPlacementConfig", err)
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
+			// Get the details
+			By("Get the v1beta1 version of the ClusterPodPlacementConfig")
+			ppc := &v1beta1.ClusterPodPlacementConfig{}
+			err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: common.SingletonResourceObjectName,
+				},
+			}), ppc)
+			Expect(err).NotTo(HaveOccurred(), "failed to get the v1beta1 version of the ClusterPodPlacementConfig", err)
+			By("Validate a v1beta1 ClusterPodPlacementConfig plugins ommit empty")
+			Expect(ppc.Spec.Plugins).To(BeNil())
+		})
+		It("should fail creating the CPPC with multiple items for the same architecture in the plugins.nodeAffinityScoring.Platforms list", func() {
+			By("Creating a v1beta1 ClusterPodPlacementConfig")
+			err := client.Create(ctx,
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 50).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 100).
+					Build(),
+			)
+			Expect(err).To(HaveOccurred(), "the ClusterPodPlacementConfig should not be accepted", err)
+		})
 	})
 })

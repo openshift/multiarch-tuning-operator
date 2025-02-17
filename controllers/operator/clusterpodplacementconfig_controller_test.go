@@ -582,8 +582,69 @@ var _ = Describe("Controllers/ClusterPodPlacementConfig/ClusterPodPlacementConfi
 		})
 		AfterAll(func() {
 			err := k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
-			Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
+			Expect(crclient.IgnoreNotFound(err)).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
 			Eventually(framework.ValidateDeletion(k8sClient, ctx)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
+		})
+	})
+	When("Creating a cluster pod placement config", func() {
+		Context("with invalid values in the plugins.nodeAffinityScoring stanza", func() {
+			DescribeTable("The request should fail with", func(object *v1beta1.ClusterPodPlacementConfig) {
+				By("Ensure no ClusterPodPlacementConfig exists")
+				cppc := &v1beta1.ClusterPodPlacementConfig{}
+				err := k8sClient.Get(ctx, crclient.ObjectKey{
+					Name: common.SingletonResourceObjectName,
+				}, cppc)
+				Expect(errors.IsNotFound(err)).To(BeTrue(), "The ClusterPodPlacementConfig should not exist")
+				// Expect(errors.IsNotFound(err)).To(BeTrue(), "The ClusterPodPlacementConfig should not exist")
+				By("Create the ClusterPodPlacementConfig")
+				err = k8sClient.Create(ctx, object)
+				By(fmt.Sprintf("The error is: %+v", err))
+				By("Verify the ClusterPodPlacementConfig is not created")
+				Expect(err).To(HaveOccurred(), "The create ClusterPodPlacementConfig should not be accepted")
+				By("Verify the error is 'invalid'")
+				Expect(errors.IsInvalid(err)).To(BeTrue(), "The invalid ClusterPodPlacementConfig should not be accepted")
+			},
+				Entry("Negative weight", builder.NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithPlugins().
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, -100).
+					Build()),
+				Entry("Zero weight", builder.NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithPlugins().
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 0).
+					Build()),
+				Entry("Excessive weight", builder.NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithPlugins().
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 200).
+					Build()),
+				Entry("Wrong architecture", builder.NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithPlugins().
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm("Wrong", 200).
+					Build()),
+				Entry("No terms", builder.NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithPlugins().
+					WithNodeAffinityScoring(true).
+					Build()),
+				Entry("Missing architecture in a term", builder.NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithPlugins().
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm("", 5).
+					Build()),
+			)
+			AfterEach(func() {
+				By("Ensure the ClusterPodPlacementConfig is deleted")
+				err := k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
+				Expect(crclient.IgnoreNotFound(err)).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
+			})
 		})
 	})
 })

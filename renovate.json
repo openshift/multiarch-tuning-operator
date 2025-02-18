@@ -6,6 +6,12 @@
       "description": "Automerge konflux update prs",
       "matchManagers": ["tekton"],
       "automerge": true
+    },
+    {
+      "description": "Block konflux updates to go.mod",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": [".*"],
+      "enabled": false
     }
   ]
 }

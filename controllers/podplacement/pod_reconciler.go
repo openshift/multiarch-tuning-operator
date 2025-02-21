@@ -115,6 +115,7 @@ func (r *PodReconciler) processPod(ctx context.Context, pod *Pod) {
 		pod.publishEvent(corev1.EventTypeWarning, ArchitectureAwareGatedPodIgnored, ArchitectureAwareGatedPodIgnoredMsg)
 		return
 	}
+
 	// Prepare the requirement for the node affinity.
 	psdl, err := r.pullSecretDataList(ctx, pod)
 	pod.handleError(err, "Unable to retrieve the image pull secret data for the pod.")

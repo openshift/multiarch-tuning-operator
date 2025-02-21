@@ -30,6 +30,7 @@ import (
 
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/image"
+	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -122,13 +123,18 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) (boo
 		pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
 	}
 
-	pod.setArchNodeAffinity(requirement)
+	if pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution == nil {
+		pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm{}
+	}
+
+	pod.setRequiredArchNodeAffinity(requirement)
+	pod.setPreferredArchNodeAffinity()
 	return true, nil
 }
 
 // setArchNodeAffinity sets the node affinity for the pod to the given requirement based on the rules in
 // the sig-scheduling's KEP-3838: https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3838-pod-mutable-scheduling-directives.
-func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) {
+func (pod *Pod) setRequiredArchNodeAffinity(requirement corev1.NodeSelectorRequirement) {
 	// the .requiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms are ORed
 	if len(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) == 0 {
 		// We create a new array of NodeSelectorTerm of length 1 so that we can always iterate it in the next.
@@ -164,6 +170,51 @@ func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) 
 	pod.ensureLabel(utils.NodeAffinityLabel, utils.NodeAffinityLabelValueSet)
 	pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
 		ArchitecturePredicateSetupMsg+fmt.Sprintf("{%s}", strings.Join(requirement.Values, ", ")))
+}
+
+// setArchNodeAffinity sets the node affinity for the pod to the given requirement based on the rules in
+// the sig-scheduling's KEP-3838: https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3838-pod-mutable-scheduling-directives.
+func (pod *Pod) setPreferredArchNodeAffinity() {
+	cppc := clusterpodplacementconfig.GetClusterPodPlacementConfig()
+	if cppc == nil {
+		return
+	}
+
+	if !cppc.Spec.Plugins.NodeAffinityScoring.IsEnabled() && len(cppc.Spec.Plugins.NodeAffinityScoring.Platforms) > 0 {
+		return
+	}
+
+	// Prevent overriding of predefined kubernetes.io/arch
+	for _, preferredSchedulingTerm := range pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		for _, expression := range preferredSchedulingTerm.Preference.MatchExpressions {
+			if expression.Key == utils.ArchLabel {
+				return
+			}
+		}
+	}
+
+	for _, nodeAffinityScoringPlatformTerm := range cppc.Spec.Plugins.NodeAffinityScoring.Platforms {
+		preferredSchedulingTerm := corev1.PreferredSchedulingTerm{
+			Weight: nodeAffinityScoringPlatformTerm.Weight,
+			Preference: corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      utils.ArchLabel,
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{nodeAffinityScoringPlatformTerm.Architecture},
+					},
+				},
+			},
+		}
+		pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
+			pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution, preferredSchedulingTerm)
+	}
+
+	// if the nodeSelectorTerms were patched at least once, we set the nodeAffinity label to the set value, to keep
+	// track of the fact that the nodeAffinity was patched by the operator.
+	pod.ensureLabel(utils.PreferredNodeAffinityLabel, utils.NodeAffinityLabelValueSet)
+	pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
+		ArchitecturePreferredPredicateSetupMsg+fmt.Sprintf("%v", cppc.Spec.Plugins.NodeAffinityScoring.Platforms))
 }
 
 func (pod *Pod) getArchitecturePredicate(pullSecretDataList [][]byte) (corev1.NodeSelectorRequirement, error) {

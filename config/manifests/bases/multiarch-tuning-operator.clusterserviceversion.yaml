@@ -30,7 +30,7 @@ metadata:
     operatorframework.io/arch.arm64: supported
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
-  name: multiarch-tuning-operator.v1.0.0
+  name: multiarch-tuning-operator.v1.1.0
   namespace: openshift-multiarch-tuning-operator
 spec:
   apiservicedefinitions: {}
@@ -87,7 +87,7 @@ spec:
   - pod-placement
   links:
   - name: Multiarch Tuning Operator Documentation
-    url: https://docs.openshift.com/container-platform/4.16/post_installation_configuration/configuring-multi-arch-compute-machines/multiarch-tuning-operator.html
+    url: https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/postinstallation_configuration/configuring-multi-architecture-compute-machines-on-an-openshift-cluster#multiarch-tuning-operator
   maintainers:
   - email: support@redhat.com
     name: Red Hat
@@ -96,4 +96,4 @@ spec:
   provider:
     name: Red Hat
     url: https://github.com/openshift/multiarch-tuning-operator
-  version: 1.0.0
+  version: 1.1.0

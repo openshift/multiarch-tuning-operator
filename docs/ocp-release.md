@@ -162,9 +162,8 @@ Note: these steps need to be applied to each FBC
 
 1. Update the `fbc-4.x` branches to use the selected container image for both the bundle and operator.
     Example [commit](https://github.com/openshift/multiarch-tuning-operator/pull/341). The process will generate and render
-    a new bundle—rather than modifying the existing reference, simply add a new bundle and introduce a new channel.
-    When updating the version of `registry.redhat.io/openshift4/ose-operator-registry:v4.1X`, ensure that all bundles are
-    re-rendered with the updated version per FBC. Failure to do so may result in pipeline execution errors. For example `4.17` bundles in the index.yaml must be generated using uses `registry.redhat.io/openshift4/ose-operator-registry:v4.14`, but `4.16` must have all of its bundles generated using `registry.redhat.io/openshift4/ose-operator-registry:v4.13`.
+    a new bundle—rather than modifying the existing reference, simply add a new bundle and introduce a new channel if needed.
+    When updating the version of `registry.redhat.io/openshift4/ose-operator-registry:v4.1X`, ensure that all bundles are generated with `registry.redhat.io/openshift4/ose-operator-registry:v4.14`, except for the `4.16` bundles, which must be generated with `registry.redhat.io/openshift4/ose-operator-registry:v4.13`.
 
     ```shell
     podman run -it --entrypoint /bin/opm -v $(pwd):/code:Z registry.redhat.io/openshift4/ose-operator-registry:v4.1X render <konflux-bundle-image> --output=yaml
@@ -219,6 +218,7 @@ The current approach is that for every new OCP release, we will have to:
    a. https://gitlab.cee.redhat.com/releng/konflux-release-data/-/blob/main/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope/multiarch-tuning-operator-fbc-prod-index.yaml  
    b. https://gitlab.cee.redhat.com/releng/konflux-release-data/-/blob/main/config/stone-prd-rh01.pg1f.p1/product/ReleasePlanAdmission/multiarch-tuning-ope/multiarch-tuning-operator-fbc-staging-index.yaml  
    Example PR: https://gitlab.cee.redhat.com/releng/konflux-release-data/-/merge_requests/3039
+4. Adjust the BASE_IMAGE argument for the `build-args` parameter in the Konflux PipelineRun.
 5. Adjust the graphs as needed in the branches.
 
 If the release is a major version or introduced significant

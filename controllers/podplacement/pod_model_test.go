@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	mmoimage "github.com/openshift/multiarch-tuning-operator/pkg/image"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake"
@@ -1047,7 +1048,7 @@ func TestPod_shouldIgnorePod(t *testing.T) {
 				ctx:      tt.fields.ctx,
 				recorder: tt.fields.recorder,
 			}
-			if got := pod.shouldIgnorePod(); got != tt.want {
+			if got := pod.shouldIgnorePod(&v1beta1.ClusterPodPlacementConfig{}); got != tt.want {
 				t.Errorf("shouldIgnorePod() = %v, want %v", got, tt.want)
 			}
 		})

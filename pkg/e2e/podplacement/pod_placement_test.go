@@ -342,15 +342,15 @@ var _ = Describe("The Pod Placement Operand", func() {
 				Build()
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
-			By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
-			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been processed by the webhook and the scheduling gate label should be removed")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should not have been set node affinity of arch info.")
 			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
 			By("The pod should have the preferred affinities set in the ClusterPodPlacementConfig")
 			Eventually(framework.VerifyPodPreferredNodeAffinity(ctx, client, ns, "app", "test",
 				defaultExpectedAffinityTerms()), e2e.WaitShort).Should(Succeed())
 		})
-		It("should neither set the node affinity not gate pods when nodeName exist", func() {
+		It("should neither set the node affinity nor gate pods with nodeName set", func() {
 			var err error
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
@@ -531,8 +531,8 @@ var _ = Describe("The Pod Placement Operand", func() {
 			err = client.Create(ctx, s)
 			Expect(err).NotTo(HaveOccurred())
 			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
-			By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
-			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been processed by the webhook and the scheduling gate label should be set (the preferred node affinity is not set)")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
 			By("The pod should keep the same node affinity provided by the users. No node affinity is added by the controller.")
 			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
 			By("The pod should have the preferred affinities set in the ClusterPodPlacementConfig")
@@ -579,7 +579,7 @@ var _ = Describe("The Pod Placement Operand", func() {
 		})
 	})
 	Context("PodPlacementOperand works with several high-level resources owning pods", func() {
-		It("should neither set the node affinity or gate pod for DaemonSet owning pod", func() {
+		It("should neither set the node affinity nor gate pod for DaemonSet owning pod", func() {
 			var err error
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()

@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/image"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -100,6 +101,10 @@ func (pod *Pod) RemoveSchedulingGate() {
 // Then, it computes the intersection of the architectures supported by the images used by the pod via pod.getArchitecturePredicate.
 // Finally, it initializes the nodeAffinity for the pod and set it to the computed requirement via the pod.setRequiredArchNodeAffinity method.
 func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) (bool, error) {
+	if pod.isNodeSelectorConfiguredForArchitecture() {
+		pod.publishIgnorePod()
+		return false, nil
+	}
 	requirement, err := pod.getArchitecturePredicate(pullSecretDataList)
 	if err != nil {
 		return false, err
@@ -375,14 +380,17 @@ func (pod *Pod) hasControlPlaneNodeSelector() bool {
 // shouldIgnorePod returns true if the pod should be ignored by the operator.
 // The operator should ignore the pods in the following cases:
 // - the pod is in the same namespace as the operator
-// - the pod is in the kube-* namespace
+// - the pod is in a namespace with prefix kube-
 // - the pod has a node name set
 // - the pod has a node selector that matches the control plane nodes
-// - the pod is owned by a daemonset
-func (pod *Pod) shouldIgnorePod() bool {
+// - the pod is owned by a DaemonSet
+// - both the nodeSelector/nodeAffinity and the preferredAffinity are set for the kubernetes.io/arch label. TODO[Tori]: Missing unit test
+// - only the nodeSelector/nodeAffinity is set for the kubernetes.io/arch label and the NodeAffinityScoring plugin is disabled. TODO[Tori]: Missing unit test
+func (pod *Pod) shouldIgnorePod(cppc *v1beta1.ClusterPodPlacementConfig) bool {
 	return utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "kube-") ||
-		pod.Spec.NodeName != "" || pod.hasControlPlaneNodeSelector() ||
-		pod.isNodeSelectorConfiguredForArchitecture() || pod.isFromDaemonSet()
+		pod.Spec.NodeName != "" || pod.hasControlPlaneNodeSelector() || pod.isFromDaemonSet() ||
+		pod.isNodeSelectorConfiguredForArchitecture() && (cppc.Spec.Plugins == nil ||
+			!cppc.Spec.Plugins.NodeAffinityScoring.IsEnabled() || pod.isPreferredAffinityConfiguredForArchitecture())
 }
 
 // ensureSchedulingGate ensures that the pod has the scheduling gate utils.SchedulingGateName.
@@ -474,4 +482,23 @@ func (pod *Pod) handleError(err error, s string) {
 	pod.ensureAndIncrementLabel(utils.ImageInspectionErrorCountLabel)
 	pod.publishEvent(corev1.EventTypeWarning, ImageArchitectureInspectionError, ImageArchitectureInspectionErrorMsg+err.Error())
 	log.Error(err, s)
+}
+
+// TODO[Tori] Missing godoc
+// TODO[Tori] Missing unit tests
+func (pod *Pod) isPreferredAffinityConfiguredForArchitecture() bool {
+	if pod.Spec.Affinity == nil ||
+		pod.Spec.Affinity.NodeAffinity == nil ||
+		pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution == nil {
+		return false
+	}
+
+	for _, term := range pod.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		for _, expr := range term.Preference.MatchExpressions {
+			if expr.Key == utils.ArchLabel {
+				return true
+			}
+		}
+	}
+	return false
 }

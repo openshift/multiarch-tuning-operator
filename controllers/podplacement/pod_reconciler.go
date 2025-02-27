@@ -33,6 +33,7 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
+	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
@@ -103,7 +104,9 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 func (r *PodReconciler) processPod(ctx context.Context, pod *Pod) {
 	log := ctrllog.FromContext(ctx)
 	log.V(1).Info("Processing pod")
-	if pod.shouldIgnorePod() {
+
+	cppc := clusterpodplacementconfig.GetClusterPodPlacementConfig()
+	if pod.shouldIgnorePod(cppc) {
 		log.V(3).Info("A pod with the scheduling gate should be ignored. Ignoring...")
 		// We can reach this branch when:
 		// - The pod has been gated but not processed before the operator changed configuration such that the pod should be ignored.

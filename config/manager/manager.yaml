@@ -38,6 +38,8 @@ spec:
         # See https://github.com/openshift/enhancements/blob/c5b9aea25e2a7afd5f460c6a0eca7584b1685ce3/enhancements/workload-partitioning/management-workload-partitioning.md
         target.workload.openshift.io/management: |
           {"effect": "PreferredDuringScheduling"}
+        # See https://github.com/openshift/enhancements/blob/9b5d8a964fc91e8ace17e373923f1c61cdd1a96f/enhancements/authentication/custom-scc-preemption-prevention.md?plain=1#L100
+        openshift.io/required-scc: restricted-v2
       labels:
         control-plane: controller-manager
     spec:
@@ -60,8 +62,6 @@ spec:
                     - linux
       securityContext:
         runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
       containers:
       - command:
         - /manager
@@ -98,8 +98,6 @@ spec:
           privileged: false
           readOnlyRootFilesystem: true
           runAsNonRoot: true
-          seccompProfile:
-            type: RuntimeDefault
         livenessProbe:
           httpGet:
             path: /healthz

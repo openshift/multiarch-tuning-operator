@@ -31,6 +31,11 @@ const (
 	serviceAccountKind = "ServiceAccount"
 	roleKind           = "Role"
 	clusterRoleKind    = "ClusterRole"
+
+	// xref: https://github.com/openshift/enhancements/blob/9b5d8a964fc/enhancements/authentication/custom-scc-preemption-prevention.md
+	requiredSCCAnnotation      = "openshift.io/required-scc"
+	requiredSCCRestrictedV2    = "restricted-v2"
+	requiredSCCHostmoundAnyUID = "hostmount-anyuid"
 )
 
 func buildMutatingWebhookConfiguration(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig) *admissionv1.MutatingWebhookConfiguration {
@@ -123,6 +128,10 @@ func buildControllerDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlac
 	d := buildDeployment(clusterPodPlacementConfig, utils.PodPlacementControllerName, 2, utils.PodPlacementControllerName,
 		utils.PodPlacementFinalizerName, "--leader-elect", "--enable-ppc-controllers",
 	)
+	if d.Spec.Template.Annotations == nil {
+		d.Spec.Template.Annotations = map[string]string{}
+	}
+	d.Spec.Template.Annotations[requiredSCCAnnotation] = requiredSCCHostmoundAnyUID
 	d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes,
 		corev1.Volume{
 			Name: "docker-conf",
@@ -198,6 +207,7 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 					Annotations: map[string]string{
 						// See https://github.com/openshift/enhancements/blob/c5b9aea25e/enhancements/workload-partitioning/management-workload-partitioning.md
 						"target.workload.openshift.io/management": "{\"effect\": \"PreferredDuringScheduling\"}",
+						requiredSCCAnnotation:                     requiredSCCRestrictedV2,
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -301,9 +311,6 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 								Privileged:             utils.NewPtr(false),
 								ReadOnlyRootFilesystem: utils.NewPtr(true),
 								RunAsNonRoot:           utils.NewPtr(true),
-								SeccompProfile: &corev1.SeccompProfile{
-									Type: corev1.SeccompProfileTypeRuntimeDefault,
-								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
@@ -323,9 +330,6 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 					ServiceAccountName: serviceAccount,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: utils.NewPtr(true),
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
 					},
 					TopologySpreadConstraints: []corev1.TopologySpreadConstraint{
 						{

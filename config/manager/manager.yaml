@@ -38,6 +38,7 @@ spec:
         # See https://github.com/openshift/enhancements/blob/c5b9aea25e2a7afd5f460c6a0eca7584b1685ce3/enhancements/workload-partitioning/management-workload-partitioning.md
         target.workload.openshift.io/management: |
           {"effect": "PreferredDuringScheduling"}
+        openshift.io/required-scc: restricted-v2
       labels:
         control-plane: controller-manager
     spec:

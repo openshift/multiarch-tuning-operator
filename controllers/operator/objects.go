@@ -198,6 +198,7 @@ func buildDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfi
 					Annotations: map[string]string{
 						// See https://github.com/openshift/enhancements/blob/c5b9aea25e/enhancements/workload-partitioning/management-workload-partitioning.md
 						"target.workload.openshift.io/management": "{\"effect\": \"PreferredDuringScheduling\"}",
+						"openshift.io/required-scc":               "hostmount-anyuid",
 					},
 				},
 				Spec: corev1.PodSpec{

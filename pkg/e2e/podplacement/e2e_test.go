@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+
 	"log"
 	"testing"
 
@@ -21,11 +22,13 @@ import (
 	ocpconfigv1 "github.com/openshift/api/config/v1"
 	ocpoperatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common/plugins"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/registry"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 var (
@@ -61,7 +64,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},
+		Spec: v1beta1.ClusterPodPlacementConfigSpec{
+			Plugins: &plugins.Plugins{
+				NodeAffinityScoring: defaultNodeAffinityScoring(),
+			},
+		},
 	})
+
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 	updateGlobalPullSecret()
@@ -101,6 +110,27 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 		framework.WaitForMCPComplete(ctx, client)
 	}
 })
+
+func defaultExpectedAffinityTerms() []corev1.PreferredSchedulingTerm {
+	return NewPreferredSchedulingTerms().
+		WithArchitectureWeight(utils.ArchitectureAmd64, 50).
+		Build()
+}
+
+func defaultNodeAffinityScoring() *plugins.NodeAffinityScoring {
+	ret := &plugins.NodeAffinityScoring{
+		BasePlugin: plugins.BasePlugin{
+			Enabled: true,
+		},
+	}
+	for _, term := range defaultExpectedAffinityTerms() {
+		ret.Platforms = append(ret.Platforms, plugins.NodeAffinityScoringPlatformTerm{
+			Architecture: term.Preference.MatchExpressions[0].Values[0],
+			Weight:       term.Weight,
+		})
+	}
+	return ret
+}
 
 // updateGlobalPullSecret patches the global pull secret to onboard the
 // read-only credentials of the quay.io org. for testing images stored

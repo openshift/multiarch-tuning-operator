@@ -98,7 +98,7 @@ func (pod *Pod) RemoveSchedulingGate() {
 // SetNodeAffinityArchRequirement wraps the logic to set the nodeAffinity for the pod.
 // It verifies first that no nodeSelector field is set for the kubernetes.io/arch label.
 // Then, it computes the intersection of the architectures supported by the images used by the pod via pod.getArchitecturePredicate.
-// Finally, it initializes the nodeAffinity for the pod and set it to the computed requirement via the pod.setArchNodeAffinity method.
+// Finally, it initializes the nodeAffinity for the pod and set it to the computed requirement via the pod.setRequiredArchNodeAffinity method.
 func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) (bool, error) {
 	requirement, err := pod.getArchitecturePredicate(pullSecretDataList)
 	if err != nil {
@@ -122,13 +122,13 @@ func (pod *Pod) SetNodeAffinityArchRequirement(pullSecretDataList [][]byte) (boo
 		pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
 	}
 
-	pod.setArchNodeAffinity(requirement)
+	pod.setRequiredArchNodeAffinity(requirement)
 	return true, nil
 }
 
-// setArchNodeAffinity sets the node affinity for the pod to the given requirement based on the rules in
+// setRequiredArchNodeAffinity sets the node affinity for the pod to the given requirement based on the rules in
 // the sig-scheduling's KEP-3838: https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/3838-pod-mutable-scheduling-directives.
-func (pod *Pod) setArchNodeAffinity(requirement corev1.NodeSelectorRequirement) {
+func (pod *Pod) setRequiredArchNodeAffinity(requirement corev1.NodeSelectorRequirement) {
 	// the .requiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms are ORed
 	if len(pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) == 0 {
 		// We create a new array of NodeSelectorTerm of length 1 so that we can always iterate it in the next.

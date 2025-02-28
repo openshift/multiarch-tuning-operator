@@ -517,7 +517,7 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 			g := NewGomegaWithT(t)
 			pred, err := pod.getArchitecturePredicate(nil)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			pod.setArchNodeAffinity(pred)
+			pod.setRequiredArchNodeAffinity(pred)
 			g.Expect(pod.Spec.Affinity).Should(Equal(tt.want.Spec.Affinity))
 			imageInspectionCache = mmoimage.FacadeSingleton()
 		})

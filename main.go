@@ -40,6 +40,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -116,8 +117,13 @@ func main() {
 		leaderId = fmt.Sprintf("ppc-controllers-%s", leaderId)
 		// We need to watch the pods with the status.phase equal to Pending to be able to update the nodeAffinity.
 		// We can discard the other pods because they are already scheduled.
-		cacheOpts.DefaultFieldSelector = fields.OneTermEqualSelector("status.phase", "Pending")
+		cacheOpts.ByObject = map[client.Object]cache.ByObject{
+			&corev1.Pod{}: {
+				Field: fields.OneTermEqualSelector("status.phase", "Pending"),
+			},
+		}
 	}
+
 	// Rapid Reset CVEs. For more information see:
 	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
 	// - https://github.com/advisories/GHSA-4374-p667-p6c8

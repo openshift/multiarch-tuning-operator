@@ -27,7 +27,7 @@ metadata:
     categories: OpenShift Optional, Other
     console.openshift.io/disable-operand-delete: "false"
     containerImage: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
-    createdAt: "2025-02-27T15:35:11Z"
+    createdAt: "2025-03-03T12:15:46Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -317,6 +317,7 @@ spec:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
                 multiarch.openshift.io/image: registry.ci.openshift.org/origin/multiarch-tuning-operator:main
+                openshift.io/required-scc: restricted-v2
                 target.workload.openshift.io/management: |
                   {"effect": "PreferredDuringScheduling"}
               labels:
@@ -390,8 +391,6 @@ spec:
                   privileged: false
                   readOnlyRootFilesystem: true
                   runAsNonRoot: true
-                  seccompProfile:
-                    type: RuntimeDefault
                 volumeMounts:
                 - mountPath: /var/run/manager/tls
                   name: multiarch-tuning-operator-controller-manager-service-cert
@@ -399,8 +398,6 @@ spec:
               priorityClassName: system-cluster-critical
               securityContext:
                 runAsNonRoot: true
-                seccompProfile:
-                  type: RuntimeDefault
               serviceAccountName: multiarch-tuning-operator-controller-manager
               terminationGracePeriodSeconds: 10
               volumes:

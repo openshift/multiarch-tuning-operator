@@ -388,7 +388,8 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 		Context("with different types of preferred affinities", func() {
 			It("appends ClusterPodPlacementConfig node affinity to nil preferred affinities", func() {
 				pod := NewPod().
-					WithContainersImages("nginx:latest").
+					WithContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
+						registry.PublicRepo, registry.ComputeNameByMediaType(imgspecv1.MediaTypeImageManifest))).
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").
 					Build()
@@ -447,7 +448,8 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					},
 				}
 				pod := NewPod().
-					WithContainersImages("nginx:latest").
+					WithContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
+						registry.PublicRepo, registry.ComputeNameByMediaType(imgspecv1.MediaTypeImageManifest))).
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").
 					WithPreferredDuringSchedulingIgnoredDuringExecution(&preferredSchedulingTerm).
@@ -517,7 +519,8 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 					},
 				}
 				pod := NewPod().
-					WithContainersImages("nginx:latest").
+					WithContainersImages(fmt.Sprintf("%s/%s/%s:latest", registryAddress,
+						registry.PublicRepo, registry.ComputeNameByMediaType(imgspecv1.MediaTypeImageManifest))).
 					WithGenerateName("test-pod-").
 					WithNamespace("test-namespace").
 					WithPreferredDuringSchedulingIgnoredDuringExecution(&preferredSchedulingTerm).

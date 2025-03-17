@@ -302,7 +302,6 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			Entry(utils.MasterNodeSelectorLabel, utils.MasterNodeSelectorLabel),
 		)
 	})
-	// TODO[tori]: It("Should ignore pods with already set required node affinity when the nodeAffinityScoring plugin is disabled")
 	Context("When a pod placement config is created", func() {
 		It("should create a v1beta1 CPPC with plugins and succeed getting the v1alpha1 version of the CPPC", func() {
 			By("Creating the ClusterPodPlacementConfig")
@@ -333,7 +332,47 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				Name: common.SingletonResourceObjectName,
 			}, v1alpha1obj)
 			Expect(err).NotTo(HaveOccurred(), "failed to get the v1alpha1 version of the ClusterPodPlacementConfig", err)
-			// TODO[tori] Add more validation. After the operator reconciles the operand, we should validate that both the required and preferred node affinities.
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			By("Create a deployment using the container")
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64,
+					utils.ArchitectureArm64, utils.ArchitectureS390x, utils.ArchitecturePpc64le).
+				Build()
+			expectedNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
+			By("The pod should have been processed by the webhook and the scheduling gate label should be set as set")
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set architecture label")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
+				utils.MultiArchLabel, "",
+				utils.ArchLabelValue(utils.ArchitectureAmd64), "",
+				utils.ArchLabelValue(utils.ArchitectureArm64), "",
+				utils.ArchLabelValue(utils.ArchitectureS390x), "",
+				utils.ArchLabelValue(utils.ArchitecturePpc64le), "",
+			), e2e.WaitShort).Should(Succeed())
+			By("Verify node affinity label are set correct")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
+				utils.NodeAffinityLabel, utils.NodeAffinityLabelValueSet,
+				utils.PreferredNodeAffinityLabel, utils.NodeAffinityLabelValueSet,
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should have been set node affinity of arch info.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *expectedNSTs), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have any preferred affinities")
+			Eventually(framework.VerifyPodPreferredNodeAffinity(ctx, client, ns, "app", "test", nil), e2e.WaitShort).Should(Succeed())
 		})
 		It("should succeed creating a v1alpha1 CPPC and get the v1beta1 version with no plugins field", func() {
 			By("Creating a v1alpha1 ClusterPodPlacementConfig")
@@ -367,6 +406,52 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 					Build(),
 			)
 			Expect(err).To(HaveOccurred(), "the ClusterPodPlacementConfig should not be accepted", err)
+		})
+		It("Should ignore pods with already set required node affinity when the nodeAffinityScoring plugin is disabled", func() {
+			var err error
+			By("Creating a v1beta1 ClusterPodPlacementConfig")
+			err = client.Create(ctx,
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithNodeAffinityScoring(false).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 24).
+					Build(),
+			)
+			Expect(err).NotTo(HaveOccurred(), "failed to create the ClusterPodPlacementConfig", err)
+			By("Create an ephemeral namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Create a deployment using the container with conflicting node affinity")
+			archLabelNSR := NewNodeSelectorRequirement().
+				WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, utils.ArchitectureAmd64).
+				Build()
+			archLabelNSTs := NewNodeSelectorTerm().WithMatchExpressions(archLabelNSR).Build()
+			By("Create a deployment using the container")
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				WithNodeSelectorTerms(*archLabelNSTs).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			By("Verify node affinity label are set correct")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
+				utils.SchedulingGateLabel, utils.LabelValueNotSet,
+				utils.NodeAffinityLabel, utils.LabelValueNotSet,
+			), e2e.WaitShort).Should(Succeed())
+			By("The pod should keep the same node affinity provided by the users. No node affinity is added by the controller.")
+			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test", *archLabelNSTs), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have any preferred affinities")
+			Eventually(framework.VerifyPodPreferredNodeAffinity(ctx, client, ns, "app", "test", nil), e2e.WaitShort).Should(Succeed())
 		})
 	})
 })

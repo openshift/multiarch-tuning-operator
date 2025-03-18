@@ -176,9 +176,11 @@ func (pod *Pod) setRequiredArchNodeAffinity(requirement corev1.NodeSelectorRequi
 func (pod *Pod) SetPreferredArchNodeAffinity(cppc *v1beta1.ClusterPodPlacementConfig) {
 	// Prevent overriding of user-provided kubernetes.io/arch preferred affinities
 	if pod.isPreferredAffinityConfiguredForArchitecture() {
-		pod.ensureLabel(utils.PreferredNodeAffinityLabel, utils.LabelValueNotSet)
-		pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
-			ArchitecturePreferredPredicateSkippedMsg)
+		if _, exists := pod.Labels[utils.PreferredNodeAffinityLabel]; !exists {
+			pod.ensureLabel(utils.PreferredNodeAffinityLabel, utils.LabelValueNotSet)
+			pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
+				ArchitecturePreferredPredicateSkippedMsg)
+		}
 		return
 	}
 

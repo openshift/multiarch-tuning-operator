@@ -283,6 +283,6 @@ func VerifyPodLabelsAreSet(ctx context.Context, client runtimeclient.Client, ns 
 		for i := 0; i < len(labelsKeyValuePair); i += 2 {
 			entries[labelsKeyValuePair[i]] = labelsKeyValuePair[i+1]
 		}
-		VerifyPodLabels(ctx, client, ns, labelKey, labelInValue, true, entries)
+		VerifyPodLabels(ctx, client, ns, labelKey, labelInValue, true, entries)(g)
 	}
 }

@@ -564,6 +564,38 @@ var _ = Describe("Controllers/Podplacement/PodReconciler", func() {
 						"unexpected preferred node affinity")
 				}).Should(Succeed(), "failed to set preferred node affinity in pod")
 			})
+			It("sets the preferred node affinity and label when there is an error setting the required affinity", func() {
+				pod := NewPod().
+					WithContainersImages("quay.io/non-existing/image:latest").
+					WithGenerateName("test-pod-").
+					WithNamespace("test-namespace").
+					Build()
+				err := k8sClient.Create(ctx, pod)
+				Expect(err).NotTo(HaveOccurred(), "failed to create pod", err)
+				// Test the removal of the scheduling gate. However, since the pod is mutated and the reconciler
+				// removes the scheduling gate concurrently, we cannot ensure that the scheduling gate is added
+				// and that the following Eventually works on a pod with the scheduling gate.
+				// Waiting for the pod to be mutated is not enough, as the pod could be mutated and the reconciler
+				// could have removed the scheduling gate before our check.
+				Eventually(func(g Gomega) {
+					// Get pod from the API server
+					err := k8sClient.Get(ctx, crclient.ObjectKeyFromObject(pod), pod)
+					g.Expect(err).NotTo(HaveOccurred(), "failed to get pod", err)
+					By(fmt.Sprintf("Error count is set to '%s'", pod.Labels[utils.ImageInspectionErrorCountLabel]))
+					g.Expect(pod.Spec.SchedulingGates).NotTo(ContainElement(corev1.PodSchedulingGate{
+						Name: utils.SchedulingGateName,
+					}), "scheduling gate not removed")
+					g.Expect(pod.Labels).To(HaveKeyWithValue(utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved),
+						"scheduling gate annotation not found")
+					g.Expect(pod.Labels).To(HaveKeyWithValue(utils.ImageInspectionErrorCountLabel, strconv.Itoa(MaxRetryCount)), "image inspection error count not found")
+					g.Expect(pod.Labels).To(HaveKeyWithValue(utils.PreferredNodeAffinityLabel, utils.NodeAffinityLabelValueSet),
+						"preferred node affinity label not found")
+					g.Expect(pod.Labels).To(HaveKeyWithValue(utils.NodeAffinityLabel, utils.LabelValueNotSet),
+						"node affinity label not found")
+				}).WithTimeout(e2e.WaitShort).WithPolling(time.Millisecond*250).Should(Succeed(), "failed to remove scheduling gate from pod")
+				// Polling set to 250ms such that the error count is shown in the logs at each update.
+
+			})
 		})
 	})
 })

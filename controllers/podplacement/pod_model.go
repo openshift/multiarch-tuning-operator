@@ -173,11 +173,8 @@ func (pod *Pod) setRequiredArchNodeAffinity(requirement corev1.NodeSelectorRequi
 
 // SetPreferredArchNodeAffinity sets the node affinity for the pod to the preferences given in the ClusterPodPlacementConfig.
 func (pod *Pod) SetPreferredArchNodeAffinity(cppc *v1beta1.ClusterPodPlacementConfig) {
-	// Prevent overriding of user-provided kubernetes.io/arch preferred affinities
+	// Prevent overriding of user-provided kubernetes.io/arch preferred affinities or overwriting previously set preferred affinity
 	if pod.isPreferredAffinityConfiguredForArchitecture() {
-		pod.ensureLabel(utils.PreferredNodeAffinityLabel, utils.LabelValueNotSet)
-		pod.publishEvent(corev1.EventTypeNormal, ArchitectureAwareNodeAffinitySet,
-			ArchitecturePreferredPredicateSkippedMsg)
 		return
 	}
 

@@ -7,11 +7,14 @@ import (
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 
 	. "github.com/onsi/gomega"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common/plugins"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	mmoimage "github.com/openshift/multiarch-tuning-operator/pkg/image"
@@ -519,6 +522,99 @@ func TestPod_setArchNodeAffinity(t *testing.T) {
 			pred, err := pod.getArchitecturePredicate(nil)
 			g.Expect(err).ShouldNot(HaveOccurred())
 			pod.setRequiredArchNodeAffinity(pred)
+			g.Expect(pod.Spec.Affinity).Should(Equal(tt.want.Spec.Affinity))
+			imageInspectionCache = mmoimage.FacadeSingleton()
+		})
+	}
+}
+
+func TestPod_SetPreferredArchNodeAffinityWithCPPC(t *testing.T) {
+	tests := []struct {
+		name string
+		pod  *v1.Pod
+		want *v1.Pod
+	}{
+		{
+			name: "pod with no predefined preferred affinity",
+			pod:  NewPod().WithContainersImages(fake.SingleArchAmd64Image).Build(),
+			want: NewPod().WithContainersImages(fake.SingleArchAmd64Image).WithPreferredDuringSchedulingIgnoredDuringExecution(
+				NewPreferredSchedulingTerm().WithArchitecture(utils.ArchitectureAmd64).WithWeight(1).Build(),
+			).Build(),
+		},
+		{
+			name: "pod with predefined preferred node affinity",
+			pod: NewPod().WithContainersImages(fake.SingleArchAmd64Image).WithPreferredDuringSchedulingIgnoredDuringExecution(
+				NewPreferredSchedulingTerm().WithCustomKeyValue("foo", "bar").WithWeight(50).Build(),
+			).Build(),
+			want: NewPod().WithContainersImages(fake.SingleArchAmd64Image).WithPreferredDuringSchedulingIgnoredDuringExecution(
+				NewPreferredSchedulingTerm().WithCustomKeyValue("foo", "bar").WithWeight(50).Build(),
+				NewPreferredSchedulingTerm().WithArchitecture(utils.ArchitectureAmd64).WithWeight(1).Build(),
+			).Build(),
+		},
+		{
+			name: "pod with predefined preferred node affinity with arch label set",
+			pod: NewPod().WithContainersImages(fake.SingleArchAmd64Image).WithPreferredDuringSchedulingIgnoredDuringExecution(
+				NewPreferredSchedulingTerm().WithArchitecture(utils.ArchitectureAmd64).WithWeight(30).Build(),
+			).Build(),
+			want: NewPod().WithContainersImages(fake.SingleArchAmd64Image).WithPreferredDuringSchedulingIgnoredDuringExecution(
+				NewPreferredSchedulingTerm().WithArchitecture(utils.ArchitectureAmd64).WithWeight(30).Build(),
+			).Build(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			imageInspectionCache = fake.FacadeSingleton()
+			pod := &Pod{
+				Pod: *tt.pod,
+				ctx: ctx,
+			}
+			g := NewGomegaWithT(t)
+			pod.SetPreferredArchNodeAffinity(
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 1).Build())
+			g.Expect(pod.Spec.Affinity).Should(Equal(tt.want.Spec.Affinity))
+			imageInspectionCache = mmoimage.FacadeSingleton()
+		})
+	}
+}
+
+func TestPod_SetPreferredArchNodeAffinity(t *testing.T) {
+	tests := []struct {
+		name string
+		pod  *v1.Pod
+		want *v1.Pod
+	}{
+		{
+			name: "pod with empty preferred node affinity",
+			pod:  NewPod().WithContainersImages(fake.MultiArchImage).WithPreferredDuringSchedulingIgnoredDuringExecution().Build(),
+			want: NewPod().WithContainersImages(fake.MultiArchImage).WithPreferredDuringSchedulingIgnoredDuringExecution().Build(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			imageInspectionCache = fake.FacadeSingleton()
+			pod := &Pod{
+				Pod: *tt.pod,
+				ctx: ctx,
+			}
+			g := NewGomegaWithT(t)
+			pod.SetPreferredArchNodeAffinity(&v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1beta1.ClusterPodPlacementConfigSpec{
+					Plugins: &plugins.Plugins{
+						NodeAffinityScoring: &plugins.NodeAffinityScoring{
+							BasePlugin: plugins.BasePlugin{
+								Enabled: true, // Enable the plugin
+							},
+							Platforms: []plugins.NodeAffinityScoringPlatformTerm{},
+						},
+					},
+				},
+			})
 			g.Expect(pod.Spec.Affinity).Should(Equal(tt.want.Spec.Affinity))
 			imageInspectionCache = mmoimage.FacadeSingleton()
 		})
@@ -1040,6 +1136,21 @@ func TestPod_shouldIgnorePod(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "pod with nodeSelector/nodeAffinity and the preferredAffinity is not set for the kubernetes.io/arch label",
+			fields: fields{
+				Pod: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
+					[]v1.NodeSelectorRequirement{
+						{
+							Key:      utils.ArchLabel,
+							Operator: v1.NodeSelectorOpExists,
+							Values:   []string{utils.ArchitectureAmd64},
+						},
+					},
+				).Build(),
+			},
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1050,6 +1161,198 @@ func TestPod_shouldIgnorePod(t *testing.T) {
 			}
 			if got := pod.shouldIgnorePod(&v1beta1.ClusterPodPlacementConfig{}); got != tt.want {
 				t.Errorf("shouldIgnorePod() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPod_shouldIgnorePodWithPluginsEnabledInCPPC(t *testing.T) {
+	type fields struct {
+		Pod      *v1.Pod
+		ctx      context.Context
+		recorder record.EventRecorder
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   bool
+	}{
+		{
+			name: "pod with nodeSelector/nodeAffinity and the preferredAffinity is set for the kubernetes.io/arch label",
+			fields: fields{
+				Pod: NewPod().WithContainersImages(fake.SingleArchAmd64Image).WithPreferredDuringSchedulingIgnoredDuringExecution(
+					NewPreferredSchedulingTerm().WithArchitecture(utils.ArchitectureAmd64).WithWeight(1).Build()).
+					WithNodeSelectorTermsMatchExpressions(
+						[]v1.NodeSelectorRequirement{
+							{
+								Key:      utils.ArchLabel,
+								Operator: v1.NodeSelectorOpExists,
+								Values:   []string{utils.ArchitectureAmd64},
+							},
+						},
+					).Build(),
+			},
+			want: true,
+		},
+		{
+			name: "pod with set nodeAffinity, the preferredAffinity is not set for the kubernetes.io/arch label",
+			fields: fields{
+				Pod: NewPod().WithContainersImages(fake.SingleArchAmd64Image).
+					WithNodeSelectorTermsMatchExpressions(
+						[]v1.NodeSelectorRequirement{
+							{
+								Key:      utils.ArchLabel,
+								Operator: v1.NodeSelectorOpExists,
+								Values:   []string{utils.ArchitectureAmd64},
+							},
+						},
+					).Build(),
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod:      *tt.fields.Pod,
+				ctx:      tt.fields.ctx,
+				recorder: tt.fields.recorder,
+			}
+			if got := pod.shouldIgnorePod(NewClusterPodPlacementConfig().
+				WithName(common.SingletonResourceObjectName).
+				WithNodeAffinityScoring(true).
+				WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 1).Build(),
+			); got != tt.want {
+				t.Errorf("shouldIgnorePod() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPod_shouldIgnorePodWithPluginsDisabledInCPPC(t *testing.T) {
+	type fields struct {
+		Pod      *v1.Pod
+		ctx      context.Context
+		recorder record.EventRecorder
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   bool
+	}{
+		{
+			name: "pod with nodeSelector/nodeAffinity is set for the kubernetes.io/arch label and the NodeAffinityScoring plugin is disabled ",
+			fields: fields{
+				Pod: NewPod().WithContainersImages(fake.MultiArchImage).WithNodeSelectorTermsMatchExpressions(
+					[]v1.NodeSelectorRequirement{
+						{
+							Key:      utils.ArchLabel,
+							Operator: v1.NodeSelectorOpExists,
+							Values:   []string{utils.ArchitectureAmd64},
+						},
+					},
+				).Build(),
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod:      *tt.fields.Pod,
+				ctx:      tt.fields.ctx,
+				recorder: tt.fields.recorder,
+			}
+			if got := pod.shouldIgnorePod(NewClusterPodPlacementConfig().
+				WithName(common.SingletonResourceObjectName).
+				WithNodeAffinityScoring(false).
+				WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 1).Build()); got != tt.want {
+				t.Errorf("shouldIgnorePod() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsPreferredAffinityConfiguredForArchitecture(t *testing.T) {
+	tests := []struct {
+		name     string
+		affinity *v1.Affinity
+		expected bool
+	}{
+		{
+			name:     "Affinity is nil",
+			affinity: nil,
+			expected: false,
+		},
+		{
+			name:     "NodeAffinity is nil",
+			affinity: &v1.Affinity{NodeAffinity: nil},
+			expected: false,
+		},
+		{
+			name:     "NodeAffinity is nil",
+			affinity: &v1.Affinity{NodeAffinity: &v1.NodeAffinity{PreferredDuringSchedulingIgnoredDuringExecution: nil}},
+			expected: false,
+		},
+		{
+			name: "PreferredSchedulingTerm contains matchExpression with key=kubernetes.io/arch",
+			affinity: &v1.Affinity{
+				NodeAffinity: &v1.NodeAffinity{
+					PreferredDuringSchedulingIgnoredDuringExecution: []v1.PreferredSchedulingTerm{
+						{
+							Weight: int32(1),
+							Preference: v1.NodeSelectorTerm{
+								MatchExpressions: []v1.NodeSelectorRequirement{
+									{
+										Key:      utils.ArchLabel,
+										Operator: v1.NodeSelectorOpIn,
+										Values:   []string{utils.ArchitectureArm64},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "PreferredSchedulingTerm does not contain a matchExpression with key=kubernetes.io/arch",
+			affinity: &v1.Affinity{
+				NodeAffinity: &v1.NodeAffinity{
+					PreferredDuringSchedulingIgnoredDuringExecution: []v1.PreferredSchedulingTerm{
+						{
+							Weight: int32(1),
+							Preference: v1.NodeSelectorTerm{
+								MatchExpressions: []v1.NodeSelectorRequirement{
+									{
+										Key:      "foo",
+										Operator: v1.NodeSelectorOpIn,
+										Values:   []string{"bar"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pod := &Pod{
+				Pod: v1.Pod{
+					Spec: v1.PodSpec{
+						Affinity: test.affinity,
+					},
+				},
+			}
+
+			result := pod.isPreferredAffinityConfiguredForArchitecture()
+			if result != test.expected {
+				t.Errorf("expected %v, got %v", test.expected, result)
 			}
 		})
 	}

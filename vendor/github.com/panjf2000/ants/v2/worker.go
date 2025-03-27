@@ -31,6 +31,8 @@ import (
 // it starts a goroutine that accepts tasks and
 // performs function calls.
 type goWorker struct {
+	worker
+
 	// pool who owns this worker.
 	pool *Pool
 
@@ -64,11 +66,11 @@ func (w *goWorker) run() {
 			w.pool.cond.Signal()
 		}()
 
-		for f := range w.task {
-			if f == nil {
+		for fn := range w.task {
+			if fn == nil {
 				return
 			}
-			f()
+			fn()
 			if ok := w.pool.revertWorker(w); !ok {
 				return
 			}
@@ -84,10 +86,10 @@ func (w *goWorker) lastUsedTime() time.Time {
 	return w.lastUsed
 }
 
-func (w *goWorker) inputFunc(fn func()) {
-	w.task <- fn
+func (w *goWorker) setLastUsedTime(t time.Time) {
+	w.lastUsed = t
 }
 
-func (w *goWorker) inputParam(interface{}) {
-	panic("unreachable")
+func (w *goWorker) inputFunc(fn func()) {
+	w.task <- fn
 }

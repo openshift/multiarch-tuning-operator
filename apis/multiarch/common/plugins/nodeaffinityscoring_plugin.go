@@ -30,7 +30,7 @@ type NodeAffinityScoring struct {
 	Platforms []NodeAffinityScoringPlatformTerm `json:"platforms" protobuf:"bytes,2,opt,name=platforms"`
 }
 
-// PlatformConfig holds configuration for specific platforms, with required fields validated.
+// NodeAffinityScoringPlatformTerm holds configuration for specific platforms, with required fields validated.
 type NodeAffinityScoringPlatformTerm struct {
 	// Architecture must be a list of non-empty string of arch names.
 	// +kubebuilder:validation:Enum=arm64;amd64;ppc64le;s390x

@@ -4,7 +4,7 @@ import (
 	v1 "k8s.io/api/rbac/v1"
 )
 
-// DeploymentBuilder is a builder for v1.Subject objects to be used only in unit tests.
+// SubjectBuilder is a builder for v1.Subject objects to be used only in unit tests.
 type SubjectBuilder struct {
 	subject *v1.Subject
 }

@@ -19,7 +19,6 @@ import (
 
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,13 +36,13 @@ type RegistryConfig struct {
 	CertConfigmapName   string
 	KeyPath             string
 	CaPath              string
-	RegistryProxyUrl    string
+	RegistryProxyURL    string
 	RegistryProxyUser   string
 	RegistryProxyPasswd string
 	Port                int32
 }
 
-func NewRegistry(ns *corev1.Namespace, name, certConfigmapName, registryProxyUrl, registryProxyUser, registryProxyPasswd string) (*RegistryConfig, error) {
+func NewRegistry(ns *corev1.Namespace, name, certConfigmapName, registryProxyURL, registryProxyUser, registryProxyPasswd string) (*RegistryConfig, error) {
 	registryHost := fmt.Sprintf("%s.%s.svc.cluster.local", name, ns.Name)
 	serverTLS, err := buildRegistryTLSConfig(registryHost)
 	if err != nil {
@@ -56,7 +55,7 @@ func NewRegistry(ns *corev1.Namespace, name, certConfigmapName, registryProxyUrl
 		CertConfigmapName:   certConfigmapName,
 		KeyPath:             serverTLS.privateKeyPath,
 		CaPath:              serverTLS.certificatePath,
-		RegistryProxyUrl:    registryProxyUrl,
+		RegistryProxyURL:    registryProxyURL,
 		RegistryProxyUser:   registryProxyUser,
 		RegistryProxyPasswd: registryProxyPasswd,
 		Port:                5001,
@@ -112,8 +111,8 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 
 	// Create configmap for ca bundles for cluster-wide proxy
 	log.Printf("create configmap for ca bundles if cluster-wide proxy exist")
-	config := &v1.ConfigMap{}
-	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
+	config := &corev1.ConfigMap{}
+	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "registry-trusted-ca",
 			Namespace: r.Namespace.Name,
@@ -161,7 +160,7 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 							NewContainerEnv().WithName("REGISTRY_HTTP_TLS_CERTIFICATE").WithValue("/etc/secrets/tls.crt").Build(),
 							NewContainerEnv().WithName("REGISTRY_HTTP_TLS_KEY").WithValue("/etc/secrets/tls.key").Build(),
 							NewContainerEnv().WithName("REGISTRY_STORAGE_DELETE_ENABLED").WithValue("true").Build(),
-							NewContainerEnv().WithName("REGISTRY_PROXY_REMOTEURL").WithValue(r.RegistryProxyUrl).Build(),
+							NewContainerEnv().WithName("REGISTRY_PROXY_REMOTEURL").WithValue(r.RegistryProxyURL).Build(),
 							NewContainerEnv().WithName("REGISTRY_PROXY_USERNAME").WithValue(r.RegistryProxyUser).Build(),
 							NewContainerEnv().WithName("REGISTRY_PROXY_PASSWORD").WithValue(r.RegistryProxyPasswd).Build(),
 							NewContainerEnv().WithName("HTTP_PROXY").WithValue(httpProxy).Build(),
@@ -173,7 +172,7 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 				WithVolumes(NewVolume().WithName("registry-storage").WithVolumeEmptyDir(&corev1.EmptyDirVolumeSource{}).Build(),
 					NewVolume().WithName("registry-secret").WithVolumeProjectedDefaultMode(utils.NewPtr(int32(420))).
 						WithVolumeProjectedSourcesSecretLocalObjectReference(secret.Name).Build(),
-					NewVolume().WithVolumeSourceConfigmap(config.Name, v1.KeyToPath{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}).
+					NewVolume().WithVolumeSourceConfigmap(config.Name, corev1.KeyToPath{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}).
 						WithName("trusted-ca").Build()).
 				Build()).
 		WithReplicas(utils.NewPtr(int32(1))).
@@ -192,8 +191,8 @@ func AddCertificateToConfigmap(ctx context.Context, client runtimeclient.Client,
 	if err != nil {
 		return err
 	}
-	c := v1.ConfigMap{}
-	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
+	c := corev1.ConfigMap{}
+	err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.CertConfigmapName,
 			Namespace: "openshift-config",
@@ -228,8 +227,8 @@ func AddCertificateToConfigmap(ctx context.Context, client runtimeclient.Client,
 }
 
 func RemoveCertificateFromConfigmap(ctx context.Context, client runtimeclient.Client, r *RegistryConfig) error {
-	c := v1.ConfigMap{}
-	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1.ConfigMap{
+	c := corev1.ConfigMap{}
+	err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.CertConfigmapName,
 			Namespace: "openshift-config",

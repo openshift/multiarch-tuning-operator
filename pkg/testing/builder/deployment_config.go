@@ -10,7 +10,7 @@ type DeploymentConfigBuilder struct {
 	deploymentconfig *ocpv1.DeploymentConfig
 }
 
-// NewDeployment returns a new DeploymentConfigBuilder to buildc ocpv1.DeploymentConfig objects. It is meant to be usedc only in unit tests.
+// NewDeploymentConfig returns a new DeploymentConfigBuilder to buildc ocpv1.DeploymentConfig objects. It is meant to be usedc only in unit tests.
 func NewDeploymentConfig() *DeploymentConfigBuilder {
 	return &DeploymentConfigBuilder{
 		deploymentconfig: &ocpv1.DeploymentConfig{},

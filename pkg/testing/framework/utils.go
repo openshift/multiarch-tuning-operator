@@ -15,7 +15,6 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -58,7 +57,7 @@ func StartChannelMonitor(ch chan error, descr string) {
 func EnsureNamespaces(ctx context.Context, client client.Client, namespaces ...string) {
 	var err error
 	for _, ns := range namespaces {
-		namespace := &v1.Namespace{
+		namespace := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: ns,
 			},
@@ -157,7 +156,7 @@ func WriteToFile(dir, fileName, content string) error {
 	log.Printf("Writing content to file %s", filePath)
 	_, err = file.WriteString(content)
 	if err != nil {
-		return fmt.Errorf("Failed to write content to file: %w", err)
+		return fmt.Errorf("failed to write content to file: %w", err)
 	}
 	return nil
 }

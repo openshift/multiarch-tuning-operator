@@ -18,7 +18,7 @@ func GetRandomNodeName(ctx context.Context, client runtimeclient.Client, labelKe
 		return "", err
 	}
 	if len(nodes.Items) == 0 {
-		return "", fmt.Errorf("Got null nodes by key %s and value %s lable", labelKey, labelInValue)
+		return "", fmt.Errorf("got null nodes by key %s and value %s lable", labelKey, labelInValue)
 	}
 	randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(nodes.Items))))
 	if err != nil {

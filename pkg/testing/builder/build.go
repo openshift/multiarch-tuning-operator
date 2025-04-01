@@ -9,7 +9,7 @@ type BuildBuilder struct {
 	build *ocpv1.Build
 }
 
-// NewDeployment returns a new BuildBuilder to builbappsv1.DeploymentConfig objects. It is meant to be usebonly in unit tests.
+// NewBuild returns a new BuildBuilder to builbappsv1.DeploymentConfig objects. It is meant to be usebonly in unit tests.
 func NewBuild() *BuildBuilder {
 	return &BuildBuilder{
 		build: &ocpv1.Build{},
@@ -17,11 +17,11 @@ func NewBuild() *BuildBuilder {
 }
 
 func (b *BuildBuilder) WithDockerImage(image string) *BuildBuilder {
-	if b.build.Spec.CommonSpec.Strategy.SourceStrategy == nil {
-		b.build.Spec.CommonSpec.Strategy.SourceStrategy = &ocpv1.SourceBuildStrategy{}
+	if b.build.Spec.Strategy.SourceStrategy == nil {
+		b.build.Spec.Strategy.SourceStrategy = &ocpv1.SourceBuildStrategy{}
 	}
-	b.build.Spec.CommonSpec.Strategy.SourceStrategy.From.Kind = "DockerImage"
-	b.build.Spec.CommonSpec.Strategy.SourceStrategy.From.Name = image
+	b.build.Spec.Strategy.SourceStrategy.From.Kind = "DockerImage"
+	b.build.Spec.Strategy.SourceStrategy.From.Name = image
 	return b
 }
 

@@ -50,7 +50,7 @@ func (p *ClusterPodPlacementConfigBuilder) WithNodeAffinityScoring(enabled bool)
 	if p.Spec.Plugins.NodeAffinityScoring == nil {
 		p.Spec.Plugins.NodeAffinityScoring = &plugins.NodeAffinityScoring{}
 	}
-	p.Spec.Plugins.NodeAffinityScoring.BasePlugin.Enabled = enabled
+	p.Spec.Plugins.NodeAffinityScoring.Enabled = enabled
 	return p
 }
 

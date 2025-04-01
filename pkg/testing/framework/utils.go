@@ -14,7 +14,6 @@ import (
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -118,7 +117,7 @@ func LoadClientset() (*kubernetes.Clientset, error) {
 func RegisterScheme(s *runtime.Scheme) error {
 	var errs []error
 	errs = append(errs, admissionv1.AddToScheme(s))
-	errs = append(errs, corev1.AddToScheme(s))
+	errs = append(errs, v1.AddToScheme(s))
 	errs = append(errs, appsv1.AddToScheme(s))
 	errs = append(errs, v1alpha1.AddToScheme(s))
 	errs = append(errs, v1beta1.AddToScheme(s))
@@ -157,7 +156,7 @@ func WriteToFile(dir, fileName, content string) error {
 	log.Printf("Writing content to file %s", filePath)
 	_, err = file.WriteString(content)
 	if err != nil {
-		return fmt.Errorf("Failed to write content to file: %w", err)
+		return fmt.Errorf("failed to write content to file: %w", err)
 	}
 	return nil
 }

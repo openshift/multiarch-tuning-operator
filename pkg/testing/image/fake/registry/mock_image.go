@@ -32,8 +32,8 @@ type MockImage struct {
 	destination   *types.ImageDestination
 }
 
-// GetUrl returns the url of the image
-func (i *MockImage) GetUrl() string {
+// GetURL returns the url of the image
+func (i *MockImage) GetURL() string {
 	return fmt.Sprintf("%s/%s/%s:%s", url, i.Repository, i.Name, i.Tag)
 }
 
@@ -53,7 +53,7 @@ func (i *MockImage) getDestination(ctx context.Context, authFile string) (dst ty
 	if i.destination != nil {
 		return *i.destination, nil
 	}
-	ref, err := docker.ParseReference(fmt.Sprintf("//%s", i.GetUrl()))
+	ref, err := docker.ParseReference(fmt.Sprintf("//%s", i.GetURL()))
 	if err != nil {
 		log.Error(err, "Error parsing the image reference for the image")
 		return
@@ -73,13 +73,13 @@ func (i *MockImage) getDestination(ctx context.Context, authFile string) (dst ty
 
 // prepareSingleArchImage creates and push the config blob and the manifestObj for a single architecture image
 func (i *MockImage) prepareSingleArchImage(ctx context.Context, dst *types.ImageDestination) (
-	manifestDigest *digest.Digest, manifestJsonBytes []byte, err error) {
+	manifestDigest *digest.Digest, manifestJSONBytes []byte, err error) {
 	// Single architecture images or partial manifests for manifestObj lists
 	// We expect the architecture set to be a singleton
 	arch, _ := i.Architectures.PopAny()
-	labelsJsonBytes, _ := json.Marshal(i.Labels)
-	configData := []byte(fmt.Sprintf(`{"architecture":"%s","os":"linux","config":{"Labels":%s}}`, arch, string(labelsJsonBytes)))
-	log.Info(fmt.Sprintf("%s (%s): %s", i.GetUrl(), arch, string(configData)))
+	labelsJSONBytes, _ := json.Marshal(i.Labels)
+	configData := []byte(fmt.Sprintf(`{"architecture":"%s","os":"linux","config":{"Labels":%s}}`, arch, string(labelsJSONBytes)))
+	log.Info(fmt.Sprintf("%s (%s): %s", i.GetURL(), arch, string(configData)))
 	configDataDigest, err := manifest.Digest(configData)
 	if err != nil {
 		log.Error(err, "Error computing the digest of the image config data")
@@ -96,12 +96,12 @@ func (i *MockImage) prepareSingleArchImage(ctx context.Context, dst *types.Image
 			Size:      int64(len(configData)),
 		},
 	}
-	manifestJsonBytes, err = json.Marshal(manifestObj)
+	manifestJSONBytes, err = json.Marshal(manifestObj)
 	if err != nil {
 		log.Error(err, "Error marshalling the manifestObj")
 		return nil, nil, err
 	}
-	manifestDigestV, err := manifest.Digest(manifestJsonBytes)
+	manifestDigestV, err := manifest.Digest(manifestJSONBytes)
 	if err != nil {
 		log.Error(err, "Error computing the digest of the manifestObj")
 		return nil, nil, err
@@ -122,7 +122,7 @@ func (i *MockImage) prepareSingleArchImage(ctx context.Context, dst *types.Image
 
 // prepareManifestList creates and push the config blob and the manifestObj for a manifest list
 func (i *MockImage) prepareManifestList(ctx context.Context, authFile string, dst *types.ImageDestination) (
-	manifestDigest *digest.Digest, manifestJsonBytes []byte, err error) {
+	manifestDigest *digest.Digest, manifestJSONBytes []byte, err error) {
 	// The Docker and OCI manifest list json are compatible for the current cases
 	list := imgspecv1.Index{
 		Versioned: specs.Versioned{
@@ -161,12 +161,12 @@ func (i *MockImage) prepareManifestList(ctx context.Context, authFile string, ds
 		})
 	}
 	// marshal the manifest list
-	manifestJsonBytes, err = json.Marshal(list)
+	manifestJSONBytes, err = json.Marshal(list)
 	if err != nil {
 		log.Error(err, "Error marshalling the manifest list")
 		return nil, nil, err
 	}
-	manifestDigestV, err := manifest.Digest(manifestJsonBytes)
+	manifestDigestV, err := manifest.Digest(manifestJSONBytes)
 	if err != nil {
 		log.Error(err, "Error computing the singleArchImageDigest of the manifest")
 	}
@@ -183,27 +183,27 @@ func (i *MockImage) pushImage(ctx context.Context, authFile string) (length int6
 		return
 	}
 	// Create and push the config data blob and set up the manifestObj
-	var manifestJsonBytes []byte
+	var manifestJSONBytes []byte
 	switch i.MediaType {
 	case imgspecv1.MediaTypeImageManifest, manifest.DockerV2Schema2MediaType:
-		manifestDigest, manifestJsonBytes, err = i.prepareSingleArchImage(ctx, &dst)
+		manifestDigest, manifestJSONBytes, err = i.prepareSingleArchImage(ctx, &dst)
 		if err != nil {
 			return length, nil, err
 		}
 	case manifest.DockerV2ListMediaType, imgspecv1.MediaTypeImageIndex:
 		// NOTE: prepareManifestList will recursively call pushImage to push the single manifests of the list
-		manifestDigest, manifestJsonBytes, err = i.prepareManifestList(ctx, authFile, &dst)
+		manifestDigest, manifestJSONBytes, err = i.prepareManifestList(ctx, authFile, &dst)
 		if err != nil {
 			return length, nil, err
 		}
 	}
-	length = int64(len(manifestJsonBytes))
+	length = int64(len(manifestJSONBytes))
 	var instanceDigest *digest.Digest
 	if i.partial {
 		// If the MockImage comes from recursion, to push the single manifest of a manifest list
 		instanceDigest = manifestDigest
 	}
-	err = dst.PutManifest(ctx, manifestJsonBytes, instanceDigest)
+	err = dst.PutManifest(ctx, manifestJSONBytes, instanceDigest)
 	if err != nil {
 		return length, nil, err
 	}
@@ -215,5 +215,5 @@ func (i *MockImage) pushImage(ctx context.Context, authFile string) (length int6
 }
 
 func (i *MockImage) Equals(other *MockImage) bool {
-	return i.GetUrl() == other.GetUrl()
+	return i.GetURL() == other.GetURL()
 }

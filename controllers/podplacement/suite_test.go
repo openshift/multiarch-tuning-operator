@@ -65,7 +65,6 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
-	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake/registry"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -171,7 +170,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	By("Prepare shared data and Pass to all processes")
 	// Get cluster info and share with all processes
-	kc := framework.FromEnvTestConfig(cfg)
+	kc := testingutils.FromEnvTestConfig(cfg)
 	// The registry.perRegistryCertDirPath is used by registry.PushMockImage,
 	// need to pass to all processes
 	registryCertPath := registry.GetCertPath()
@@ -215,7 +214,7 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	By("Deleting the ClusterPodPlacementConfig")
 	err := k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
 	Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
-	Eventually(framework.ValidateDeletion(k8sClient, ctx)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
+	Eventually(testingutils.ValidateDeletion(k8sClient, ctx)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
 	By("Checking the cache is empty")
 	Expect(clusterpodplacementconfig.GetClusterPodPlacementConfig()).To(BeNil())
 
@@ -288,7 +287,7 @@ func seedRegistry() {
 	// Just print the seed images for debugging purposes.
 	suiteLog.Info("Seed completed. The registry contains the following images:")
 	for _, image := range registry.GetMockImages() {
-		suiteLog.Info(image.GetUrl())
+		suiteLog.Info(image.GetURL())
 	}
 }
 

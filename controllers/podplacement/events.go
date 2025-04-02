@@ -18,7 +18,7 @@ const (
 	ArchitecturePredicatesConflictMsg        = "All the scheduling predicates already include architecture-specific constraints"
 	ArchitecturePredicateSetupMsg            = "Set the supported architectures to "
 	ArchitecturePreferredPredicateSetupMsg   = "Set the architecture preferences in the nodeAffinity"
-	ArchitecturePreferredPredicateSkippedMsg = "The node affinity already includes architecture preferences"
+	ArchitecturePreferredPredicateSkippedMsg = "Preferred architecture in node affinity was not set"
 	ImageArchitectureInspectionErrorMsg      = "Failed to retrieve the supported architectures: "
 	NoSupportedArchitecturesFoundMsg         = "Pod cannot be scheduled due to incompatible image architectures; container images have no supported architectures in common"
 	ArchitectureAwareGatedPodIgnoredMsg      = "The gated pod has been modified and is no longer eligible for architecture-aware scheduling"

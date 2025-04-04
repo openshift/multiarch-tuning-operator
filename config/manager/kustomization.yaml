@@ -4,8 +4,8 @@ resources:
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
-- name: controller
-  newName: registry.ci.openshift.org/origin/multiarch-tuning-operator
-  newTag: main
+  - name: controller
+    newName: registry.ci.openshift.org/origin/multiarch-tuning-operator
+    newTag: main
 commonAnnotations:
   multiarch.openshift.io/image: registry.ci.openshift.org/origin/multiarch-tuning-operator:main

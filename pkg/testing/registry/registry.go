@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -31,19 +30,19 @@ import (
 )
 
 type RegistryConfig struct {
-	Namespace           *corev1.Namespace
+	Namespace           *v1.Namespace
 	Name                string
 	RegistryHost        string
 	CertConfigmapName   string
 	KeyPath             string
 	CaPath              string
-	RegistryProxyUrl    string
+	RegistryProxyURL    string
 	RegistryProxyUser   string
 	RegistryProxyPasswd string
 	Port                int32
 }
 
-func NewRegistry(ns *corev1.Namespace, name, certConfigmapName, registryProxyUrl, registryProxyUser, registryProxyPasswd string) (*RegistryConfig, error) {
+func NewRegistry(ns *v1.Namespace, name, certConfigmapName, registryProxyURL, registryProxyUser, registryProxyPasswd string) (*RegistryConfig, error) {
 	registryHost := fmt.Sprintf("%s.%s.svc.cluster.local", name, ns.Name)
 	serverTLS, err := buildRegistryTLSConfig(registryHost)
 	if err != nil {
@@ -56,7 +55,7 @@ func NewRegistry(ns *corev1.Namespace, name, certConfigmapName, registryProxyUrl
 		CertConfigmapName:   certConfigmapName,
 		KeyPath:             serverTLS.privateKeyPath,
 		CaPath:              serverTLS.certificatePath,
-		RegistryProxyUrl:    registryProxyUrl,
+		RegistryProxyURL:    registryProxyURL,
 		RegistryProxyUser:   registryProxyUser,
 		RegistryProxyPasswd: registryProxyPasswd,
 		Port:                5001,
@@ -161,7 +160,7 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 							NewContainerEnv().WithName("REGISTRY_HTTP_TLS_CERTIFICATE").WithValue("/etc/secrets/tls.crt").Build(),
 							NewContainerEnv().WithName("REGISTRY_HTTP_TLS_KEY").WithValue("/etc/secrets/tls.key").Build(),
 							NewContainerEnv().WithName("REGISTRY_STORAGE_DELETE_ENABLED").WithValue("true").Build(),
-							NewContainerEnv().WithName("REGISTRY_PROXY_REMOTEURL").WithValue(r.RegistryProxyUrl).Build(),
+							NewContainerEnv().WithName("REGISTRY_PROXY_REMOTEURL").WithValue(r.RegistryProxyURL).Build(),
 							NewContainerEnv().WithName("REGISTRY_PROXY_USERNAME").WithValue(r.RegistryProxyUser).Build(),
 							NewContainerEnv().WithName("REGISTRY_PROXY_PASSWORD").WithValue(r.RegistryProxyPasswd).Build(),
 							NewContainerEnv().WithName("HTTP_PROXY").WithValue(httpProxy).Build(),
@@ -170,7 +169,7 @@ func Deploy(ctx context.Context, client runtimeclient.Client, r *RegistryConfig)
 						).
 						WithPortsContainerPort(r.Port).
 						Build()).
-				WithVolumes(NewVolume().WithName("registry-storage").WithVolumeEmptyDir(&corev1.EmptyDirVolumeSource{}).Build(),
+				WithVolumes(NewVolume().WithName("registry-storage").WithVolumeEmptyDir(&v1.EmptyDirVolumeSource{}).Build(),
 					NewVolume().WithName("registry-secret").WithVolumeProjectedDefaultMode(utils.NewPtr(int32(420))).
 						WithVolumeProjectedSourcesSecretLocalObjectReference(secret.Name).Build(),
 					NewVolume().WithVolumeSourceConfigmap(config.Name, v1.KeyToPath{Key: "ca-bundle.crt", Path: "tls-ca-bundle.pem"}).

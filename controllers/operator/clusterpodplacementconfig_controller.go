@@ -109,7 +109,7 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 	var err error
 
 	if err = r.Get(ctx, client.ObjectKey{
-		Name: req.NamespacedName.Name,
+		Name: req.Name,
 	}, clusterPodPlacementConfig); err != nil {
 		log.Error(err, "Unable to fetch ClusterPodPlacementConfig")
 		return ctrl.Result{}, client.IgnoreNotFound(err)

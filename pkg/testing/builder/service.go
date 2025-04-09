@@ -7,7 +7,7 @@ type ServiceBuilder struct {
 	service *v1.Service
 }
 
-// Newservice returns a new ServiceBuilder to build v1.Service objects. It is meant to be used only in unit tests.
+// NewService returns a new ServiceBuilder to build v1.Service objects. It is meant to be used only in unit tests.
 func NewService() *ServiceBuilder {
 	return &ServiceBuilder{
 		service: &v1.Service{},

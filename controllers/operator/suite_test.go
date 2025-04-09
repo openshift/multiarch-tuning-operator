@@ -40,6 +40,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/utils/clock"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -228,7 +229,7 @@ func runManager() {
 		Scheme:        mgr.GetScheme(),
 		ClientSet:     clientset,
 		DynamicClient: dynamic.NewForConfigOrDie(cfg),
-		Recorder:      events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, ctrlref),
+		Recorder:      events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, ctrlref, clock.RealClock{}),
 	}).SetupWithManager(mgr)).NotTo(HaveOccurred())
 
 	err = mgr.AddReadyzCheck("readyz", healthz.Ping)

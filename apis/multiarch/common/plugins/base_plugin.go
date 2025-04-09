@@ -34,7 +34,7 @@ type IBasePlugin interface {
 	Name() string
 }
 
-// BasePlugin
+// BasePlugin defines basic structure of a plugin
 type BasePlugin struct {
 	// Enabled indicates whether the plugin is enabled.
 	// +kubebuilder:"validation:Required"
@@ -46,7 +46,7 @@ func (b *BasePlugin) Name() string {
 	return "BasePlugin"
 }
 
-// Enabled returns the value of the Enabled field.
+// IsEnabled returns the value of the Enabled field.
 func (b *BasePlugin) IsEnabled() bool {
 	return b.Enabled
 }

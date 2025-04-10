@@ -3,5 +3,8 @@
   "extends": ["github>konflux-ci/mintmaker//config/renovate/renovate.json"],
   "gomod": {
     "enabled": false
+  },
+  "dockerfile": {
+    "enabled": false
   }
 }

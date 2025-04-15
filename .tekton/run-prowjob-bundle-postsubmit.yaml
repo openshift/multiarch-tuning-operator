@@ -1,0 +1,61 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  annotations:
+    build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}
+    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main"
+  labels:
+    appstudio.openshift.io/application: multiarch-tuning-operator
+    appstudio.openshift.io/component: multiarch-tuning-operator
+    pipelines.appstudio.openshift.io/type: build
+  name: run-prowjob-bundle-postsubmit
+  namespace: multiarch-tuning-ope-tenant
+spec:
+  params:
+  - name: SNAPSHOT
+    value: $(params.SNAPSHOT)
+  - name: CLOUD_PROVIDER
+    value: "aws"
+  - name: DEPLOY_TEST_COMMAND
+    value: "make e2e"
+  - name: OPENSHIFT_VERSION
+    value: "4.20"
+  - name: CHANNEL_STREAM
+    value: "nightly"
+  - name: ARCHITECTURE
+    value: "arm64"
+  - name: ARTIFACTS_BUILD_ROOT
+    value: "quay-proxy.ci.openshift.org/openshift/ci:ocp_builder_rhel-9-golang-1.23-openshift-4.19"
+  - name: DOCKERFILE_ADDITIONS
+    value: "RUN make build"
+  - name: BUNDLE_NS
+    value: openshift-multiarch-tuning-operator
+  - name: BUNDLE_PRE_TEST_COMMAND
+    value: "oc apply -k ./deploy/envs/prow-konflux-bundle"
+  pipelineRef:
+    params:
+    - name: url
+      value: https://github.com/openshift/konflux-tasks
+    - name: revision
+      value: main
+    - name: pathInRepo
+      value: tasks/run-prowjob/0.1/run-prowjob.yaml
+    resolver: git
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-multiarch-tuning-operator
+  workspaces:
+  - name: workspace
+    volumeClaimTemplate:
+      metadata:
+        creationTimestamp: null
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      status: {}
+status: {}

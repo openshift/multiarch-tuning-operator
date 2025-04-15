@@ -33,7 +33,9 @@ spec:
     - name: hermetic
       value: "true"
     - name: BUILD_ARGS
-      value: 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.17'
+      value:
+        - 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.17'
+        - 'OCP_VERSION=fbc-v4-17'
   taskRunTemplate: {}
   pipelineRef:
     name: fbc-pipeline

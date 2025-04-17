@@ -7,7 +7,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "fbc-4.16"
+      == "fbc"
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: fbc-v4-16
@@ -30,7 +30,9 @@ spec:
     - name: hermetic
       value: "true"
     - name: BUILD_ARGS
-      value: 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.16'
+      value:
+        - 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.16'
+        - 'OCP_VERSION=fbc-v4-16'
   taskRunTemplate: {}
   pipelineRef:
     name: fbc-pipeline

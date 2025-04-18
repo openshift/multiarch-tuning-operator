@@ -59,8 +59,8 @@ func (dst *ClusterPodPlacementConfig) ConvertFrom(srcRaw conversion.Hub) error {
 	// Status
 	dst.Status.Conditions = src.Status.Conditions
 
-	if dst.ObjectMeta.Annotations == nil {
-		dst.ObjectMeta.Annotations = make(map[string]string)
+	if dst.Annotations == nil {
+		dst.Annotations = make(map[string]string)
 	}
 
 	return nil

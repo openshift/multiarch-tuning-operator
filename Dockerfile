@@ -8,7 +8,7 @@ ARG OCP_VERSION=fbc-v4-18
 ENTRYPOINT ["/bin/opm"]
 CMD ["serve", "/configs", "--cache-dir=/tmp/cache"]
 
-ADD /licenses /licenses/
+ADD licenses/ /licenses/
 # Copy declarative config root into image at /configs and pre-populate serve cache
 ADD ${OCP_VERSION}/catalog/ /configs
 RUN ["/bin/opm", "serve", "/configs", "--cache-dir=/tmp/cache", "--cache-only"]

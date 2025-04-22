@@ -7,13 +7,13 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "fbc-4.18"
+      == "fbc"
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: fbc-4-18
-    appstudio.openshift.io/component: fbc-4-18
+    appstudio.openshift.io/application: fbc-v4-18
+    appstudio.openshift.io/component: fbc-v4-18
     pipelines.appstudio.openshift.io/type: build
-  name: fbc-4-18-on-push
+  name: fbc-v4-18-on-push
   namespace: multiarch-tuning-ope-tenant
 spec:
   params:
@@ -22,7 +22,7 @@ spec:
   - name: git-url
     value: '{{source_url}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/fbc-4-18/fbc-4-18:{{revision}}
+    value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/fbc-v4-18/fbc-v4-18:{{revision}}
   - name: path-context
     value: .
   - name: revision
@@ -30,7 +30,9 @@ spec:
   - name: hermetic
     value: "true"
   - name: BUILD_ARGS
-    value: 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.18'
+    value:
+      - 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.18'
+      - 'OCP_VERSION=fbc-v4-18'
   taskRunTemplate: {}
   pipelineRef:
     name: fbc-pipeline

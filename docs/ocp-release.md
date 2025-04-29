@@ -39,29 +39,28 @@ The current approach is that for every new OCP release, we will have to:
 
 ## Pin to a new Golang and K8S API version
 
-1. Update the Dockerfiles to use a base image with the desired Golang version (it should be the one used by k8s.io/api
+1. Update go version in base images 
+   - Update the Dockerfiles to use a base image with the desired Golang version (it should be the one used by k8s.io/api
    or openshift/api)
-2. Update the Makefile to use the new Golang version base image (BUILD_IMAGE variable)
-3. Commit the changes to the Golang version
-4. Update the k8s libraries in the go.mod file to the desired version
-5. Update the dependencies with `go get -u`, and ensure no new version of the k8s API is used
-
-```shell
-go mod download
-go mod tidy
-go mod verify
-```
-
-6. Commit the changes to go.mod and go.sum
-7. Update the vendor/ folder
+   - Update the Makefile to use the new Golang version base image (BUILD_IMAGE variable)
+   - Check if updated references are needed in .tekton for konflux 
+   - Commit the changes to the Golang version
+4. Update go.mod
+   - Update the k8s libraries in the go.mod file to the desired version 
+   - Update the dependencies with `go get -u`, and ensure no new version of the k8s API is used
+    ```shell
+    go mod download
+    go mod tidy
+    go mod verify
+    ```
+   - Commit the changes to go.mod and go.sum
+7. Update the vendor/ folder and commit changes 
 
 ```shell
 rm -rf vendor/
 go mod vendor
 ```
-
-8. Commit the changes to the vendor/ folder
-9. Update the tools in the Makefile to the desired version:
+4. Update the tools in the Makefile to the desired version and commit changes:
 
 ```makefile
 # https://github.com/kubernetes-sigs/kustomize/releases
@@ -76,19 +75,23 @@ ENVTEST_K8S_VERSION = 1.29.3
 GOLINT_VERSION = v1.60.1
 ```
 
-10. Commit the changes to the Makefile
-11. Run the tests and ensure everything is building and working as expected. Look for deprecation warnings PRs in the
+5. Run and commit the following. Address any warnings or errors that may occur
+```shell
+make generate
+make manifests
+make bundle
+```
+6. Run the tests and ensure everything is building and working as expected. Look for deprecation warnings PRs in the
     controller-runtime repository.
-
 ```shell
 make docker-build
 make build
-make bundle
 make test
 ```
 
-12. Commit any other changes to the code, if any
-13. Create a PR with the changes.
+7. Commit any other changes to the code, if any
+8. Create a PR with the changes.
+9. Update this document with any changes 
 
 Example log:
 
@@ -102,7 +105,7 @@ cda73fe1 pin K8S API to v0.30.4 and set go minimum version to 1.22.5
 e511fdce Update go version in base images to 1.22
 ```
 
-Example PR: https://github.com/openshift/multiarch-tuning-operator/pull/225
+Example PRs: https://github.com/openshift/multiarch-tuning-operator/pull/225, https://github.com/openshift/multiarch-tuning-operator/pull/542
 
 The PR in the repo may need to be paired with one in the Prow config:
 see https://github.com/openshift/release/pull/55728/commits/707fa080a66d8006c4a69e452a4621ed54f67cf6 as an example

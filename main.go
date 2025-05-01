@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -109,12 +110,12 @@ func main() {
 	}
 
 	// Build the leader election ID deterministically and based on the flags
-	leaderId := "208d7abd.multiarch.openshift.io"
+	leaderID := "208d7abd.multiarch.openshift.io"
 	if enableOperator {
-		leaderId = fmt.Sprintf("operator-%s", leaderId)
+		leaderID = fmt.Sprintf("operator-%s", leaderID)
 	}
 	if enableClusterPodPlacementConfigOperandControllers {
-		leaderId = fmt.Sprintf("ppc-controllers-%s", leaderId)
+		leaderID = fmt.Sprintf("ppc-controllers-%s", leaderID)
 		// We need to watch the pods with the status.phase equal to Pending to be able to update the nodeAffinity.
 		// We can discard the other pods because they are already scheduled.
 		cacheOpts.ByObject = map[client.Object]cache.ByObject{
@@ -151,7 +152,7 @@ func main() {
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       leaderId,
+		LeaderElectionID:       leaderID,
 		Cache:                  cacheOpts,
 		Logger:                 ctrllog.FromContext(context.Background()).WithName("manager"),
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
@@ -209,12 +210,17 @@ func RunOperator(mgr ctrl.Manager) {
 		Scheme:        mgr.GetScheme(),
 		ClientSet:     clientset,
 		DynamicClient: dynamic.NewForConfigOrDie(config),
-		Recorder: events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, &corev1.ObjectReference{
-			Kind:       gvk.Kind,
-			Name:       common.SingletonResourceObjectName,
-			Namespace:  utils.Namespace(),
-			APIVersion: gvk.GroupVersion().String(),
-		}),
+		Recorder: events.NewKubeRecorder(
+			clientset.CoreV1().Events(utils.Namespace()),
+			utils.OperatorName,
+			&corev1.ObjectReference{
+				Kind:       gvk.Kind,
+				Name:       common.SingletonResourceObjectName,
+				Namespace:  utils.Namespace(),
+				APIVersion: gvk.GroupVersion().String(),
+			},
+			clock.RealClock{},
+		),
 	}).SetupWithManager(mgr), unableToCreateController, controllerKey, "ClusterPodPlacementConfig")
 	must((&multiarchv1beta1.ClusterPodPlacementConfig{}).SetupWebhookWithManager(mgr), unableToCreateController,
 		controllerKey, "ClusterPodPlacementConfigConversionWebhook")

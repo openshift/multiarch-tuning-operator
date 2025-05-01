@@ -183,11 +183,11 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 }
 
 func (i *registryInspector) createAuthFile(secrets ...[]byte) (*os.File, error) {
-	authJson, err := marshaledImagePullSecrets(secrets)
+	authJSON, err := marshaledImagePullSecrets(secrets)
 	if err != nil {
 		return nil, err
 	}
-	fd, err := writeMemFile("mto_ppc_inspector", authJson)
+	fd, err := writeMemFile("mto_ppc_inspector", authJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -210,12 +210,12 @@ func marshaledImagePullSecrets(secrets [][]byte) ([]byte, error) {
 			continue
 		}
 	}
-	authJson, err := authCfgContent.marshallAuths()
+	authJSON, err := authCfgContent.marshallAuths()
 	if err != nil {
 		log.Error(err, "Error marshalling pull secrets")
 		return nil, err
 	}
-	return authJson, nil
+	return authJSON, nil
 }
 
 // writeMemFile creates an in memory file based on memfd_create

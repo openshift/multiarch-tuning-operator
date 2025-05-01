@@ -41,13 +41,13 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 	metrics.InitCommonMetrics()
 	metrics.InspectionGauge.Set(float64(c.imageRefsCache.Len()))
 	now := time.Now()
-	authJson, err := marshaledImagePullSecrets(secrets)
+	authJSON, err := marshaledImagePullSecrets(secrets)
 	if err != nil {
 		return nil, err
 	}
 
 	log := ctrllog.FromContext(ctx).WithValues("imageReference", imageReference)
-	hash := computeFNV128Hash(imageReference, authJson)
+	hash := computeFNV128Hash(imageReference, authJSON)
 	if architectures, ok := c.imageRefsCache.Get(hash); ok && !skipCache {
 		log.V(3).Info("Cache hit", "architectures", architectures, "hash", hash)
 		defer utils.HistogramObserve(now, metrics.TimeToInspectImageGivenHit)

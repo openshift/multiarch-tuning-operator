@@ -316,7 +316,7 @@ func deleteTestRegistryConfigObject(ctx context.Context, client runtimeclient.Cl
 
 func runRegistry(ctx context.Context, client runtimeclient.Client, ns *corev1.Namespace, name string, ifAddCertificateToConfigmap bool) *registry.RegistryConfig {
 	By(fmt.Sprintf("Runing registry for %s test", name))
-	registryConfig, err := registry.NewRegistry(ns, name, certConfigmapName, "https://quay.io", auth_user_local, auth_pass_local)
+	registryConfig, err := registry.NewRegistry(ns, name, certConfigmapName, "https://quay.io", authUserLocal, authPassLocal)
 	Expect(err).NotTo(HaveOccurred())
 	err = registry.Deploy(ctx, client, registryConfig)
 	Expect(err).NotTo(HaveOccurred())

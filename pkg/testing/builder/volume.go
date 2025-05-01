@@ -20,22 +20,22 @@ func (v *VolumeBuilder) WithName(name string) *VolumeBuilder {
 }
 
 func (v *VolumeBuilder) WithVolumeSourceHostPath(path string, pathType *v1.HostPathType) *VolumeBuilder {
-	if v.volume.VolumeSource.HostPath == nil {
-		v.volume.VolumeSource.HostPath = &v1.HostPathVolumeSource{}
+	if v.volume.HostPath == nil {
+		v.volume.HostPath = &v1.HostPathVolumeSource{}
 	}
-	v.volume.VolumeSource.HostPath.Path = path
-	v.volume.VolumeSource.HostPath.Type = pathType
+	v.volume.HostPath.Path = path
+	v.volume.HostPath.Type = pathType
 	return v
 }
 
 func (v *VolumeBuilder) WithVolumeSourceConfigmap(name string, values ...v1.KeyToPath) *VolumeBuilder {
-	if v.volume.VolumeSource.ConfigMap == nil {
-		v.volume.VolumeSource.ConfigMap = &v1.ConfigMapVolumeSource{}
+	if v.volume.ConfigMap == nil {
+		v.volume.ConfigMap = &v1.ConfigMapVolumeSource{}
 	}
-	v.volume.VolumeSource.ConfigMap.LocalObjectReference = v1.LocalObjectReference{
+	v.volume.ConfigMap.LocalObjectReference = v1.LocalObjectReference{
 		Name: name,
 	}
-	v.volume.VolumeSource.ConfigMap.Items = values
+	v.volume.ConfigMap.Items = values
 	return v
 }
 

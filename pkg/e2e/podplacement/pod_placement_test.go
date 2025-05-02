@@ -29,8 +29,8 @@ const (
 	helloOpenshiftPrivateArmImageLocal        = "quay.io/multi-arch/tuning-test-local:arm-1.1.0"
 	helloOpenshiftPrivateArmPpcImageLocal     = "quay.io/multi-arch/tuning-test-local:arm-ppc64le-1.1.0"
 	registryAddress                           = "quay.io/multi-arch/tuning-test-local"
-	auth_user_local                           = "multi-arch+mto_testing_local_ps"
-	auth_pass_local                           = "R9ATA6ENZ7DRD6AFX2VRMK5TTWN8MAPZEHG5QYUUXM1AA8LV6Y02O9Y926T8V28M"
+	authUserLocal                             = "multi-arch+mto_testing_local_ps"
+	authPassLocal                             = "R9ATA6ENZ7DRD6AFX2VRMK5TTWN8MAPZEHG5QYUUXM1AA8LV6Y02O9Y926T8V28M"
 )
 
 var _ = Describe("The Pod Placement Operand", func() {
@@ -800,11 +800,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 			secretData := map[string][]byte{
 				".dockerconfigjson": []byte(fmt.Sprintf(`{"auths":{"%s":{"auth":"%s"}}}`,
 					registryAddress, base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(
-						"%s:%s", auth_user_local, auth_pass_local))))),
+						"%s:%s", authUserLocal, authPassLocal))))),
 			}
 			secret := NewSecret().
 				WithData(secretData).
-				WithDockerConfigJsonType().
+				WithDockerConfigJSONType().
 				WithName("mto-testing-local-pull-secret").
 				WithNameSpace(ns.Name).
 				Build()
@@ -860,11 +860,11 @@ var _ = Describe("The Pod Placement Operand", func() {
 			secretData := map[string][]byte{
 				".dockerconfigjson": []byte(fmt.Sprintf(`{"auths":{"%s":{"auth":"%s"}}}`,
 					registryAddress, base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(
-						"%s:%s", auth_user_local, auth_pass_local))))),
+						"%s:%s", authUserLocal, authPassLocal))))),
 			}
 			secret := NewSecret().
 				WithData(secretData).
-				WithDockerConfigJsonType().
+				WithDockerConfigJSONType().
 				WithName("mto-testing-local-pull-secret").
 				WithNameSpace(ns.Name).
 				Build()

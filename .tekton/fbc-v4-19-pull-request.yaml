@@ -38,7 +38,14 @@ spec:
       - 'OCP_VERSION=fbc-v4-19'
   taskRunTemplate: {}
   pipelineRef:
-    name: fbc-pipeline
+    resolver: bundles
+    params:
+      - name: name
+        value: fbc-builder
+      - name: bundle
+        value: quay.io/konflux-ci/tekton-catalog/pipeline-fbc-builder:devel@sha256:711937676da6ba4d75d22fb5130bf6b160c70bd2341f95fdecebd107f1142ead
+      - name: kind
+        value: pipeline
   workspaces:
   - name: workspace
     volumeClaimTemplate:

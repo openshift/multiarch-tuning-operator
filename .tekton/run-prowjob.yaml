@@ -1,0 +1,67 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: run-prowjob
+spec:
+  description: >-
+    Run a parameterized prowjob using gangway.
+  params:
+    - name: GANGWAY_TOKEN
+      type: string
+      description: Token to authenticate with gangway
+      default: gangway-token
+    - name: CLOUD_PROVIDER
+      description: 'Cloud provider to use for the test (one of aws, gcp, azure)'
+      default: aws
+      type: string
+    - name: DEPLOY_TEST_COMMAND
+      type: string
+      description: 'Command to run for deploying the test'
+      default: 'make e2e'
+    - description: 'Snapshot of the application'
+      name: SNAPSHOT
+      default: '{"components": [{"name":"test-app", "containerImage": "quay.io/example/repo:latest"}]}'
+      type: string
+    - name: OPENSHIFT_VERSION
+      description: 'OpenShift version to test against'
+      default: '4.18'
+      type: string
+    - name: ARCHITECTURE
+      description: 'Architecture to test against. amd64, arm64'
+      default: 'amd64'
+      type: string
+    - name: ARTIFACTS_BUILD_ROOT
+      description: 'Image to use for building the artifatcs image'
+      default: 'quay-proxy.ci.openshift.org/openshift/ci:ocp_builder_rhel-9-golang-1.22-openshift-4.17'
+      type: string
+    - name: DOCKERFILE_ADDITIONS
+      description: 'Dockerfile additions to use for building the artifatcs image'
+      default: 'RUN make build'
+      type: string
+    - name: ENVS
+      description: 'Optional environment variables to inject into the test; separated by commas; e.g. VAR1=val1,VAR2=val2'
+      default: ''
+      type: string
+  tasks:
+    - name: run-prowjob
+      displayName: "Running prowjob $(params.PROWJOB_NAME)"
+      taskRef:
+        resolver: git
+        params:
+        - name: url
+          value: https://github.com/Prucek/GNU_go_sort.git
+        - name: revision
+          value: master
+        - name: pathInRepo
+          value: task/run-prowjob.yaml
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: CLOUD_PROVIDER
+          value: "aws"
+        - name: DEPLOY_TEST_COMMAND
+          value: "CLEANUP=true USE_OLM=false ./hack/deploy-and-e2e.sh"
+        - name: OPENSHIFT_VERSION
+          value: "4.17"
+        - name: ARCHITECTURE
+          value: "arm64"

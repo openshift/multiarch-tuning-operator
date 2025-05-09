@@ -42,6 +42,10 @@ func (i *Facade) StoreGlobalPullSecret(pullSecret []byte) {
 	i.storeGlobalPullSecret(pullSecret)
 }
 
+func (i *Facade) ClearCache() {
+	i.inspectionCache.ClearCache()
+}
+
 func newImageFacade() *Facade {
 	inspectionCache := newCacheProxy()
 	return &Facade{

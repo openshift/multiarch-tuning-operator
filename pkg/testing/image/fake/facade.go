@@ -24,6 +24,10 @@ func (i *Facade) GetCompatibleArchitecturesSet(ctx context.Context, imageReferen
 	return i.inspectionCache.GetCompatibleArchitecturesSet(ctx, imageReference, skipCache, secrets)
 }
 
+func (i *Facade) ClearCache() {
+	i.inspectionCache.ClearCache()
+}
+
 func newImageFacade() *Facade {
 	inspectionCache := newCacheProxy()
 	return &Facade{

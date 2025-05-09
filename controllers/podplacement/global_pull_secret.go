@@ -87,6 +87,7 @@ func (s *GlobalPullSecretSyncer) onAddOrUpdate(obj interface{}) {
 	s.log.Info("The global pull secret was updated")
 	if pullSecret, err := utils.ExtractAuthFromSecret(secret); err == nil {
 		image.FacadeSingleton().StoreGlobalPullSecret(pullSecret)
+		image.FacadeSingleton().ClearCache()
 	} else {
 		s.log.Error(err, "Error extracting the auth from the secret")
 	}

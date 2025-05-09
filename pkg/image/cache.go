@@ -77,6 +77,12 @@ func newCacheProxy() *cacheProxy {
 	}
 }
 
+func (c *cacheProxy) ClearCache() {
+	// Purge clears the cache completely.
+	// onEvict is called for each evicted key.
+	c.imageRefsCache.Purge()
+}
+
 func computeFNV128Hash(imageReference string, secrets []byte) string {
 	hash := fnv.New128()
 	hash.Write([]byte(imageReference)) // Add the image reference

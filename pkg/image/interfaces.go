@@ -26,6 +26,8 @@ type ICache interface {
 	// GetCompatibleArchitecturesSet takes an image reference. a list of secrets and the client to the cluster and
 	// returns a set of architectures that are compatible with the image reference.
 	GetCompatibleArchitecturesSet(ctx context.Context, imageReference string, skipCache bool, secrets [][]byte) (sets.Set[string], error)
+	// clearCache purges the cache of all entries
+	ClearCache()
 }
 
 type IRegistryInspector interface {

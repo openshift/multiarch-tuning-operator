@@ -44,6 +44,11 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	return nil, errors.New("image not found")
 }
 
+// clearCache clears the image inspection cache - not applicable here
+func (i *registryInspector) ClearCache() {
+	return
+}
+
 func newRegistryInspector() *registryInspector {
 	return &registryInspector{}
 }

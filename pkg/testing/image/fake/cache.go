@@ -23,6 +23,10 @@ func (c *cacheProxy) GetCompatibleArchitecturesSet(ctx context.Context, imageRef
 	return nil, errors.New("image not found")
 }
 
+func (c *cacheProxy) ClearCache() {
+	c.imageRefsArchitectureMap = map[string]sets.Set[string]{}
+}
+
 func newCacheProxy() *cacheProxy {
 	return &cacheProxy{
 		imageRefsArchitectureMap: map[string]sets.Set[string]{},

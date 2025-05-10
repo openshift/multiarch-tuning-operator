@@ -252,6 +252,11 @@ func writeMemFile(name string, b []byte) (int, error) {
 	return fd, nil
 }
 
+// clearCache clears the image inspection cache - not applicable here
+func (i *registryInspector) ClearCache() {
+	return
+}
+
 func (i *registryInspector) storeGlobalPullSecret(pullSecret []byte) {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()

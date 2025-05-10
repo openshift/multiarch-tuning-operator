@@ -45,12 +45,42 @@ spec:
               command:
                 type: string
               containerID:
+                description: |-
+                  ContainerID must be a runtime-prefixed 64-character hexadecimal string.
+                  Example: containerd://<64-hex-chars>
+                  Ref: https://github.com/kubernetes/kubernetes/blob/02eb7d424ad5ccf4f00863fe861f165be0d491da/pkg/apis/core/types.go#L2875
+                       https://github.com/elastic/apm/blob/c7655441bb5f15db5ddbd7f4b60cb0735758d44d/specs/agents/metadata.md?plain=1#L111
+                pattern: ^.+://[a-f0-9]{64}$
                 type: string
               nodeName:
+                description: |-
+                  NodeName must follow the RFC 1123 DNS label format:
+                  - Max length: 63 characters
+                  - Characters: lowercase letters, digits, and hyphens (`-`)
+                  - Must start and end with an alphanumeric character
+                  Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+                maxLength: 63
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                 type: string
               podName:
+                description: |-
+                  PodName must follow the RFC 1123 DNS subdomain format:
+                  - Max length: 253 characters
+                  - Characters: lowercase letters, digits, hyphens (`-`), and dots (`.`)
+                  - Must start and end with an alphanumeric character
+                  Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                 type: string
               podNamespace:
+                description: |-
+                  PodNamespace must follow the RFC 1123 DNS subdomain format (same as PodName)
+                  - Max length: 253 characters
+                  - Characters: lowercase letters, digits, hyphens (`-`), and dots (`.`)
+                  - Must start and end with an alphanumeric character
+                  Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                 type: string
             type: object
         type: object

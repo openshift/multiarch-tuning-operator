@@ -64,6 +64,7 @@ import (
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
+	multiarchcontrollers "github.com/openshift/multiarch-tuning-operator/controllers/enoexecevent"
 	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
@@ -169,6 +170,13 @@ func main() {
 	})
 	must(err, "unable to create manager")
 
+	if err = (&multiarchcontrollers.ENoExecEventReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ENoExecEvent")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 	must(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
 	must(mgr.AddReadyzCheck("readyz", healthz.Ping), "unable to set up ready check")

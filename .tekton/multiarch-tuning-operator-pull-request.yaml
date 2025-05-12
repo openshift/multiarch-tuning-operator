@@ -18,86 +18,87 @@ metadata:
   namespace: multiarch-tuning-ope-tenant
 spec:
   params:
-    - name: dockerfile
-      value: konflux.Dockerfile
-      # TODO: change to Dockerfile when https://issues.redhat.com/browse/KONFLUX-2361
-    - name: git-url
-      value: '{{source_url}}'
-    - name: image-expires-after
-      value: 5d
-    - name: output-image
-      value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/multiarch-tuning-operator/multiarch-tuning-operator:on-pr-{{revision}}
-    - name: path-context
-      value: .
-    - name: revision
-      value: '{{revision}}'
-    - name: build-platforms
-      value:
-        - localhost
-        - linux/arm64
-        - linux/ppc64le
-        - linux/s390x
-    - name: hermetic
-      value: "true"
-    - name: prefetch-input
-      value: '{"packages": [{"type": "gomod"}], "flags": ["gomod-vendor-check"]}'
-    - name: build-source-image
-      value: "true"
+  - name: dockerfile
+    value: konflux.Dockerfile
+  - name: git-url
+    value: '{{source_url}}'
+  - name: image-expires-after
+    value: 5d
+  - name: output-image
+    value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/multiarch-tuning-operator/multiarch-tuning-operator:on-pr-{{revision}}
+  - name: path-context
+    value: .
+  - name: revision
+    value: '{{revision}}'
+  - name: build-platforms
+    value:
+    - localhost
+    - linux/arm64
+    - linux/ppc64le
+    - linux/s390x
+  - name: hermetic
+    value: "true"
+  - name: prefetch-input
+    value: '{"packages": [{"type": "gomod"}], "flags": ["gomod-vendor-check"]}'
+  - name: build-source-image
+    value: "true"
   pipelineRef:
-    resolver: bundles
     params:
-      - name: name
-        value: docker-build-multi-platform-oci-ta
-      - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta:devel@sha256:aefe40b0c92ab90b6671f00d769fc9ddf8a049ada7d1d1a5f7850ec049b587df
-      - name: kind
-        value: pipeline
+    - name: name
+      value: docker-build-multi-platform-oci-ta
+    - name: bundle
+      value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta:devel@sha256:aefe40b0c92ab90b6671f00d769fc9ddf8a049ada7d1d1a5f7850ec049b587df
+    - name: kind
+      value: pipeline
+    resolver: bundles
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-multiarch-tuning-operator
   workspaces:
-    - name: workspace
-      volumeClaimTemplate:
-        metadata:
-          creationTimestamp: null
-        spec:
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: 1Gi
-        status: {}
-    - name: workspace-arm64
-      volumeClaimTemplate:
-        metadata:
-          creationTimestamp: null
-        spec:
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: 1Gi
-        status: {}
-    - name: workspace-s390x
-      volumeClaimTemplate:
-        metadata:
-          creationTimestamp: null
-        spec:
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: 1Gi
-        status: {}
-    - name: workspace-ppc64le
-      volumeClaimTemplate:
-        metadata:
-          creationTimestamp: null
-        spec:
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: 1Gi
-        status: {}
-    - name: git-auth
-      secret:
-        secretName: '{{ git_auth_secret }}'
+  - name: workspace
+    volumeClaimTemplate:
+      metadata:
+        creationTimestamp: null
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      status: {}
+  - name: workspace-arm64
+    volumeClaimTemplate:
+      metadata:
+        creationTimestamp: null
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      status: {}
+  - name: workspace-s390x
+    volumeClaimTemplate:
+      metadata:
+        creationTimestamp: null
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      status: {}
+  - name: workspace-ppc64le
+    volumeClaimTemplate:
+      metadata:
+        creationTimestamp: null
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      status: {}
+  - name: git-auth
+    secret:
+      secretName: '{{ git_auth_secret }}'
 status: {}

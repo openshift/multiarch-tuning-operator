@@ -18,20 +18,27 @@ package enoexecevent
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
+	"net"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"k8s.io/client-go/kubernetes/scheme"
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -42,6 +49,8 @@ var (
 	k8sClient client.Client
 	testEnv   *envtest.Environment
 	ctx       context.Context
+	cancel    context.CancelFunc
+	suiteLog  = ctrl.Log.WithName("setup")
 )
 
 func TestAPIs(t *testing.T) {
@@ -53,10 +62,15 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
+	ctx, cancel = context.WithCancel(context.TODO())
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: true,
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
+		ErrorIfCRDPathMissing: false,
+		WebhookInstallOptions: envtest.WebhookInstallOptions{
+			Paths: []string{filepath.Join("..", "..", "..", "config", "webhook")},
+		},
 	}
 
 	var err error
@@ -65,18 +79,73 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = multiarchv1beta1.AddToScheme(scheme.Scheme)
+	scheme := runtime.NewScheme()
+	err = v1beta1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = admissionv1beta1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme
 
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	// start webhook server using Manager
+	webhookServer := webhook.NewServer(webhook.Options{
+		Port:    testEnv.WebhookInstallOptions.LocalServingPort,
+		Host:    testEnv.WebhookInstallOptions.LocalServingHost,
+		CertDir: testEnv.WebhookInstallOptions.LocalServingCertDir,
+	})
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme:                 scheme,
+		HealthProbeBindAddress: ":4980",
+		Logger:                 suiteLog,
+		WebhookServer:          webhookServer,
+	})
+
+	//webhookInstallOptions := &testEnv.WebhookInstallOptions
+	//mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+	//	Scheme:             scheme,
+	//	Host:               webhookInstallOptions.LocalServingHost,
+	//	Port:               webhookInstallOptions.LocalServingPort,
+	//	CertDir:            webhookInstallOptions.LocalServingCertDir,
+	//	LeaderElection:     false,
+	//	MetricsBindAddress: "0",
+	//})
+	Expect(err).NotTo(HaveOccurred())
+
+	err = (&v1beta1.ENoExecEvent{}).SetupWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
+	//+kubebuilder:scaffold:webhook
+
+	go func() {
+		defer GinkgoRecover()
+		err = mgr.Start(ctx)
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	// wait for the webhook server to get ready
+	dialer := &net.Dialer{Timeout: time.Second}
+	addrPort := fmt.Sprintf("%s:%d", testEnv.WebhookInstallOptions.LocalServingHost, testEnv.WebhookInstallOptions.LocalServingPort)
+	Eventually(func() error {
+		conn, err := tls.DialWithDialer(dialer, "tcp", addrPort, &tls.Config{InsecureSkipVerify: true})
+		if err != nil {
+			return err
+		}
+		err = conn.Close()
+		if err != nil {
+			return err
+		}
+		return nil
+	}).Should(Succeed())
 
 })
 
 var _ = AfterSuite(func() {
+	cancel()
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())

@@ -520,3 +520,21 @@ spec:
     targetPort: 9443
     type: ValidatingAdmissionWebhook
     webhookPath: /validate-multiarch-openshift-io-v1beta1-clusterpodplacementconfig
+  - admissionReviewVersions:
+    - v1
+    deploymentName: webhook
+    failurePolicy: Fail
+    generateName: venoexecevent.kb.io
+    rules:
+    - apiGroups:
+      - multiarch.openshift.io
+      apiVersions:
+      - v1beta1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - enoexecevents
+    sideEffects: None
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-multiarch-openshift-io-v1beta1-enoexecevent

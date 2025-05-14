@@ -6,7 +6,7 @@ resources:
   - ../../base/config.openshift.io/imagedistedmirrorsets/multiarch-tuning-operator-fbc-staging
 
 # Patch the CatalogSource to use the specific index image you want to test in the layer kustomization file
-#patches:
+# patches:
 #  - target:
 #      group: operators.coreos.com
 #      version: v1alpha1

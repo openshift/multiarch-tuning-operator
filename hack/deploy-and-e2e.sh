@@ -44,10 +44,10 @@ fi
 
 oc wait deployments -n ${NAMESPACE} \
   -l app.kubernetes.io/part-of=multiarch-tuning-operator \
-  --for=condition=Available=True
+  --for=condition=Available=True --timeout=10m
 oc wait pods -n ${NAMESPACE} \
   -l control-plane=controller-manager \
-  --for=condition=Ready=True
+  --for=condition=Ready=True --timeout=10m
 
 make e2e
 

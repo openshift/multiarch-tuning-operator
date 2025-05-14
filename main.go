@@ -91,9 +91,11 @@ var (
 	enableClusterPodPlacementConfigOperandWebHook,
 	enableClusterPodPlacementConfigOperandControllers,
 	enableCPPCInformer bool
-	enableOperator  bool
-	initialLogLevel int
-	postFuncs       []func()
+	enableOperator                       bool
+	enableENoExecEventOperandControllers bool
+	enableEeNoExecEventOperandWebHook    bool
+	initialLogLevel                      int
+	postFuncs                            []func()
 )
 
 func init() {
@@ -170,17 +172,6 @@ func main() {
 	})
 	must(err, "unable to create manager")
 
-	if err = (&multiarchcontrollers.ENoExecEventReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ENoExecEvent")
-		os.Exit(1)
-	}
-	if err = (&multiarchv1beta1.ENoExecEvent{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "ENoExecEvent")
-		os.Exit(1)
-	}
 	//+kubebuilder:scaffold:builder
 	must(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
 	must(mgr.AddReadyzCheck("readyz", healthz.Ping), "unable to set up ready check")
@@ -197,6 +188,10 @@ func main() {
 	}
 	if enableClusterPodPlacementConfigOperandWebHook {
 		RunClusterPodPlacementConfigOperandWebHook(mgr)
+	}
+
+	if enableENoExecEventOperandControllers {
+		RunENoExecEventOperandControllers(mgr)
 	}
 
 	setupLog.Info("starting manager")
@@ -236,6 +231,19 @@ func RunOperator(mgr ctrl.Manager) {
 	}).SetupWithManager(mgr), unableToCreateController, controllerKey, "ClusterPodPlacementConfig")
 	must((&multiarchv1beta1.ClusterPodPlacementConfig{}).SetupWebhookWithManager(mgr), unableToCreateController,
 		controllerKey, "ClusterPodPlacementConfigConversionWebhook")
+
+	if err := (&multiarchv1beta1.ENoExecEvent{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "ENoExecEvent")
+	}
+}
+
+func RunENoExecEventOperandControllers(mgr ctrl.Manager) {
+	if err := (&multiarchcontrollers.ENoExecEventReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ENoExecEvent")
+	}
 }
 
 func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
@@ -298,6 +306,9 @@ func bindFlags() {
 	flag.BoolVar(&enableClusterPodPlacementConfigOperandControllers, "enable-ppc-controllers", false, "Enable the pod placement config operand controllers")
 	flag.BoolVar(&enableOperator, "enable-operator", false, "Enable the operator")
 	flag.BoolVar(&enableCPPCInformer, "enable-cppc-informer", false, "Enable informer for ClusterPodPlacementConfig")
+	flag.BoolVar(&enableENoExecEventOperandControllers, "enable-enee-controllers", false, "Enable the no exec event operand controllers")
+	flag.BoolVar(&enableEeNoExecEventOperandWebHook, "enable-enee-webhook", false, "Enable the no exec event operand webhook")
+
 	// This may be deprecated in the future. It is used to support the current way of setting the log level for operands
 	// If operands will start to support a controller that watches the ClusterPodPlacementConfig, this flag may be removed
 	// and the log level will be set in the ClusterPodPlacementConfig at runtime (with no need for reconciliation)

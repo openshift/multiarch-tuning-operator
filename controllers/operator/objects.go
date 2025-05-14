@@ -126,7 +126,7 @@ func buildWebhookDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlaceme
 
 func buildControllerDeployment(clusterPodPlacementConfig *v1beta1.ClusterPodPlacementConfig) *appsv1.Deployment {
 	d := buildDeployment(clusterPodPlacementConfig, utils.PodPlacementControllerName, 2, utils.PodPlacementControllerName,
-		utils.PodPlacementFinalizerName, "--leader-elect", "--enable-ppc-controllers", "--enable-cppc-informer",
+		utils.PodPlacementFinalizerName, "--leader-elect", "--enable-ppc-controllers", "--enable-cppc-informer", "--enable-enee-controllers",
 	)
 	if d.Spec.Template.Annotations == nil {
 		d.Spec.Template.Annotations = map[string]string{}

@@ -125,7 +125,7 @@ ifeq ($(NO_DOCKER), 1)
   DOCKER_CMD =
   IMAGE_BUILD_CMD = imagebuilder
 else
-  DOCKER_CMD := $(ENGINE) run --env GO111MODULE=$(GO111MODULE) --env GOFLAGS=$(GOFLAGS) --env GOLINT_VERSION=$(GOLINT_VERSION) --rm -v "$(PWD)":/go/src/github.com/openshift/multiarch-tuning-operator:Z -w /go/src/github.com/openshift/multiarch-tuning-operator $(BUILD_IMAGE)
+  DOCKER_CMD := $(ENGINE) run --env GO111MODULE=$(GO111MODULE) --env GOFLAGS=$(GOFLAGS) --env GOLINT_VERSION=$(GOLINT_VERSION) --rm  -v "$(PWD)":/go/src/github.com/outrigger-project/multiarch-tuning-operator:Z -v "$(PWD)":/go/src/github.com/openshift/multiarch-tuning-operator:Z -w /go/src/github.com/openshift/multiarch-tuning-operator $(BUILD_IMAGE)
   IMAGE_BUILD_CMD = $(ENGINE) build
 endif
 
@@ -171,7 +171,8 @@ vet: ## Run go vet against code.
 
 .PHONY: lint
 lint:
-	GOLINT_VERSION=$(GOLINT_VERSION) $(DOCKER_CMD) hack/golangci-lint.sh ./...
+	GOLINT_VERSION=$(GOLINT_VERSION) $(DOCKER_CMD) hack/golangci-lint.sh
+	GOLINT_VERSION=$(GOLINT_VERSION) $(DOCKER_CMD) hack/golangci-lint.sh ./enoexec-daemon
 
 .PHONY: goimports
 goimports: ## Goimports against code
@@ -179,7 +180,9 @@ goimports: ## Goimports against code
 
 .PHONY: gosec
 gosec: ## Run gosec.sh script to run gosec command for all the repository source code
-	$(DOCKER_CMD) hack/gosec.sh ./...
+	$(DOCKER_CMD) hack/gosec.sh -exclude-dir enoexec-daemon/ $$(find ./enoexec-daemon/ -type d -not -path './enoexec-daemon/vendor*' | sed 's/^/-exclude-dir /') ./...
+	# TODO: The below command is using outrigger-project as workdir. We can change it once all the repo (modules and imports) are migrated to outrigger-project.
+	$(DOCKER_CMD) bash -c "cd /go/src/github.com/outrigger-project/multiarch-tuning-operator/enoexec-daemon && ../hack/gosec.sh ./..."
 
 .PHONY: verify-diff
 verify-diff: ## Verify that no files have changed in the versioned working tree
@@ -188,6 +191,7 @@ verify-diff: ## Verify that no files have changed in the versioned working tree
 .PHONY: vendor
 vendor: ## Run go mod vendor
 	$(DOCKER_CMD) hack/go-mod.sh
+	$(DOCKER_CMD) hack/go-mod.sh enoexec-daemon
 
 .PHONY: test
 test: manifests generate envtest fmt vet goimports gosec lint unit ## Run tests.

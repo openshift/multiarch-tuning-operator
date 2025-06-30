@@ -8,11 +8,17 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/outrigger-project/multiarch-tuning-operator/enoexec-daemon/internal/storage"
+	"github.com/outrigger-project/multiarch-tuning-operator/enoexec-daemon/internal/types"
 )
 
 var (
@@ -26,6 +32,12 @@ func main() {
 	log, err := logr.FromContext(ctx)
 	must(err, "failed to get logger from context")
 
+	ch := make(chan *types.ENOEXECInternalEvent, 256)
+	storageImpl, err := storage.NewK8sENOExecEventStorage(ctx,
+		rate.NewLimiter(5, 10), ch, os.Getenv("NODE_NAME"), os.Getenv("NAMESPACE"), time.Minute,
+	)
+	must(err, "failed to create storage")
+
 	log.Info("Starting workers")
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -33,7 +45,7 @@ func main() {
 		log.Info("Starting storage writer")
 		defer wg.Done()
 		defer cancel()
-		// TODO: Replace with actual storage implementation
+		err = storageImpl.Run()
 		<-ctx.Done()
 	}()
 	wg.Add(1)
@@ -50,6 +62,10 @@ func main() {
 		defer wg.Done()
 		defer cancel()
 		// TODO: Replace with actual event processing implementation
+		if err = storageImpl.Store(nil); err != nil {
+			log.Error(err, "Failed to store event")
+			return
+		}
 		<-ctx.Done()
 	}()
 

@@ -38,8 +38,6 @@ func (i *IWStorageBase) Store(evt *types.ENOEXECInternalEvent) error {
 }
 
 // close runs the cleanup operations for the storage implementation.
-//
-//nolint:unused
 func (i *IWStorageBase) close() error {
 	close(i.ch)
 	if i.ctx != nil {

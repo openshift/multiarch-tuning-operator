@@ -64,7 +64,7 @@ import (
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
-	"github.com/openshift/multiarch-tuning-operator/controllers/enoexecevent"
+	enoexeceventhandler "github.com/openshift/multiarch-tuning-operator/controllers/enoexecevent/handler"
 	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
@@ -268,7 +268,7 @@ func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
 func RunENoExecEventControllers(mgr ctrl.Manager) {
 	config := ctrl.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
-	must(enoexecevent.NewReconciler(
+	must(enoexeceventhandler.NewReconciler(
 		mgr.GetClient(),
 		clientset,
 		mgr.GetScheme(),

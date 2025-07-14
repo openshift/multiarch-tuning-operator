@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package enoexecevent
+package handler
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func init() {
 
 func TestOperator(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Controllers Integration Suite", Label("integration"))
+	RunSpecs(t, "Controllers Integration Suite", Label("integration", "integration-enoexec-handler"))
 }
 
 var _ = BeforeAll
@@ -140,7 +140,7 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 func startTestEnv() {
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 	var err error
@@ -160,7 +160,7 @@ func startTestEnv() {
 
 	klog.Info("Applying CRDs to the test environment")
 	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
-	resMap, err := kustomizer.Run(filesys.MakeFsOnDisk(), filepath.Join("..", "..", "config", "crd"))
+	resMap, err := kustomizer.Run(filesys.MakeFsOnDisk(), filepath.Join("..", "..", "..", "config", "crd"))
 	Expect(err).NotTo(HaveOccurred())
 	err = applyResources(resMap)
 	Expect(err).NotTo(HaveOccurred())

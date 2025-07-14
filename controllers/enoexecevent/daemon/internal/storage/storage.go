@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	"github.com/outrigger-project/multiarch-tuning-operator/enoexec-daemon/internal/types"
+	"github.com/openshift/multiarch-tuning-operator/controllers/enoexecevent/daemon/internal/types"
 )
 
 // IWStorage is the interface that defines the methods for writeable storage implementations.

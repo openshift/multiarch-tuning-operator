@@ -20,8 +20,8 @@ import (
 	"github.com/go-logr/logr"
 
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
-	"github.com/outrigger-project/multiarch-tuning-operator/enoexec-daemon/internal/types"
-	"github.com/outrigger-project/multiarch-tuning-operator/enoexec-daemon/internal/utils"
+	"github.com/openshift/multiarch-tuning-operator/controllers/enoexecevent/daemon/internal/types"
+	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
 // K8sENOExecEventStorage is a storage implementation that writes ENOExec events to Kubernetes.
@@ -83,7 +83,7 @@ func (s *K8sENOExecEventStorage) Run() error {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to get logger:", err)
 		return fmt.Errorf("failed to get logger from context: %w", err)
 	}
-	defer utils.Should(s.close())
+	defer utils.ShouldStdErr(s.close())
 
 	for {
 		select {

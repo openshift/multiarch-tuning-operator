@@ -59,6 +59,8 @@ const (
 	False                      = "false"
 	ExecFormatErrorEventReason = "ExecFormatError"
 	UnknownContainer           = "unknown-container" // Used when the container name is not known or not provided
+	EnoexecControllerName      = "enoexec-event-handler-controller"
+	EnoexecDaemonSet           = "enoexec-event-daemon"
 )
 
 func AllSupportedArchitecturesSet() sets.Set[string] {

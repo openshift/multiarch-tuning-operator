@@ -5,12 +5,78 @@ metadata:
 spec:
   description: >-
     Run a parameterized prowjob using gangway.
+  params:
+    - name: GANGWAY_TOKEN
+      type: string
+      description: Token to authenticate with gangway
+      default: gangway-token
+    - description: 'Snapshot of the application'
+      name: SNAPSHOT
+      default: '{"components": [{"name":"test-app", "containerImage": "quay.io/example/repo:latest"}]}'
+      type: string
   tasks:
-    - name: hello-world
-      taskSpec:
-        steps:
-          - name: hello
-            image: brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23
-            script: |
-              #!/bin/bash
-              echo "Hello, world!"
+    - name: run-prowjob
+      displayName: "Running prowjob $(params.PROWJOB_NAME)"
+      taskRef:
+        resolver: git
+        params:
+        - name: url
+          value: https://github.com/Prucek/GNU_go_sort
+        - name: revision
+          value: master
+        - name: pathInRepo
+          value: task/inject-ci-operator.yaml
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: ARTIFACTS_BUILD_ROOT
+          value: "quay-proxy.ci.openshift.org/openshift/ci:ocp_builder_rhel-9-golang-1.23-openshift-4.19"
+        - name: DOCKERFILE_ADDITIONS
+          value: "RUN make build"
+        - name: CI_OPERATOR_CONFIG
+          value: |
+            releases:
+              initial:
+                integration:
+                  name: "4.20"
+                  namespace: ocp
+              latest:
+                integration:
+                  include_built_images: true
+                  name: "4.20"
+                  namespace: ocp
+              multi-initial:
+                candidate:
+                  architecture: multi
+                  product: ocp
+                  stream: nightly
+                  version: "4.20"
+            resources:
+              '*':
+                limits:
+                  memory: 4Gi
+                requests:
+                  cpu: 100m
+                  memory: 200Mi
+            tests:
+            - as: konflux-test-bundle
+              capabilities:
+              - arm64
+              skip_if_only_changed: (^docs/)|((^|/)OWNERS(_ALIASES)?$)|((^|/)[A-Za-z]+\.md$)|((^|/)\.github/)|((^|/)\.tekton/)|((^|/).*konflux\.Dockerfile$)
+              steps:
+                cluster_profile: gcp
+                dependencies:
+                  OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE: release:multi-initial
+                  OO_BUNDLE: pipeline:konflux
+                env:
+                  ADDITIONAL_WORKER_ARCHITECTURE: x86_64
+                  ADDITIONAL_WORKER_VM_TYPE: n2-standard-4
+                  ADDITIONAL_WORKERS: "1"
+                  COMPUTE_NODE_REPLICAS: "2"
+                  COMPUTE_NODE_TYPE: t2a-standard-4
+                  OCP_ARCH: arm64
+                test:
+                - ref: ipi-install-heterogeneous
+                - ref: multiarch-tuning-operator-e2e-olm-kustomize
+                workflow: ipi-gcp
+              timeout: 6h0m0s

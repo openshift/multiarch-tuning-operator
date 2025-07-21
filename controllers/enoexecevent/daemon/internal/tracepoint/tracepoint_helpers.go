@@ -110,10 +110,10 @@ func (tp *Tracepoint) initializeOffsets() error {
 	}
 	var realParentOffset, tgidOffset int32
 	const (
-		realParentFound = 1 << 0
-		tgidFound       = 1 << 1
+		realParentFound uint8 = 1 << 0
+		tgidFound       uint8 = 1 << 1
 	)
-	var foundFlags uint32
+	var foundFlags uint8
 	for _, member := range taskStruct.Members {
 		if member.Name == "real_parent" {
 			realParentOffset = int32(member.Offset.Bytes())
@@ -125,7 +125,7 @@ func (tp *Tracepoint) initializeOffsets() error {
 		}
 
 	}
-	if foundFlags != (realParentFound | tgidFound) {
+	if foundFlags != uint8(realParentFound|tgidFound) {
 		return fmt.Errorf("failed to find real_parent or tgid in task_struct")
 	}
 	tp.realParentOffset = &realParentOffset

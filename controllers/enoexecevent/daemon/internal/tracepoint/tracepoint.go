@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
+	"os"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -34,7 +36,24 @@ type Tracepoint struct {
 	ch chan *types.ENOEXECInternalEvent
 }
 
-func NewTracepoint(ctx context.Context, ch chan *types.ENOEXECInternalEvent, bufferSize uint32) (*Tracepoint, error) {
+func NewTracepoint(ctx context.Context, ch chan *types.ENOEXECInternalEvent, maxEvents uint32) (*Tracepoint, error) {
+	// Buffer Size must be a multiple of page size
+	if os.Getpagesize() <= 0 {
+		return nil, fmt.Errorf("invalid page size")
+	}
+	pageSize := uint32(os.Getpagesize()) // [bytes]
+	// The payload is 8 bytes. Other 8 bytes are used for the header.
+	// 16 [bytes/event].
+	payloadSize := PayloadSize + 8
+
+	// The buffer size has to be a multiple of the page size.
+	// We calculate the required buffer size based on the maximum number of events as
+	// size_max = maxEvents * 8 [bytes].
+	// We obtain the number of pages required to store the events rounding up the number of pages required
+	// to store size_max bytes: required_pages = Ceil(size_max [bytes] / pageSize [bytes]).
+	// Finally, we multiply required_pages by the page size to get the buffer size.
+	bufferSize := pageSize * uint32(math.Ceil(float64(maxEvents*payloadSize)/float64(pageSize)))
+
 	tp := &Tracepoint{
 		bufferSize: bufferSize,
 		ch:         ch,

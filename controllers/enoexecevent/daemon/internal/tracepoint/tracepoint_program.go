@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	ExitLabel    = "exit"
-	CleanupLabel = "cleanup"
-	PayloadSize  = 8 // [bytes]
+	ExitLabel           = "exit"
+	CleanupLabel        = "cleanup"
+	PayloadSize  uint32 = 8 // [bytes]
 )
 
 // https://stackoverflow.com/questions/9305992/if-threads-share-the-same-pid-how-can-they-be-identified
@@ -136,12 +136,12 @@ func ringBufReserve(fd int) asm.Instructions {
 	// R2: size of the event to reserve (24 bytes)
 	// R3: flags (must be 0)
 	return asm.Instructions{
-		asm.LoadMapPtr(asm.R1, fd),        // FD of ring buffer map
-		asm.Mov.Imm(asm.R2, PayloadSize),  // Size of the event to reserve (8 bytes)
-		asm.Mov.Imm(asm.R3, 0),            // Flags must be 0
-		asm.FnRingbufReserve.Call(),       // Reserve space in the ring buffer
-		asm.JEq.Imm(asm.R0, 0, ExitLabel), // If reserve fails, exit
-		asm.Mov.Reg(asm.R7, asm.R0),       // The address of the reserved space is stored in R7
+		asm.LoadMapPtr(asm.R1, fd),              // FD of ring buffer map
+		asm.Mov.Imm(asm.R2, int32(PayloadSize)), // Size of the event to reserve (8 bytes)
+		asm.Mov.Imm(asm.R3, 0),                  // Flags must be 0
+		asm.FnRingbufReserve.Call(),             // Reserve space in the ring buffer
+		asm.JEq.Imm(asm.R0, 0, ExitLabel),       // If reserve fails, exit
+		asm.Mov.Reg(asm.R7, asm.R0),             // The address of the reserved space is stored in R7
 	}
 }
 

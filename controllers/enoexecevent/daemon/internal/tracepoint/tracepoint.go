@@ -127,14 +127,14 @@ func (tp *Tracepoint) Run() error {
 		return errors.Join(fmt.Errorf("failed to attach tracepoint: %w", err),
 			tp.close())
 	}
-	defer utils.ShouldStdErr(tp.close())
+	defer utils.ShouldStdErr(tp.close)
 
 	log.Info("Allocate Ring buffer reader")
 	rd, err := ringbuf.NewReader(tp.events)
 	if err != nil {
 		return errors.Join(fmt.Errorf("failed to create ring buffer reader: %w", err), tp.close())
 	}
-	defer utils.ShouldStdErr(rd.Close())
+	defer utils.ShouldStdErr(rd.Close)
 
 	// Start a goroutine to monitor the context and close the tracepoint when the context is done
 	// This is useful for graceful shutdowns and to unblock the main loop from the blocking rd.Read()

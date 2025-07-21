@@ -83,7 +83,7 @@ func (s *K8sENOExecEventStorage) Run() error {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to get logger:", err)
 		return fmt.Errorf("failed to get logger from context: %w", err)
 	}
-	defer utils.ShouldStdErr(s.close())
+	defer utils.ShouldStdErr(s.close)
 
 	for {
 		select {

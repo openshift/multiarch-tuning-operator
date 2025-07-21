@@ -31,7 +31,7 @@ func getPodContainerUUIDFor(pid int32) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("failed to open %s: %w", cgroupPath, err)
 	}
-	defer utils.ShouldStdErr(file.Close())
+	defer utils.ShouldStdErr(file.Close)
 	scanner := bufio.NewScanner(file)
 	var out string
 	for scanner.Scan() {
@@ -76,7 +76,7 @@ func getPodNameFromUUID(ctx context.Context, uid string) (string, string, error)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to connect to CRI socket: %w", err)
 	}
-	defer utils.ShouldStdErr(cri.Close())
+	defer utils.ShouldStdErr(cri.Close)
 	criClient := runtimeapi.NewRuntimeServiceClient(cri)
 	pods, err := criClient.ListPodSandbox(ctx, &runtimeapi.ListPodSandboxRequest{})
 	if err != nil {

@@ -2,12 +2,14 @@ package tracepoint
 
 import (
 	"fmt"
+
 	"github.com/cilium/ebpf/asm"
 )
 
 const (
 	ExitLabel    = "exit"
 	CleanupLabel = "cleanup"
+	PayloadSize  = 8 // [bytes]
 )
 
 // https://stackoverflow.com/questions/9305992/if-threads-share-the-same-pid-how-can-they-be-identified
@@ -89,9 +91,6 @@ func (tp *Tracepoint) initializeProgSpec() error {
 		// from R8 + tgidOffset into the ring buffer's first 4 bytes
 		loadIntoRingBufEvent(asm.R8, *tp.tgidOffset, 4, 0),
 
-		// Load process name (comm) into ring buffer event at offset 8
-		loadIntoRingBufEvent(asm.R6, *tp.commOffset, 16, 8),
-
 		submitEvent(),
 		// Discard the reserved space in the ring buffer if submit failed.
 		// rollbackEvent() is skipped if submit succeeded with a jump to exit().
@@ -126,29 +125,23 @@ func getCurrentTask() asm.Instructions {
 }
 
 // ringBufReserve reserves space in the ring buffer for the event.
-// It reserves space for the real_parent's TGID, current task's TGID, and the process name.
+// It reserves space for the real_parent's TGID, current task's TGID.
 // https://docs.ebpf.io/linux/helper-function/bpf_ringbuf_reserve/
-// The reserved space is 24 bytes:
-// sizeof(int32) * 2 [bytes] + 16 [bytes] (for process name)
+// The reserved space is 16 bytes:
+// 2 * sizeof(int32) [bytes]
 // [ real_parent->tgid ][ current->tgid     ]
 // [------4 bytes------][------4 bytes------]
-// [         process name - 16 bytes        ]
-// [---------------- 8 bytes ---------------]
-// [---------------- 8 bytes ---------------]
 func ringBufReserve(fd int) asm.Instructions {
 	// R1: pointer to the ring buffer map
 	// R2: size of the event to reserve (24 bytes)
 	// R3: flags (must be 0)
 	return asm.Instructions{
-		asm.LoadMapPtr(asm.R1, fd), // FD of ring buffer map
-
-		asm.Mov.Imm(asm.R2, 24), // size of the event to reserve (24 bytes)
-		asm.Mov.Imm(asm.R3, 0),  // flags must be 0
-
-		asm.FnRingbufReserve.Call(), // Reserve space in the ring buffer
-
-		asm.JEq.Imm(asm.R0, 0, ExitLabel), // if reserve fails, exit
-		asm.Mov.Reg(asm.R7, asm.R0),       // the address of the reserved space is stored in R7
+		asm.LoadMapPtr(asm.R1, fd),        // FD of ring buffer map
+		asm.Mov.Imm(asm.R2, PayloadSize),  // Size of the event to reserve (8 bytes)
+		asm.Mov.Imm(asm.R3, 0),            // Flags must be 0
+		asm.FnRingbufReserve.Call(),       // Reserve space in the ring buffer
+		asm.JEq.Imm(asm.R0, 0, ExitLabel), // If reserve fails, exit
+		asm.Mov.Reg(asm.R7, asm.R0),       // The address of the reserved space is stored in R7
 	}
 }
 

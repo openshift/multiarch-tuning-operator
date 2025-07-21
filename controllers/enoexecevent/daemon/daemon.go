@@ -27,17 +27,18 @@ func RunDaemon(ctx context.Context, cancel context.CancelFunc) error {
 		return fmt.Errorf("invalid page size")
 	}
 	pageSize := uint32(os.Getpagesize()) // [bytes]
-	// The payload is 24 bytes. Other 8 bytes are used for the header.
-	// 32 [bytes/event].
+	// The payload is 8 bytes. Other 8 bytes are used for the header.
+	// 16 [bytes/event].
+	payloadSize := tracepoint.PayloadSize + 8
 	// See https://github.com/outrigger-project/multiarch-tuning-operator/blob/eabed5c4e54/enhancements/MTO-0004-enoexec-monitoring.md
 	maxEvents := 256
 	// The buffer size has to be a multiple of the page size.
 	// We calculate the required buffer size based on the maximum number of events as
-	// size_max = maxEvents * 24 [bytes].
+	// size_max = maxEvents * 8 [bytes].
 	// We obtain the number of pages required to store the events rounding up the number of pages required
 	// to store size_max bytes: required_pages = Ceil(size_max [bytes] / pageSize [bytes]).
 	// Finally, we multiply required_pages by the page size to get the buffer size.
-	bufferSize := pageSize * uint32(math.Ceil(float64(maxEvents*24)/float64(pageSize)))
+	bufferSize := pageSize * uint32(math.Ceil(float64(maxEvents*payloadSize)/float64(pageSize)))
 
 	log.Info("Buffer size calculated", "buffer_size", bufferSize, "page_size", pageSize, "max_events", maxEvents)
 

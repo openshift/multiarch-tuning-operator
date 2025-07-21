@@ -15,7 +15,6 @@ type ENOEXECInternalEvent struct {
 	PodName      string `yaml:"podName,omitempty"`
 	PodNamespace string `yaml:"podNamespace,omitempty"`
 	ContainerID  string `yaml:"containerID,omitempty"`
-	ProcessName  string `yaml:"processName,omitempty"`
 }
 
 // ToENoExecEvent converts the ENOEXECInternalEvent to a multiarchv1beta1.ENOExecEvent that can be stored in Kubernetes.
@@ -30,7 +29,6 @@ func (e *ENOEXECInternalEvent) ToENoExecEvent(namespace string, nodeName string)
 			PodName:      e.PodName,
 			PodNamespace: e.PodNamespace,
 			ContainerID:  e.ContainerID,
-			Command:      "",
 		},
 	}, nil
 }

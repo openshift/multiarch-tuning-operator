@@ -29,7 +29,6 @@ type Tracepoint struct {
 
 	tgidOffset       *int32
 	realParentOffset *int32
-	commOffset       *int32
 	bufferSize       uint32 // Size of the ring buffer in bytes
 
 	ch chan *types.ENOEXECInternalEvent
@@ -175,7 +174,6 @@ func (tp *Tracepoint) processRecord(record *ringbuf.Record) (*types.ENOEXECInter
 	}
 	realParentTGID := int32(order.Uint32(record.RawSample[:4]))
 	currentTaskTGID := int32(order.Uint32(record.RawSample[4:8]))
-	commandName := string(record.RawSample[8:])
 	log.V(4).Info("Processing record",
 		"real_parent_tgid", realParentTGID, "current_task_tgid", currentTaskTGID)
 	for _, pid := range []int32{currentTaskTGID, realParentTGID} {
@@ -203,7 +201,6 @@ func (tp *Tracepoint) processRecord(record *ringbuf.Record) (*types.ENOEXECInter
 			PodName:      podName,
 			PodNamespace: podNamespace,
 			ContainerID:  containerUUID,
-			ProcessName:  commandName,
 		}, nil
 	}
 	return nil, fmt.Errorf("failed to find pod/container UUIDs in record: %v", record) // No pod/container found

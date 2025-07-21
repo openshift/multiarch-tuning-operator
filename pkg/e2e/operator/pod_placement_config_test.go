@@ -425,6 +425,46 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			By("The pod should not have any preferred affinities")
 			Eventually(framework.VerifyPodPreferredNodeAffinity(ctx, client, ns, "app", "test", nil), e2e.WaitShort).Should(Succeed())
 		})
+		It("Should create a pod when plugin NodeAffinityScoring is nil", func() {
+			var err error
+			By("Creating a v1beta1 ClusterPodPlacementConfig")
+			err = client.Create(ctx,
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithPlugins().
+					Build(),
+			)
+			Expect(err).NotTo(HaveOccurred(), "failed to create the ClusterPodPlacementConfig", err)
+			By("Get the v1beta1 version of the CPPC")
+			ppc := &v1beta1.ClusterPodPlacementConfig{}
+			err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: common.SingletonResourceObjectName,
+				},
+			}), ppc)
+			Expect(err).NotTo(HaveOccurred(), "failed to get the v1beta1 ClusterPodPlacementConfig", err)
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
+			By("Create a namespace")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Create a pod")
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				Build()
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-deployment").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, d)
+			Expect(err).NotTo(HaveOccurred(), "failed to create deployment", err)
+			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateLabel), e2e.WaitShort).Should(Succeed())
+		})
 	})
 	Context("the ClusterPodPlacementConfig is deleted within 1s after creation", func() {
 		It("Should cleanup all finalizers", func() {

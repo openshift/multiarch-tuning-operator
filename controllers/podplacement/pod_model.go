@@ -317,7 +317,7 @@ func (pod *Pod) ensureArchitectureLabels(requirement corev1.NodeSelectorRequirem
 func (pod *Pod) shouldIgnorePod(cppc *v1beta1.ClusterPodPlacementConfig) bool {
 	return utils.Namespace() == pod.Namespace || strings.HasPrefix(pod.Namespace, "kube-") ||
 		pod.Spec.NodeName != "" || pod.HasControlPlaneNodeSelector() || pod.IsFromDaemonSet() ||
-		pod.isNodeSelectorConfiguredForArchitecture() && (cppc.Spec.Plugins == nil ||
+		pod.isNodeSelectorConfiguredForArchitecture() && (cppc.Spec.Plugins == nil || cppc.Spec.Plugins.NodeAffinityScoring == nil ||
 			!cppc.Spec.Plugins.NodeAffinityScoring.IsEnabled() || pod.isPreferredAffinityConfiguredForArchitecture())
 }
 

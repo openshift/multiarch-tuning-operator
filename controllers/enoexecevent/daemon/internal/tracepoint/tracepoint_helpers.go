@@ -31,7 +31,7 @@ func getPodContainerUUIDFor(pid int32) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("failed to open %s: %w", cgroupPath, err)
 	}
-	defer utils.ShouldStdErr(file.Close())
+	defer utils.ShouldStdErr(file.Close)
 	scanner := bufio.NewScanner(file)
 	var out string
 	for scanner.Scan() {
@@ -76,7 +76,7 @@ func getPodNameFromUUID(ctx context.Context, uid string) (string, string, error)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to connect to CRI socket: %w", err)
 	}
-	defer utils.ShouldStdErr(cri.Close())
+	defer utils.ShouldStdErr(cri.Close)
 	criClient := runtimeapi.NewRuntimeServiceClient(cri)
 	pods, err := criClient.ListPodSandbox(ctx, &runtimeapi.ListPodSandboxRequest{})
 	if err != nil {
@@ -109,18 +109,23 @@ func (tp *Tracepoint) initializeOffsets() error {
 		return fmt.Errorf("task_struct is not a struct")
 	}
 	var realParentOffset, tgidOffset int32
-	var realParentFound, tgidFound bool
+	const (
+		realParentFound uint8 = 1 << 0
+		tgidFound       uint8 = 1 << 1
+	)
+	var foundFlags uint8
 	for _, member := range taskStruct.Members {
 		if member.Name == "real_parent" {
 			realParentOffset = int32(member.Offset.Bytes())
-			realParentFound = true
+			foundFlags |= realParentFound
 		}
 		if member.Name == "tgid" {
 			tgidOffset = int32(member.Offset.Bytes())
-			tgidFound = true
+			foundFlags |= tgidFound
 		}
+
 	}
-	if !realParentFound || !tgidFound {
+	if foundFlags != uint8(realParentFound|tgidFound) {
 		return fmt.Errorf("failed to find real_parent or tgid in task_struct")
 	}
 	tp.realParentOffset = &realParentOffset

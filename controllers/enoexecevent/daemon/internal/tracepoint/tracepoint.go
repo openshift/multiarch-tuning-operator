@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
+	"os"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -34,7 +36,24 @@ type Tracepoint struct {
 	ch chan *types.ENOEXECInternalEvent
 }
 
-func NewTracepoint(ctx context.Context, ch chan *types.ENOEXECInternalEvent, bufferSize uint32) (*Tracepoint, error) {
+func NewTracepoint(ctx context.Context, ch chan *types.ENOEXECInternalEvent, maxEvents uint32) (*Tracepoint, error) {
+	// Buffer Size must be a multiple of page size
+	if os.Getpagesize() <= 0 {
+		return nil, fmt.Errorf("invalid page size")
+	}
+	pageSize := uint32(os.Getpagesize()) // [bytes]
+	// The payload is 8 bytes. Other 8 bytes are used for the header.
+	// 16 [bytes/event].
+	payloadSize := PayloadSize + 8
+
+	// The buffer size has to be a multiple of the page size.
+	// We calculate the required buffer size based on the maximum number of events as
+	// size_max = maxEvents * 8 [bytes].
+	// We obtain the number of pages required to store the events rounding up the number of pages required
+	// to store size_max bytes: required_pages = Ceil(size_max [bytes] / pageSize [bytes]).
+	// Finally, we multiply required_pages by the page size to get the buffer size.
+	bufferSize := pageSize * uint32(math.Ceil(float64(maxEvents*payloadSize)/float64(pageSize)))
+
 	tp := &Tracepoint{
 		bufferSize: bufferSize,
 		ch:         ch,
@@ -126,14 +145,14 @@ func (tp *Tracepoint) Run() error {
 		return errors.Join(fmt.Errorf("failed to attach tracepoint: %w", err),
 			tp.close())
 	}
-	defer utils.ShouldStdErr(tp.close())
+	defer utils.ShouldStdErr(tp.close)
 
 	log.Info("Allocate Ring buffer reader")
 	rd, err := ringbuf.NewReader(tp.events)
 	if err != nil {
 		return errors.Join(fmt.Errorf("failed to create ring buffer reader: %w", err), tp.close())
 	}
-	defer utils.ShouldStdErr(rd.Close())
+	defer utils.ShouldStdErr(rd.Close)
 
 	// Start a goroutine to monitor the context and close the tracepoint when the context is done
 	// This is useful for graceful shutdowns and to unblock the main loop from the blocking rd.Read()
@@ -168,9 +187,12 @@ func (tp *Tracepoint) processRecord(record *ringbuf.Record) (*types.ENOEXECInter
 	if len(record.RawSample) < 8 {
 		return nil, fmt.Errorf("record too short: %d bytes, expected at least 8 bytes", len(record.RawSample))
 	}
-	// TODO: Is this ok on s390x?
-	realParentTGID := int32(binary.LittleEndian.Uint32(record.RawSample[:4]))
-	currentTaskTGID := int32(binary.LittleEndian.Uint32(record.RawSample[4:]))
+	var order binary.ByteOrder = binary.LittleEndian
+	if binary.LittleEndian.Uint16([]byte{1, 0}) != 1 {
+		order = binary.BigEndian
+	}
+	realParentTGID := int32(order.Uint32(record.RawSample[:4]))
+	currentTaskTGID := int32(order.Uint32(record.RawSample[4:8]))
 	log.V(4).Info("Processing record",
 		"real_parent_tgid", realParentTGID, "current_task_tgid", currentTaskTGID)
 	for _, pid := range []int32{currentTaskTGID, realParentTGID} {
@@ -198,7 +220,6 @@ func (tp *Tracepoint) processRecord(record *ringbuf.Record) (*types.ENOEXECInter
 			PodName:      podName,
 			PodNamespace: podNamespace,
 			ContainerID:  containerUUID,
-			// Binary:      "", // TODO: get binary name from record
 		}, nil
 	}
 	return nil, fmt.Errorf("failed to find pod/container UUIDs in record: %v", record) // No pod/container found

@@ -29,8 +29,8 @@ func Buckets() []float64 {
 	}
 }
 
-func ShouldStdErr(err error) {
-	if err != nil {
+func ShouldStdErr(fn func() error) {
+	if err := fn(); err != nil {
 		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 	}
 }

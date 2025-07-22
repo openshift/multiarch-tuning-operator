@@ -3,7 +3,6 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"sync"
 	"time"
@@ -21,39 +20,29 @@ func RunDaemon(ctx context.Context, cancel context.CancelFunc) error {
 	if err != nil {
 		return fmt.Errorf("failed to get logger from context: %w", err)
 	}
-
-	// Buffer Size must be a multiple of page size
-	if os.Getpagesize() <= 0 {
-		return fmt.Errorf("invalid page size")
-	}
-	pageSize := uint32(os.Getpagesize()) // [bytes]
-	// The payload is 24 bytes. Other 8 bytes are used for the header.
-	// 32 [bytes/event].
-	// See https://github.com/outrigger-project/multiarch-tuning-operator/blob/eabed5c4e54/enhancements/MTO-0004-enoexec-monitoring.md
-	maxEvents := 256
-	// The buffer size has to be a multiple of the page size.
-	// We calculate the required buffer size based on the maximum number of events as
-	// size_max = maxEvents * 32 [bytes].
-	// We obtain the number of pages required to store the events rounding up the number of pages required
-	// to store size_max bytes: required_pages = Ceil(size_max [bytes] / pageSize [bytes]).
-	// Finally, we multiply required_pages by the page size to get the buffer size.
-	bufferSize := pageSize * uint32(math.Ceil(float64(maxEvents*32)/float64(pageSize)))
-
-	log.Info("Buffer size calculated", "buffer_size", bufferSize, "page_size", pageSize, "max_events", maxEvents)
+	var (
+		maxEvents uint32     = 256
+		rateLimit rate.Limit = 5
+		burst                = 10
+		timeout              = time.Minute
+	)
 
 	log.Info("Initializing channel")
 	ch := make(chan *types.ENOEXECInternalEvent, maxEvents)
 
-	log.Info("Initializing storage")
-	storageImpl, err := storage.NewK8sENOExecEventStorage(ctx,
-		rate.NewLimiter(5, 10), ch, os.Getenv("NODE_NAME"), os.Getenv("NAMESPACE"), time.Minute,
-	)
+	nodeName := os.Getenv("NODE_NAME")
+	namespace := os.Getenv("NAMESPACE")
+
+	log.Info("Initializing storage", "node_name", nodeName, "namespace", namespace,
+		"rate limit", rateLimit, "burst", burst, "timeout", timeout)
+	storageImpl, err := storage.NewK8sENOExecEventStorage(
+		ctx, rate.NewLimiter(rateLimit, burst), ch, nodeName, namespace, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
 
-	log.Info("Initializing tracepoint", "buffer_size", bufferSize)
-	tp, err := tracepoint.NewTracepoint(ctx, ch, bufferSize)
+	log.Info("Initializing tracepoint")
+	tp, err := tracepoint.NewTracepoint(ctx, ch, maxEvents)
 	if err != nil {
 		return fmt.Errorf("failed to create tracepoint: %w", err)
 	}

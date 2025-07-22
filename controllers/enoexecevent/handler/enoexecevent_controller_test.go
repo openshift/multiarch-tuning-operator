@@ -306,6 +306,14 @@ var _ = Describe("Controllers/ENoExecEvent/Reconciler", func() {
 					}, &v1beta1.ENoExecEvent{})
 				}).Should(MatchError(ContainSubstring("not found")), "the ENoExecEvent should be deleted")
 			})
+			It("should reject a NodeName that exceeds 253 character", func() {
+				By("Updating the ENoExecEvent")
+				enee.Status = v1beta1.ENoExecEventStatus{
+					NodeName: "a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890",
+				}
+				err := k8sClient.Status().Update(ctx, enee)
+				Expect(err).To(HaveOccurred(), "Should not update enne status with NodeName that is longer that 253 characters", err)
+			})
 			It("should reject a NodeName that has an invalid character", func() {
 				By("Updating the ENoExecEvent")
 				enee.Status = v1beta1.ENoExecEventStatus{
@@ -314,7 +322,7 @@ var _ = Describe("Controllers/ENoExecEvent/Reconciler", func() {
 				err := k8sClient.Status().Update(ctx, enee)
 				Expect(err).To(HaveOccurred(), "Should not update enne status with nodeName that contains an invalid character", err)
 				enee.Status = v1beta1.ENoExecEventStatus{
-					NodeName: "test.node-name",
+					NodeName: "test?node-name",
 				}
 				err = k8sClient.Status().Update(ctx, enee)
 				Expect(err).To(HaveOccurred(), "Should not update enne status with nodeName that contains an invalid character", err)
@@ -332,6 +340,14 @@ var _ = Describe("Controllers/ENoExecEvent/Reconciler", func() {
 				}
 				err = k8sClient.Status().Update(ctx, enee)
 				Expect(err).To(HaveOccurred(), "Should not update enne status with nodeName that ends with an invalid character", err)
+			})
+			It("should accept a NodeName that has valid character", func() {
+				By("Updating the ENoExecEvent")
+				enee.Status = v1beta1.ENoExecEventStatus{
+					NodeName: "test.node.name",
+				}
+				err := k8sClient.Status().Update(ctx, enee)
+				Expect(err).NotTo(HaveOccurred(), "Should update enne status with nodeName that starts with an valid character", err)
 			})
 			It("should reject a PodName that exceeds 253 character", func() {
 				By("Updating the ENoExecEvent")
@@ -380,7 +396,7 @@ var _ = Describe("Controllers/ENoExecEvent/Reconciler", func() {
 			It("should reject a PodNamespace that exceeds 253 character", func() {
 				By("Updating the ENoExecEvent")
 				enee.Status = v1beta1.ENoExecEventStatus{
-					PodNamespace: "a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a234567890",
+					PodNamespace: "a234567890.a234567890.a234567890.a234567890.a234567890.a234567890.a23456789",
 				}
 				err := k8sClient.Status().Update(ctx, enee)
 				Expect(err).To(HaveOccurred(), "Should not update enne status with podNamespace that is longer that 253 characters", err)
@@ -398,11 +414,17 @@ var _ = Describe("Controllers/ENoExecEvent/Reconciler", func() {
 				}
 				err = k8sClient.Status().Update(ctx, enee)
 				Expect(err).To(HaveOccurred(), "Should not update enne status with PodNamespace that contains an uppercase character", err)
+				By("Updating the ENoExecEvent")
+				enee.Status = v1beta1.ENoExecEventStatus{
+					PodNamespace: "test.pod.name",
+				}
+				err = k8sClient.Status().Update(ctx, enee)
+				Expect(err).To(HaveOccurred(), "Should not update enne status with PodNamespace that contains an invalid character", err)
 			})
 			It("should accept valid PodNamespace", func() {
 				By("Updating the ENoExecEvent")
 				enee.Status = v1beta1.ENoExecEventStatus{
-					PodNamespace: "valid.pod-namespace-26",
+					PodNamespace: "valid-pod-namespace-26",
 				}
 				err := k8sClient.Status().Update(ctx, enee)
 				Expect(err).NotTo(HaveOccurred(), "Should update enne status with valid podNamespace", err)
@@ -416,7 +438,7 @@ var _ = Describe("Controllers/ENoExecEvent/Reconciler", func() {
 				Expect(err).To(HaveOccurred(), "Should not update enne status with podNamespace that starts with invalid character", err)
 				By("Updating the ENoExecEvent")
 				enee.Status = v1beta1.ENoExecEventStatus{
-					PodNamespace: "test-pod-name.",
+					PodNamespace: "test-pod-name-",
 				}
 				err = k8sClient.Status().Update(ctx, enee)
 				Expect(err).To(HaveOccurred(), "Should not update enne status with podNamespace that ends with invalid character", err)

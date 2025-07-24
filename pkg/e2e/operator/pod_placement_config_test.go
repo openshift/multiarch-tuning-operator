@@ -256,18 +256,14 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 	})
 	Context("The webhook should not gate pods with node selectors that pin them to the control plane", func() {
 		BeforeEach(func() {
-			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster",
-				},
-				Spec: v1beta1.ClusterPodPlacementConfigSpec{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchExpressions: []metav1.LabelSelectorRequirement{
-							{
-								Key:      "multiarch.openshift.io/exclude-pod-placement",
-								Operator: "DoesNotExist",
-							},
-						}}}})
+			By("Creating the ClusterPodPlacementConfig")
+			err := client.Create(ctx,
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 50).
+					Build(),
+			)
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
 		})
@@ -295,8 +291,15 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			//should exclude the namespace
 			By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
 			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+			By("Verify node affinity label are set correct")
+			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
+				utils.NodeAffinityLabel, utils.LabelValueNotSet,
+				utils.PreferredNodeAffinityLabel, utils.LabelValueNotSet,
+			), e2e.WaitShort).Should(Succeed())
 			By("The pod should not have been set node affinity of arch info.")
 			Eventually(framework.VerifyPodNodeAffinity(ctx, client, ns, "app", "test"), e2e.WaitShort).Should(Succeed())
+			By("The pod should not have preferred affinities from the ClusterPodPlacementConfig")
+			Eventually(framework.VerifyPodPreferredNodeAffinity(ctx, client, ns, "app", "test", nil), e2e.WaitShort).Should(Succeed())
 		},
 			Entry(utils.ControlPlaneNodeSelectorLabel, utils.ControlPlaneNodeSelectorLabel),
 			Entry(utils.MasterNodeSelectorLabel, utils.MasterNodeSelectorLabel),

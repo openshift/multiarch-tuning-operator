@@ -54,13 +54,14 @@ spec:
                 type: string
               nodeName:
                 description: |-
-                  NodeName must follow the RFC 1123 DNS label format:
-                  - Max length: 63 characters
-                  - Characters: lowercase letters, digits, and hyphens (`-`)
+                  NodeName must follow the RFC 1123 DNS subdomain format.
+                  - Max length: 253 characters
+                  - Consists of lowercase letters, digits, hyphens (`-`), and dots (`.`)
                   - Must start and end with an alphanumeric character
-                  Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
-                maxLength: 63
-                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                  Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+                       https://github.com/kubernetes/kubernetes/blob/b4de8bc1b1095d8f465995521a6986e201812342/pkg/apis/core/validation/validation.go#L273
+                maxLength: 253
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                 type: string
               podName:
                 description: |-
@@ -69,18 +70,20 @@ spec:
                   - Characters: lowercase letters, digits, hyphens (`-`), and dots (`.`)
                   - Must start and end with an alphanumeric character
                   Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+                       https://github.com/kubernetes/kubernetes/blob/b4de8bc1b1095d8f465995521a6986e201812342/pkg/apis/core/validation/validation.go#L257
                 maxLength: 253
                 pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                 type: string
               podNamespace:
                 description: |-
-                  PodNamespace must follow the RFC 1123 DNS subdomain format (same as PodName)
-                  - Max length: 253 characters
-                  - Characters: lowercase letters, digits, hyphens (`-`), and dots (`.`)
+                  PodNamespace must follow the RFC 1123 DNS label format.
+                  - Max length: 63 characters
+                  - Characters: lowercase letters, digits, and hyphens ('-')
                   - Must start and end with an alphanumeric character
-                  Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
-                maxLength: 253
-                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                  Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+                       https://github.com/kubernetes/kubernetes/blob/5be5fd022920e0aa77e29792fffbb5f3690547b3/staging/src/k8s.io/apimachinery/pkg/api/validation/generic.go#L63
+                maxLength: 63
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                 type: string
             type: object
         type: object

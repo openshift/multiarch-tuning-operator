@@ -27,13 +27,17 @@ type ENoExecEventSpec struct {
 
 // ENoExecEventStatus defines the observed state of ENoExecEvent
 type ENoExecEventStatus struct {
-	// NodeName must follow the RFC 1123 DNS label format:
-	// - Max length: 63 characters
-	// - Characters: lowercase letters, digits, and hyphens (`-`)
+	// For validating the fields of NodeName and PodName we mimic the functionality of IsDNS1123Subdomain (https://github.com/kubernetes/kubernetes/blob/5be5fd022920e0aa77e29792fffbb5f3690547b3/staging/src/k8s.io/apimachinery/pkg/util/validation/validation.go#L219)
+	// For validating the fields of PodNamespace we  mimic the functionality of IsDNS1123Label (https://github.com/kubernetes/kubernetes/blob/5be5fd022920e0aa77e29792fffbb5f3690547b3/staging/src/k8s.io/apimachinery/pkg/util/validation/validation.go#L188)
+
+	// NodeName must follow the RFC 1123 DNS subdomain format.
+	// - Max length: 253 characters
+	// - Consists of lowercase letters, digits, hyphens (`-`), and dots (`.`)
 	// - Must start and end with an alphanumeric character
-	// Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
-	// +kubebuilder:validation:MaxLength=63
-	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	// Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+	//      https://github.com/kubernetes/kubernetes/blob/b4de8bc1b1095d8f465995521a6986e201812342/pkg/apis/core/validation/validation.go#L273
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	NodeName string `json:"nodeName,omitempty"`
 
 	// PodName must follow the RFC 1123 DNS subdomain format:
@@ -41,17 +45,19 @@ type ENoExecEventStatus struct {
 	// - Characters: lowercase letters, digits, hyphens (`-`), and dots (`.`)
 	// - Must start and end with an alphanumeric character
 	// Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+	//      https://github.com/kubernetes/kubernetes/blob/b4de8bc1b1095d8f465995521a6986e201812342/pkg/apis/core/validation/validation.go#L257
 	// +kubebuilder:validation:MaxLength=253
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	PodName string `json:"podName,omitempty"`
 
-	// PodNamespace must follow the RFC 1123 DNS subdomain format (same as PodName)
-	// - Max length: 253 characters
-	// - Characters: lowercase letters, digits, hyphens (`-`), and dots (`.`)
+	// PodNamespace must follow the RFC 1123 DNS label format.
+	// - Max length: 63 characters
+	// - Characters: lowercase letters, digits, and hyphens ('-')
 	// - Must start and end with an alphanumeric character
-	// Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
-	// +kubebuilder:validation:MaxLength=253
-	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	// Ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+	//      https://github.com/kubernetes/kubernetes/blob/5be5fd022920e0aa77e29792fffbb5f3690547b3/staging/src/k8s.io/apimachinery/pkg/api/validation/generic.go#L63
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	PodNamespace string `json:"podNamespace,omitempty"`
 
 	// ContainerID must be a runtime-prefixed 64-character hexadecimal string.

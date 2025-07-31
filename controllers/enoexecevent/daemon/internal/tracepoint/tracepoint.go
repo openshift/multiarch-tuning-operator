@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -34,6 +35,8 @@ type Tracepoint struct {
 	bufferSize       uint32 // Size of the ring buffer in bytes
 
 	ch chan *types.ENOEXECInternalEvent
+
+	order binary.ByteOrder
 }
 
 func NewTracepoint(ctx context.Context, ch chan *types.ENOEXECInternalEvent, maxEvents uint32) (*Tracepoint, error) {
@@ -54,10 +57,24 @@ func NewTracepoint(ctx context.Context, ch chan *types.ENOEXECInternalEvent, max
 	// Finally, we multiply required_pages by the page size to get the buffer size.
 	bufferSize := pageSize * uint32(math.Ceil(float64(maxEvents*payloadSize)/float64(pageSize)))
 
+	var i uint16 = 0x0001
+	b := (*[2]byte)(unsafe.Pointer(&i))
+	// Little endian: [0x01, 0x00]
+	// Big endian: [0x00, 0x01]
+	var order binary.ByteOrder
+	if b[0] == 0x00 {
+		order = binary.BigEndian
+		fmt.Println("Detected big endian architecture")
+	} else {
+		order = binary.LittleEndian
+		fmt.Println("Detected little endian architecture")
+	}
+
 	tp := &Tracepoint{
 		bufferSize: bufferSize,
 		ch:         ch,
 		ctx:        ctx,
+		order:      order,
 		progSpec: &ebpf.ProgramSpec{
 			Name:     "multiarch_tuning_enoexec_tracepoint",
 			Type:     ebpf.TracePoint,
@@ -187,15 +204,11 @@ func (tp *Tracepoint) processRecord(record *ringbuf.Record) (*types.ENOEXECInter
 	if len(record.RawSample) < 8 {
 		return nil, fmt.Errorf("record too short: %d bytes, expected at least 8 bytes", len(record.RawSample))
 	}
-	var order binary.ByteOrder = binary.LittleEndian
-	if binary.LittleEndian.Uint16([]byte{1, 0}) != 1 {
-		order = binary.BigEndian
-	}
-	realParentTGID := int32(order.Uint32(record.RawSample[:4]))
-	currentTaskTGID := int32(order.Uint32(record.RawSample[4:8]))
+	realParentTGID := tp.order.Uint32(record.RawSample[:4])
+	currentTaskTGID := tp.order.Uint32(record.RawSample[4:8])
 	log.V(4).Info("Processing record",
 		"real_parent_tgid", realParentTGID, "current_task_tgid", currentTaskTGID)
-	for _, pid := range []int32{currentTaskTGID, realParentTGID} {
+	for _, pid := range []uint32{currentTaskTGID, realParentTGID} {
 		podUUID, containerUUID, err := getPodContainerUUIDFor(pid)
 		if err != nil {
 			// Log the error and continue processing other pids as this is not a critical error
@@ -222,7 +235,7 @@ func (tp *Tracepoint) processRecord(record *ringbuf.Record) (*types.ENOEXECInter
 			ContainerID:  containerUUID,
 		}, nil
 	}
-	return nil, fmt.Errorf("failed to find pod/container UUIDs in record: %v", record) // No pod/container found
+	return nil, fmt.Errorf("failed to find pod/container UUIDs in record: hex:[% X] = (%d, %d)", record.RawSample, realParentTGID, currentTaskTGID) // No pod/container found
 }
 
 func (tp *Tracepoint) monitor(rd *ringbuf.Reader) {

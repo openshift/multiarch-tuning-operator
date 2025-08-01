@@ -24,7 +24,7 @@ import (
 // It reads the cgroup file for the process and extracts the pod UUID and container ID from it.
 // The container ID is returned in the format "cri-o://<container_id>".
 // The pod UUID is extracted from the cgroup path and returned as a string.
-func getPodContainerUUIDFor(pid int32) (string, string, error) {
+func getPodContainerUUIDFor(pid uint32) (string, string, error) {
 	cgroupPath := fmt.Sprintf("/proc/%d/cgroup", pid)
 	//#nosec:G304 (CWE-22): Potential file inclusion via variable (Confidence: HIGH, Severity: MEDIUM)
 	file, err := os.Open(cgroupPath)

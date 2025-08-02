@@ -40,10 +40,13 @@ func initContext() (context.Context, context.CancelFunc) {
 	var logImpl *zap.Logger
 	var err error
 	if logDevMode {
-		logImpl, err = zap.NewDevelopment()
+		cfg := zap.NewDevelopmentConfig()
+		cfg.Level = zap.NewAtomicLevelAt(zapcore.Level(-initialLogLevel))
+		logImpl, err = cfg.Build()
 	} else {
-		level := zap.NewAtomicLevelAt(zapcore.Level(-initialLogLevel))
-		logImpl, err = zap.NewProduction(zap.IncreaseLevel(level))
+		cfg := zap.NewProductionConfig()
+		cfg.Level = zap.NewAtomicLevelAt(zapcore.Level(-initialLogLevel))
+		logImpl, err = cfg.Build()
 	}
 	must(err, "failed to create logger")
 	ctx = logr.NewContext(ctx, zapr.NewLogger(logImpl))

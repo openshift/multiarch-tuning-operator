@@ -32,6 +32,7 @@ import (
 	ctrl2 "sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -116,7 +117,7 @@ func (r *PodReconciler) processPod(ctx context.Context, pod *Pod) {
 		return
 	}
 
-	if cppc != nil && cppc.Spec.Plugins != nil && cppc.Spec.Plugins.NodeAffinityScoring != nil && cppc.Spec.Plugins.NodeAffinityScoring.IsEnabled() {
+	if cppc != nil && cppc.PluginsEnabled(common.NodeAffinityScoringPluginName) {
 		pod.SetPreferredArchNodeAffinity(cppc)
 	}
 

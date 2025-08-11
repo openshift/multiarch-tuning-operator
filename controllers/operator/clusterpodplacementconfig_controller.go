@@ -41,6 +41,7 @@ import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -487,7 +488,7 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 	}
 
 	execFormatErrorObjects := []client.Object{}
-	if clusterPodPlacementConfig.Spec.Plugins != nil && clusterPodPlacementConfig.Spec.Plugins.ExecFormatErrorMonitor != nil && clusterPodPlacementConfig.Spec.Plugins.ExecFormatErrorMonitor.IsEnabled() {
+	if clusterPodPlacementConfig.PluginsEnabled(common.ExecFormatErrorMonitorPluginName) {
 		execFormatErrorObjects, err = r.buildENoExecEventObjects(ctx, clusterPodPlacementConfig)
 		if err != nil {
 			return err

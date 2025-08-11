@@ -38,6 +38,7 @@ import (
 
 	"github.com/panjf2000/ants/v2"
 
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -80,7 +81,7 @@ func (a *PodSchedulingGateMutatingWebHook) Handle(ctx context.Context, req admis
 	log := ctrllog.FromContext(ctx).WithValues("namespace", pod.Namespace, "name", pod.Name)
 
 	cppc := clusterpodplacementconfig.GetClusterPodPlacementConfig()
-	if cppc != nil && cppc.Spec.Plugins != nil && cppc.Spec.Plugins.NodeAffinityScoring != nil && cppc.Spec.Plugins.NodeAffinityScoring.IsEnabled() {
+	if cppc != nil && cppc.PluginsEnabled(common.NodeAffinityScoringPluginName) {
 		pod.EnsureLabel(utils.PreferredNodeAffinityLabel, utils.LabelValueNotSet)
 	}
 	pod.EnsureLabel(utils.NodeAffinityLabel, utils.LabelValueNotSet)

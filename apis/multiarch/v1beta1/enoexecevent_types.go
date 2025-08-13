@@ -73,6 +73,10 @@ type ENoExecEventStatus struct {
 //+kubebuilder:subresource:status
 
 // ENoExecEvent is the Schema for the enoexecevents API
+// +kubebuilder:printcolumn:name=NodeName,JSONPath=.status.nodeName,type=string
+// +kubebuilder:printcolumn:name=PodName,JSONPath=.status.podName,type=string
+// +kubebuilder:printcolumn:name=PodNamespace,JSONPath=.status.podNamespace,type=string
+// +kubebuilder:printcolumn:name=ContainerID,JSONPath=.status.containerID,type=string
 type ENoExecEvent struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

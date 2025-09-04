@@ -93,6 +93,13 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 	// than do this everytime
 	sysregistriesv2.InvalidateCache()
 
+	// check if image reference has both tag and digest
+	imageReference, err = parseImageReference(imageReference)
+	if err != nil {
+		log.Error(err, "Couldn't parse image reference")
+		return nil, err
+	}
+
 	sys := &types.SystemContext{
 		AuthFilePath:                authFile.Name(),
 		RegistriesDirPath:           RegistryCertsDir(),
@@ -193,6 +200,38 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 		return sets.New[string](config.Architecture), nil
 	}
 	return supportedArchitectures, nil
+}
+
+// parseImageReference normalizes an imageName into a reference suitable for use
+// with the inspection library. It returns one of the following:
+//  1. A tag-only reference if no digest is present
+//  2. A digest-only reference if a digest is present, dropping the tag when both
+//     a tag and digest are specified in the pod's container image field
+func parseImageReference(imageName string) (string, error) {
+	digestSplit := strings.Split(imageName, "@sha256:")
+	switch len(digestSplit) {
+	case 0:
+		return "", errors.New("invalid image name, must not be empty")
+	case 1:
+		return imageName, nil
+	case 2:
+	default:
+		return "", errors.New("invalid image name, must only have one digest")
+	}
+
+	// Since the length is 2, imageName is either a digest-only image or both the tag and the digest have been provided.
+	tagSplit := strings.Split(digestSplit[0], ":")
+	switch len(tagSplit) {
+	case 0:
+		return "", errors.New("invalid image name, image must not be empty")
+	case 1:
+		// Since the length is 1, no tag has been found: imageName is a digest-only image.
+		return imageName, nil
+	case 2:
+	default:
+		return "", errors.New("invalid image name, image contains more than one digest or tag")
+	}
+	return tagSplit[0] + "@sha256:" + digestSplit[1], nil
 }
 
 func isBundleImage(image ociv1.ImageConfig) bool {

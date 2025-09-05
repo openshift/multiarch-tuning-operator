@@ -7,13 +7,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
@@ -557,6 +556,28 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			By("Verify all eNoExecEvent resources are deleted")
 			Eventually(framework.ValidateDeletion(client, ctx, framework.ENoExecPlugin)).Should(Succeed())
 		})
+		It("the eNoExecEvent deployment is deleted within 1s after creation and should cleanup all objets", func() {
+			var err error
+			By("Creating a ClusterPodPlacementConfig with execFormatErrorMonitor plugin enabled")
+			err = client.Create(ctx,
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithExecFormatErrorMonitor(true).
+					Build(),
+			)
+			Expect(err).NotTo(HaveOccurred(), "failed to create the ClusterPodPlacementConfig", err)
+			By("validate the clusterPodPlacementConfig and eNoExecEvent objects exist")
+			//Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin)).Should(Succeed())
+			By("imeditately deleting the clusterpodplacementconfig after creation")
+			err = client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			By("Verify all corresponding resources are deleted")
+			Eventually(framework.ValidateDeletion(client, ctx, framework.MainPlugin, framework.ENoExecPlugin), "2m", "10s").Should(Succeed())
+		})
 		Context("When the eNoExecEvent plugin is active", func() {
 			var (
 				availableArchitectures map[string]bool
@@ -644,6 +665,107 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				Entry("s390x", utils.ArchitectureS390x),
 				Entry("ppc64le", utils.ArchitecturePpc64le),
 			)
+		})
+	})
+	Context("LifeCycle of the eNoExecEvent operands", func() {
+		BeforeEach(func() {
+			By("Creating a ClusterPodPlacementConfig with execFormatErrorMonitor plugin enabled")
+			err := client.Create(ctx,
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithExecFormatErrorMonitor(true).
+					Build(),
+			)
+			Expect(err).NotTo(HaveOccurred(), "failed to create the ClusterPodPlacementConfig", err)
+			By("validate the clusterPodPlacementConfig and eNoExecEvent objects exist")
+			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin)).Should(Succeed())
+		})
+		AfterEach(func() {
+			// clean up in case of failure to prevent all other tests from failing
+			By("Deleting all ENoExecEvent resources")
+			err := client.DeleteAllOf(ctx, &v1beta1.ENoExecEvent{}, runtimeclient.InNamespace(utils.Namespace()))
+			Expect(runtimeclient.IgnoreNotFound(err)).NotTo(HaveOccurred())
+			By("Deleting the eNoExecEvent plugin")
+			err = client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: common.SingletonResourceObjectName,
+				},
+			})
+			Expect(runtimeclient.IgnoreNotFound(err)).NotTo(HaveOccurred())
+			By("Verify all corresponding resources are deleted")
+			Eventually(framework.ValidateDeletion(client, ctx, framework.MainPlugin, framework.ENoExecPlugin)).Should(Succeed())
+		})
+		It("should deploy the eNoExecEvent operands and the then wait to destroy until there are no eNoExecEvents", func() {
+			var err error
+			By("create namespace with opt-out label")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Creating a eNoExecEvent")
+			enee := NewENoExecEvent().
+				WithName("test-enoexecevent").
+				WithCommand("foo-binary").
+				WithNodeName("test-name").
+				WithPodNamespace(ns.Name).
+				WithNamespace(utils.Namespace()).Build()
+			err = client.Create(ctx, enee)
+			Expect(err).NotTo(HaveOccurred(), "failed to create the eNoExecEvent", err)
+			By("Disable the eNoExecEvent plugin")
+			Eventually(func(g Gomega) {
+				cppc := &v1beta1.ClusterPodPlacementConfig{}
+				err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(&v1beta1.ClusterPodPlacementConfig{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: common.SingletonResourceObjectName,
+					},
+				}), cppc)
+				g.Expect(err).NotTo(HaveOccurred())
+				By("Disabling the enoexec plugin to trigger cleanup")
+				cppc.Spec.Plugins.ExecFormatErrorMonitor.Enabled = false
+				err = client.Update(ctx, cppc)
+				g.Expect(err).NotTo(HaveOccurred())
+			}).Should(Succeed(), "failed to update the ClusterPodPlacementConfig", err)
+			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.EnoExecPluginDeploymentObjects)).Should(Succeed(), "Should not have deleted the eNoExecEvent objects as a eNoExecEvent should exist", err)
+			Eventually(framework.ValidateCreationWhenObjectsAreMarkedForDeletion(client, ctx, framework.EnoExecPluginDeployment)).Should(Succeed(), "Should have the deployment marked for deletion")
+			Eventually(framework.ValidateDeletion(client, ctx, framework.EnoExecPluginDaemonSet)).Should(Succeed(), "the eNoExecEvent daemon set should be deleted", err)
+			By("Deleting eNoExecEvent")
+			err = client.Delete(ctx, enee)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(framework.ValidateDeletion(client, ctx, framework.ENoExecPlugin)).Should(Succeed())
+			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin)).Should(Succeed(), "Should not have ClusterPodPlacementConfig objects", err)
+		})
+		It("should keep the ClusterPodPlacementConfig and its operands until the all of eNoExecEvent objects have been deleted", func() {
+			var err error
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			//nolint:errcheck
+			defer client.Delete(ctx, ns)
+			By("Creating a eNoExecEvent")
+			enee := NewENoExecEvent().
+				WithName("test-enoexecevent").
+				WithCommand("foo-binary").
+				WithNodeName("test-name").
+				WithPodNamespace(ns.Name).
+				WithNamespace(utils.Namespace()).Build()
+			err = client.Create(ctx, enee)
+			Expect(err).NotTo(HaveOccurred(), "failed to create the eNoExecEvent", err)
+			By("Deleting the eNoExecEvent plugin")
+			err = client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: common.SingletonResourceObjectName,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			By("Check that all objects still exist")
+			Eventually(framework.ValidateCreation(client, ctx, framework.EnoExecPluginDeploymentObjects)).Should(Succeed(), "Should not have deleted the eNoExecEvent objects as a eNoExecEvent should exist", err)
+			Eventually(framework.ValidateCreationWhenObjectsAreMarkedForDeletion(client, ctx, framework.MainPlugin, framework.EnoExecPluginDeployment)).Should(Succeed(), "Should have the deployment marked for deletion")
+			Eventually(framework.ValidateDeletion(client, ctx, framework.EnoExecPluginDaemonSet)).Should(Succeed(), "the eNoExecEvent daemon set should be deleted", err)
+			By("Deleting eNoExecEvent")
+			err = client.Delete(ctx, enee)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(framework.ValidateDeletion(client, ctx, framework.MainPlugin, framework.ENoExecPlugin)).Should(Succeed())
 		})
 	})
 })

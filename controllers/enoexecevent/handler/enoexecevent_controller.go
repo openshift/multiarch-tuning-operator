@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	"github.com/openshift/multiarch-tuning-operator/controllers/enoexecevent/handler/metrics"
 	"github.com/openshift/multiarch-tuning-operator/pkg/models"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
@@ -65,7 +66,7 @@ func NewReconciler(client client.Client, clientSet *kubernetes.Clientset, scheme
 // Finally, it will delete the ENoExecEvent resource if the reconciliation was successful or if the pod was not found.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-
+	metrics.InitMetrics()
 	// Fetch the ENoExecEvent instance
 	enoExecEvent := &multiarchv1beta1.ENoExecEvent{}
 	if err := r.Get(ctx, req.NamespacedName, enoExecEvent); err != nil {
@@ -93,9 +94,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			logger.Error(err, "Failed to delete ENoExecEvent resource after reconciliation", "name", enoExecEvent.Name)
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
+		metrics.EnoexecCounter.Inc()
 		logger.Info("Deleted ENoExecEvent resource after successful reconciliation", "name", enoExecEvent.Name)
 		return ret, nil
 	}
+	metrics.EnoexecCounterInvalid.Inc()
 	logger.Error(err, "Failed to reconcile ENoExecEvent", "name", enoExecEvent.Name)
 	return ctrl.Result{}, err
 }

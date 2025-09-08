@@ -623,7 +623,7 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		objects = append(objects,
 			buildServiceMonitor(utils.PodPlacementControllerName),
 			buildServiceMonitor(utils.PodPlacementWebhookName),
-			buildAvailabilityAlertRule(),
+			buildCPPCAvailabilityAlertRule(),
 		)
 	} else {
 		log.V(1).Info("servicemonitoring.monitoring.coreos.com is not available. Skipping the creation of the ServiceMonitors")

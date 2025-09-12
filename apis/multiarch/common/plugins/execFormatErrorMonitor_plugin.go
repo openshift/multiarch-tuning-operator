@@ -18,8 +18,8 @@ limitations under the License.
 package plugins
 
 const (
-	// PluginName for execFormatErrorMonitor.
-	execFormatErrorMonitorPluginName = "execFormatErrorMonitor"
+	// ExecFormatErrorMonitorPluginName stores the namne for the ExecFormatErrorMonitor.
+	ExecFormatErrorMonitorPluginName = "execFormatErrorMonitor"
 )
 
 // ExecFormatErrorMonitor is a plugin that provides Exec Format Errors events reporting and monitoring
@@ -27,7 +27,7 @@ type ExecFormatErrorMonitor struct {
 	BasePlugin `json:",inline"`
 }
 
-// Name returns the name of the execFormatErrorMonitorPluginName.
+// Name returns the name of the ExecFormatErrorMonitorPluginName.
 func (b *ExecFormatErrorMonitor) Name() string {
-	return execFormatErrorMonitorPluginName
+	return ExecFormatErrorMonitorPluginName
 }

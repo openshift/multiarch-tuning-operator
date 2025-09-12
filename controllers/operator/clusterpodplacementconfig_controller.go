@@ -42,6 +42,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common/plugins"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -557,6 +558,23 @@ func (r *ClusterPodPlacementConfigReconciler) handleEnoexecDelete(ctx context.Co
 			NamespacedTypedClient: r.ClientSet.CoreV1().ServiceAccounts(utils.Namespace()),
 			ObjName:               utils.EnoexecDaemonSet,
 		},
+		{
+			NamespacedTypedClient: r.ClientSet.CoreV1().Services(utils.Namespace()),
+			ObjName:               utils.EnoexecControllerName,
+		},
+	}
+
+	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+		deploymentRelatedObjsToDelete = append(deploymentRelatedObjsToDelete, utils.ToDeleteRef{
+			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "servicemonitors"}).Namespace(utils.Namespace())),
+			ObjName:               utils.EnoexecControllerName,
+		}, utils.ToDeleteRef{
+			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "prometheusrules"}).Namespace(utils.Namespace())),
+			ObjName:               plugins.ExecFormatErrorMonitorPluginName,
+		}, utils.ToDeleteRef{
+			NamespacedTypedClient: utils.NewDynamicDeleter(r.DynamicClient.Resource(schema.GroupVersionResource{Group: "monitoring.coreos.com", Version: "v1", Resource: "prometheusrules"}).Namespace(utils.Namespace())),
+			ObjName:               utils.ExecFormatErrorsDetected,
+		})
 	}
 
 	log.Info("Deleting the ENoExecEvent Deployment resources")
@@ -623,7 +641,7 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		objects = append(objects,
 			buildServiceMonitor(utils.PodPlacementControllerName),
 			buildServiceMonitor(utils.PodPlacementWebhookName),
-			buildAvailabilityAlertRule(),
+			buildCPPCAvailabilityAlertRule(),
 		)
 	} else {
 		log.V(1).Info("servicemonitoring.monitoring.coreos.com is not available. Skipping the creation of the ServiceMonitors")
@@ -736,6 +754,7 @@ func (r *ClusterPodPlacementConfigReconciler) buildENoExecEventObjects(ctx conte
 
 	log.Info("Starting ENoExecEvent Controller")
 	objects := []client.Object{
+		buildService(utils.EnoexecControllerName),
 		buildServiceAccount(utils.EnoexecControllerName),
 		buildServiceAccount(utils.EnoexecDaemonSet),
 
@@ -807,6 +826,17 @@ func (r *ClusterPodPlacementConfigReconciler) buildENoExecEventObjects(ctx conte
 		),
 		buildDeploymentENoExecEventHandler(logVerbosityLevel),
 		buildDaemonSetENoExecEvent(utils.EnoexecDaemonSet, utils.EnoexecDaemonSet, logVerbosityLevel),
+	}
+	// If the servicemonitors.monitoring.coreos.com CRD is available, we create the ServiceMonitor objects
+	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+		log.V(1).Info("Creating ServiceMonitors")
+		objects = append(objects,
+			buildServiceMonitor(utils.EnoexecControllerName),
+			buildExecFormatErrorAvailabilityAlertRule(),
+			buildExecFormatErrorsDetectedAlertRule(),
+		)
+	} else {
+		log.V(1).Info("servicemonitoring.monitoring.coreos.com is not available. Skipping the creation of the ServiceMonitors")
 	}
 	return objects, nil
 }

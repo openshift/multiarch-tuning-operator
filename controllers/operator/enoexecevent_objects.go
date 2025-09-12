@@ -2,12 +2,18 @@ package operator
 
 import (
 	"fmt"
+	"strings"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
+	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common/plugins"
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
@@ -28,6 +34,16 @@ func buildClusterRoleENoExecEventsController() *rbacv1.ClusterRole {
 			APIGroups: []string{""},
 			Resources: []string{"pods", "pods/status"},
 			Verbs:     []string{UPDATE},
+		},
+		{
+			APIGroups: []string{"authentication.k8s.io"},
+			Resources: []string{"tokenreviews"},
+			Verbs:     []string{CREATE},
+		},
+		{
+			APIGroups: []string{"authorization.k8s.io"},
+			Resources: []string{"subjectaccessreviews"},
+			Verbs:     []string{CREATE},
 		},
 	})
 }
@@ -210,7 +226,114 @@ func buildDaemonSetENoExecEvent(serviceAccount string, name string, logVerbosity
 
 // buildEnoexecDeployment returns a minimal Deployment object matching your YAML
 func buildDeploymentENoExecEventHandler(logVerbosity int) *appsv1.Deployment {
-	return buildDeployment(logVerbosity, utils.EnoexecControllerName, 2, utils.EnoexecControllerName, "",
+	d := buildDeployment(logVerbosity, utils.EnoexecControllerName, 2, utils.EnoexecControllerName, "",
 		"--leader-elect", "--enable-enoexec-event-controllers",
 	)
+	additionalVolumes := []corev1.Volume{
+		{
+			Name: "metrics-cert",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  utils.EnoexecControllerName,
+					DefaultMode: utils.NewPtr(int32(420)),
+				},
+			},
+		},
+	}
+	additionalMounts := []corev1.VolumeMount{
+		{
+			Name:      "metrics-cert",
+			MountPath: "/var/run/manager/tls",
+			ReadOnly:  true,
+		},
+	}
+
+	d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes, additionalVolumes...)
+	d.Spec.Template.Spec.Containers[0].VolumeMounts = append(d.Spec.Template.Spec.Containers[0].VolumeMounts, additionalMounts...)
+
+	return d
+}
+
+func buildExecFormatErrorAvailabilityAlertRule() *monitoringv1.PrometheusRule {
+	return &monitoringv1.PrometheusRule{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: monitoringv1.SchemeGroupVersion.String(),
+			Kind:       monitoringv1.PrometheusRuleKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.ToLower(plugins.ExecFormatErrorMonitorPluginName),
+			Namespace: utils.Namespace(),
+		},
+		Spec: monitoringv1.PrometheusRuleSpec{
+			Groups: []monitoringv1.RuleGroup{
+				{
+					Name: "multiarch-tuning-operator-enoexec.rules",
+					Rules: []monitoringv1.Rule{
+						{
+							Alert: "ExecFormatErrorHandlerDown",
+							Expr:  intstr.FromString(fmt.Sprintf("kube_deployment_status_replicas_available{namespace=\"%s\", deployment=\"%s\"} == 0", utils.Namespace(), utils.EnoexecControllerName)),
+							For:   utils.NewPtr[monitoringv1.Duration]("1m"),
+							Annotations: map[string]string{
+								"summary":     "The exec format error handler should have at least 1 replica running and ready.",
+								"description": "The exec format error handler has been down for more than 1 minute. ",
+								"runbook_url": "https://github.com/outrigger-project/multiarch-tuning-operator/blob/main/docs/alerts/enoexec-event-handler-down.md",
+							},
+							Labels: map[string]string{
+								"severity": "critical",
+							},
+						},
+						{
+							Alert: "ExecFormatErrorDaemonDown",
+							Expr:  intstr.FromString(fmt.Sprintf("kube_daemonset_status_number_unavailable{namespace=\"%s\", daemonset=\"%s\"} > 0", utils.Namespace(), utils.EnoexecDaemonSet)),
+							For:   utils.NewPtr[monitoringv1.Duration]("20m"),
+							Annotations: map[string]string{
+								"summary": "The exec format error daemon is not available in all the nodes.",
+								"description": "Some nodes that should be running the exec format error daemon have none of the daemonset pod running and available for more than 20 minutes. " +
+									"Exec Format Errors will not be detected in those nodes",
+								"runbook_url": "https://github.com/openshift/multiarch-tuning-operator/blob/main/docs/alerts/enoexec-event-daemon-down.md",
+							},
+							Labels: map[string]string{
+								"severity": "warning",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func buildExecFormatErrorsDetectedAlertRule() *monitoringv1.PrometheusRule {
+	return &monitoringv1.PrometheusRule{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: monitoringv1.SchemeGroupVersion.String(),
+			Kind:       monitoringv1.PrometheusRuleKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.ToLower(utils.ExecFormatErrorsDetected),
+			Namespace: utils.Namespace(),
+		},
+		Spec: monitoringv1.PrometheusRuleSpec{
+			Groups: []monitoringv1.RuleGroup{
+				{
+					Name: "multiarch-tuning-operator-enoexec-detected.rules",
+					Rules: []monitoringv1.Rule{
+						{
+							Alert: utils.ExecFormatErrorsDetected,
+							Expr:  intstr.FromString("rate(mto_enoexecevents_total[6h]) > 0"),
+							For:   utils.NewPtr[monitoringv1.Duration]("1m"),
+							Annotations: map[string]string{
+								"summary":     "Exec Format Errors detected in the past 6 hours.",
+								"description": "Exec Format Errors detected in the past 6 hours.",
+								"runbook_url": "https://github.com/outrigger-project/multiarch-tuning-operator/blob/main/docs/alerts/enoexec-controller-down.md",
+							},
+							Labels: map[string]string{
+								"severity": "critical",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }

@@ -58,6 +58,7 @@ const (
 	ExecFormatErrorLabelKey      = "multiarch.openshift.io/exec-format-error"
 	True                         = "true"
 	False                        = "false"
+	ExecFormatErrorsDetected     = "ExecFormatErrorsDetected"
 	ExecFormatErrorEventReason   = "ExecFormatError"
 	UnknownContainer             = "unknown-container" // Used when the container name is not known or not provided
 	EnoexecControllerName        = "enoexec-event-handler-controller"

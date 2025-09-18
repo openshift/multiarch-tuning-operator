@@ -95,7 +95,7 @@ func buildRoleENoExecEventDaemonSet() *rbacv1.Role {
 			{
 				APIGroups: []string{v1beta1.GroupVersion.Group},
 				Resources: []string{v1beta1.ENoExecEventResource},
-				Verbs:     []string{GET, CREATE},
+				Verbs:     []string{GET, CREATE, DELETE},
 			},
 			{
 				APIGroups: []string{v1beta1.GroupVersion.Group},

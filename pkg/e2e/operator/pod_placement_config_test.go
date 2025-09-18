@@ -22,6 +22,8 @@ import (
 
 const (
 	helloOpenshiftPublicMultiarchImage = "quay.io/openshifttest/hello-openshift:1.2.0"
+	helloOpenshiftPublicArmImage       = "quay.io/openshifttest/hello-openshift:arm-1.2.0"
+	helloOpenshiftPublicAmdImage       = "quay.io/openshifttest/hello-openshift:amd-1.2.0"
 	enoexecTriggerScriptArgs           = `#!/bin/bash
 output_file="$(mktemp)"
 dd if=/dev/zero of="$output_file" bs=1024 count=1 status=none
@@ -47,6 +49,8 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			_ = framework.StorePodsLog(ctx, clientset, client, utils.Namespace(), "control-plane", "controller-manager", "manager", os.Getenv("ARTIFACT_DIR"))
 			_ = framework.StorePodsLog(ctx, clientset, client, utils.Namespace(), "controller", utils.PodPlacementControllerName, utils.PodPlacementControllerName, os.Getenv("ARTIFACT_DIR"))
 			_ = framework.StorePodsLog(ctx, clientset, client, utils.Namespace(), "controller", utils.PodPlacementWebhookName, utils.PodPlacementWebhookName, os.Getenv("ARTIFACT_DIR"))
+			_ = framework.StorePodsLog(ctx, clientset, client, utils.Namespace(), "controller", utils.EnoexecControllerName, utils.EnoexecControllerName, os.Getenv("ARTIFACT_DIR"))
+			_ = framework.StorePodsLog(ctx, clientset, client, utils.Namespace(), "app", utils.EnoexecDaemonSet, utils.EnoexecDaemonSet, os.Getenv("ARTIFACT_DIR"))
 		}
 		err := client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 			ObjectMeta: metav1.ObjectMeta{
@@ -621,7 +625,7 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				By("Creating a pod designed to trigger an ENOEXEC error")
 				ps := NewPodSpec().
 					WithContainersImages(helloOpenshiftPublicMultiarchImage).
-					WithNodeSelectors(map[string]string{utils.ArchLabel: utils.ArchitectureAmd64}).
+					WithNodeSelectors(map[string]string{utils.ArchLabel: arch}).
 					WithCommand("/bin/bash").
 					WithArgs("-c", enoexecTriggerScriptArgs).
 					Build()
@@ -636,29 +640,81 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				Expect(err).NotTo(HaveOccurred())
 				By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
 				Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
-				By("Getting the pod created by the deployment")
-				podList := &corev1.PodList{}
-				// List pods in the test namespace with the label "app=test"
-				err = client.List(ctx, podList, runtimeclient.InNamespace(ns.Name), runtimeclient.MatchingLabels(podLabel))
+				By("Verify an ExecFormatError event is recorded for the pod")
+				Eventually(framework.VerifyPodsEvents(ctx, client, ns, "app", "test", "ExecFormatError"), e2e.WaitMedium).Should(Succeed())
+				By("Deleting the deployment to avoid new pods being recreated")
+				err = client.Delete(ctx, d)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(podList.Items).NotTo(BeEmpty())
-				pod := podList.Items[0]
-				By("Polling for an ENoExecEvent from the pod")
+				By("Verifying that there are no leftover abnormal ENOExecEvent CRs")
 				Eventually(func(g Gomega) {
-					// List all events in the pod's namespace
-					eventList := &corev1.EventList{}
-					err := client.List(ctx, eventList, runtimeclient.InNamespace(ns.Name))
-					g.Expect(err).NotTo(HaveOccurred(), "failed to list events in the namespace")
-					foundEvent := false
-					for _, event := range eventList.Items {
-						// Check if the event is for our pod and has the correct reason/message
-						if event.InvolvedObject.UID == pod.UID && event.Reason == "ExecFormatError" {
-							foundEvent = true
-							break
-						}
-					}
-					g.Expect(foundEvent).To(BeTrue(), "an ENoExecEvent for the pod was not found")
-				}).Should(Succeed(), "the pod was not found in the namespace")
+					// List all ENoExecEvents in the pod's namespace
+					enoExecEventList := &v1beta1.ENoExecEventList{}
+					err := client.List(ctx, enoExecEventList, runtimeclient.InNamespace(utils.Namespace()))
+					g.Expect(err).NotTo(HaveOccurred(), "failed to list ENoExecEvents in the namespace")
+					g.Expect(len(enoExecEventList.Items)).To(BeZero(), "found leftover abnormal ENoExecEvent CRs")
+				}).Should(Succeed(), "ENoExecEvent CRs were not cleaned up")
+			},
+				Entry("amd64", utils.ArchitectureAmd64),
+				Entry("arm64", utils.ArchitectureArm64),
+				Entry("s390x", utils.ArchitectureS390x),
+				Entry("ppc64le", utils.ArchitecturePpc64le),
+			)
+			DescribeTable("should not leave over abnormal ENOExecEvent CRs with null spec", func(arch string) {
+				// Skip the test if the required architecture is not available on the cluster.
+				if !availableArchitectures[arch] {
+					Skip(fmt.Sprintf("Skipping test because no node with architecture %s is available", arch))
+				}
+				containerImage := helloOpenshiftPublicArmImage
+				if arch == utils.ArchitectureArm64 {
+					containerImage = helloOpenshiftPublicAmdImage
+				}
+				var err error
+				By("Creating a ClusterPodPlacementConfig with execFormatErrorMonitor plugin enabled")
+				err = client.Create(ctx,
+					NewClusterPodPlacementConfig().
+						WithName(common.SingletonResourceObjectName).
+						WithExecFormatErrorMonitor(true).
+						Build(),
+				)
+				Expect(err).NotTo(HaveOccurred(), "failed to create the ClusterPodPlacementConfig")
+				By("Validate the clusterPodPlacementConfig and eNoExecEvent objects exist")
+				Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin)).Should(Succeed())
+				By("Create an ephemeral namespace for the test pod")
+				ns := framework.NewEphemeralNamespace()
+				err = client.Create(ctx, ns)
+				Expect(err).NotTo(HaveOccurred())
+				//nolint:errcheck
+				defer client.Delete(ctx, ns)
+				By("Creating a pod designed to trigger an ENOEXEC error")
+				ps := NewPodSpec().
+					WithContainersImages(containerImage).
+					WithNodeSelectors(map[string]string{utils.ArchLabel: arch}).
+					Build()
+				By("Scaling deployment replicas to 10 for easier reproduction of the error scenario")
+				d := NewDeployment().
+					WithSelectorAndPodLabels(podLabel).
+					WithPodSpec(ps).
+					WithReplicas(utils.NewPtr(int32(10))).
+					WithName("test-deployment").
+					WithNamespace(ns.Name).
+					Build()
+				err = client.Create(ctx, d)
+				Expect(err).NotTo(HaveOccurred())
+				By("The pod should not have been processed by the webhook and the scheduling gate label should be set as not-set")
+				Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Present, schedulingGateNotSetLabel), e2e.WaitShort).Should(Succeed())
+				By("Verify an ExecFormatError event is recorded for the pod")
+				Eventually(framework.VerifyPodsEvents(ctx, client, ns, "app", "test", "ExecFormatError"), e2e.WaitMedium).Should(Succeed())
+				By("Deleting the deployment to avoid new pods being recreated")
+				err = client.Delete(ctx, d)
+				Expect(err).NotTo(HaveOccurred())
+				By("Verifying that there are no leftover abnormal ENOExecEvent CRs")
+				Eventually(func(g Gomega) {
+					// List all ENoExecEvents in the pod's namespace
+					enoExecEventList := &v1beta1.ENoExecEventList{}
+					err := client.List(ctx, enoExecEventList, runtimeclient.InNamespace(utils.Namespace()))
+					g.Expect(err).NotTo(HaveOccurred(), "failed to list ENoExecEvents in the namespace")
+					g.Expect(len(enoExecEventList.Items)).To(BeZero(), "found leftover abnormal ENoExecEvent CRs")
+				}).Should(Succeed(), "ENoExecEvent CRs were not cleaned up")
 			},
 				Entry("amd64", utils.ArchitectureAmd64),
 				Entry("arm64", utils.ArchitectureArm64),

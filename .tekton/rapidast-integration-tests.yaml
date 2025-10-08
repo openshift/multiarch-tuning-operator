@@ -1,16 +1,26 @@
-# An example Pipeline to use in an IntegrationTest, this is for a component named "test-component"
-# which would be built an a separate build pipeline
 apiVersion: tekton.dev/v1
-kind: Pipeline
+kind: PipelineRun
 metadata:
+  annotations:
+    build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}
+    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
+      == "main" && (".tekton/***".pathChanged() || "apis/***".pathChanged() || "controllers/***".pathChanged()
+      || "pkg/***".pathChanged() || "test/***".pathChanged() || "konflux.Dockerfile".pathChanged()
+      || "go.mod".pathChanged() || "main.go".pathChanged() || "go.sum".pathChanged()
+      || "trigger-konflux-builds.txt".pathChanged() )
+  labels:
+    appstudio.openshift.io/application: multiarch-tuning-operator
+    appstudio.openshift.io/component: multiarch-tuning-operator
   name: rapidast-integration-test
+  namespace: multiarch-tuning-ope-tenant
 spec:
   params:
     # this SNAPSHOT should be produced by the build pipeline and contain the containerImage we want to test with rapidast
     - name: SNAPSHOT
       type: string
-#    - name: revision
-#      value: '{{revision}}'
   tasks:
     # we need an clean environment where we have permission to deploy k8s resources
     # this env will only provide namespace-admin, not cluster-admin. For components
@@ -123,7 +133,7 @@ spec:
             value: https://github.com/openshift/multiarch-tuning-operator
             # TODO change revision after merge
           - name: revision
-            value: main
+            value: "$(context.pipelineRun.annotations['pipelinesascode.tekton.dev/sha'])"
           - name: pathInRepo
             value: .tekton/rapidast-check.yaml
       params:

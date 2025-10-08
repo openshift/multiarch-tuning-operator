@@ -9,6 +9,8 @@ spec:
     # this SNAPSHOT should be produced by the build pipeline and contain the containerImage we want to test with rapidast
     - name: SNAPSHOT
       type: string
+#    - name: revision
+#      value: '{{revision}}'
   tasks:
     # we need an clean environment where we have permission to deploy k8s resources
     # this env will only provide namespace-admin, not cluster-admin. For components
@@ -118,10 +120,10 @@ spec:
         resolver: git
         params:
           - name: url
-            value: https://github.com/redhatproductsecurity/rapidast
+            value: https://github.com/openshift/multiarch-tuning-operator
             # TODO change revision after merge
           - name: revision
-            value: konflux-example
+            value: main
           - name: pathInRepo
             value: .tekton/rapidast-check.yaml
       params:

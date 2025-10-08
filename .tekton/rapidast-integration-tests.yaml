@@ -20,7 +20,9 @@ spec:
   params:
     # this SNAPSHOT should be produced by the build pipeline and contain the containerImage we want to test with rapidast
     - name: SNAPSHOT
-      type: string
+      value: "$(context.pipelineRun.labels['appstudio.openshift.io/snapshot'])"
+    - name: revision
+      value: '{{revision}}'
   tasks:
     # we need an clean environment where we have permission to deploy k8s resources
     # this env will only provide namespace-admin, not cluster-admin. For components

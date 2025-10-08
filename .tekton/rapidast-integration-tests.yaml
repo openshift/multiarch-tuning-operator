@@ -1,38 +1,3 @@
-#apiVersion: tekton.dev/v1beta1
-#kind: PipelineRun
-#metadata:
-#  annotations:
-#    build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}
-#    build.appstudio.redhat.com/commit_sha: '{{revision}}'
-#    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-#    pipelinesascode.tekton.dev/max-keep-runs: "3"
-#    pipelinesascode.tekton.dev/on-event: "[pull_request]"
-#    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-#      == "main" && (".tekton/***".pathChanged() || "apis/***".pathChanged() || "controllers/***".pathChanged()
-#      || "pkg/***".pathChanged() || "test/***".pathChanged() || "konflux.Dockerfile".pathChanged()
-#      || "go.mod".pathChanged() || "main.go".pathChanged() || "go.sum".pathChanged()
-#      || "trigger-konflux-builds.txt".pathChanged() )
-#  creationTimestamp: null
-#  labels:
-#    appstudio.openshift.io/application: multiarch-tuning-operator
-#    appstudio.openshift.io/component: multiarch-tuning-operator
-#    pipelines.appstudio.openshift.io/type: build
-#  namespace: multiarch-tuning-ope-tenant
-#  name: rapidast-integration-test
-#spec:
-#  params:
-#    - name: snapshot
-#      value: "{{snapshot}}"
-#    - name: revision
-#      value: '{{revision}}'
-#  pipelineRef:
-#    params:
-#      - name: name
-#        value: rapidast-integration-pipeline
-#      - name: kind
-#        value: pipeline
-
-
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
@@ -55,7 +20,6 @@ spec:
     # this snapshot should be produced by the build pipeline and contain the containerImage we want to test with rapidast
     - name: snapshot
       type: string
-
     - name: revision
       type: string
   tasks:

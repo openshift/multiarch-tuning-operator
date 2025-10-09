@@ -4,16 +4,17 @@ metadata:
   annotations:
     build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
       == "fbc"
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: fbc-v4-17
-    appstudio.openshift.io/component: fbc-v4-17
+    appstudio.openshift.io/application: fbc-v4-20
+    appstudio.openshift.io/component: fbc-v4-20
     pipelines.appstudio.openshift.io/type: build
-  name: fbc-v4-17-on-push
+  name: fbc-v4-20-on-pull-request
   namespace: multiarch-tuning-ope-tenant
 spec:
   params:
@@ -21,8 +22,10 @@ spec:
       value: Dockerfile
     - name: git-url
       value: '{{source_url}}'
+    - name: image-expires-after
+      value: 5d
     - name: output-image
-      value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/fbc-v4-17/fbc-v4-17:{{revision}}
+      value: quay.io/redhat-user-workloads/multiarch-tuning-ope-tenant/fbc-v4-20/fbc-v4-20:on-pr-{{revision}}
     - name: path-context
       value: .
     - name: revision
@@ -31,8 +34,8 @@ spec:
       value: "true"
     - name: BUILD_ARGS
       value:
-        - 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.17'
-        - 'OCP_VERSION=fbc-v4-17'
+        - 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.20'
+        - 'OCP_VERSION=fbc-v4-20'
   taskRunTemplate: {}
   pipelineRef:
     resolver: bundles

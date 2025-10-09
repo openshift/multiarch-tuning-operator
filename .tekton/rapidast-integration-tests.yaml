@@ -44,9 +44,6 @@ spec:
 
     # use image from snapshot in new deployment in fresh environment
     - name: deploy-app
-      params:
-        - name: snapshot
-          value: "$(params.snapshot)"
       runAfter:
         - provision-env
       taskSpec:

@@ -18,7 +18,7 @@ metadata:
 spec:
   params:
     # this snapshot should be produced by the build pipeline and contain the containerImage we want to test with rapidast
-    - name: snapshot
+    - name: SNAPSHOT
       type: string
     - name: revision
       type: string
@@ -44,15 +44,18 @@ spec:
 
     # use image from snapshot in new deployment in fresh environment
     - name: deploy-app
+      params:
+        - name: SNAPSHOT
+          value: "$(params.SNAPSHOT)"
       runAfter:
         - provision-env
       taskSpec:
         params:
-          - name: snapshot
+          - name: SNAPSHOT
             type: string
         volumes:
           - name: credentials
-            emptyDir: {}
+            emptyDir: { }
         steps:
           # write the kubeconfig to a volume we can use in subsequent steps
           # and emptyDir volume will exist for the lifetime of a single taskRun
@@ -77,13 +80,13 @@ spec:
               echo "Wrote kubeconfig for new environment to $KUBECONFIG"
 
           # we need to copy the pull secret into our fresh test environment
-          # for the snapshot image stored in a private quay repo
+          # for the SNAPSHOT image stored in a private quay repo
           - name: copy-pull-secret
             image: quay.io/konflux-ci/konflux-test:latest
             env:
               - name: DEST_KUBECONFIG
                 value: /credentials/kubeconfig.yml
-              # used to pull snapshot image, should already exist in user namespace
+              # used to pull SNAPSHOT image, should already exist in user namespace
               - name: PULL_SECRET
                 value: multiarch-tuning-operator-pull
             volumeMounts:
@@ -104,8 +107,8 @@ spec:
           - name: deploy-app
             image: quay.io/konflux-ci/konflux-test:latest
             env:
-              - name: snapshot
-                value: "$(params.snapshot)"
+              - name: SNAPSHOT
+                value: "$(params.SNAPSHOT)"
               - name: KUBECONFIG
                 value: /credentials/kubeconfig.yml
             volumeMounts:
@@ -114,8 +117,8 @@ spec:
             script: |
               #!/bin/bash
               set -euxo pipefail
-
-              IMAGE=$(echo "$snapshot" | jq -r '.components[0].containerImage')
+              
+              IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[0].containerImage')
               echo "Extracted image: $IMAGE"
 
               oc create deployment multiarch-tuning-operator --image=$IMAGE

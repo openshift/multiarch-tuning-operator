@@ -1,9 +1,9 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  annotations:
+#  annotations:
 #    build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}
-    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+#    build.appstudio.redhat.com/commit_sha: '{{revision}}'
 #    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
 #    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
 #    pipelinesascode.tekton.dev/max-keep-runs: "3"
@@ -134,7 +134,8 @@ spec:
             value: https://github.com/openshift/multiarch-tuning-operator
             # TODO change revision after merge
           - name: revision
-            value: '{{revision}}'
+            value:  "$(params.revision)"
+#           value:  "$(context.pipelineRun.annotations['build.appstudio.redhat.com/commit_sha'])"
           - name: pathInRepo
             value: .tekton/rapidast-check.yaml
       params:

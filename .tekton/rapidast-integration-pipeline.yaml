@@ -1,18 +1,18 @@
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  annotations:
-    build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}
-    build.appstudio.redhat.com/commit_sha: '{{revision}}'
-    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
-    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-    pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main" && pac.component.name == "multiarch-tuning-operator" && (".tekton/***".pathChanged() || "apis/***".pathChanged() || ... )
-  labels:
-    appstudio.openshift.io/application: multiarch-tuning-operator
-    appstudio.openshift.io/component: multiarch-tuning-operator
-    pipelines.appstudio.openshift.io/type: build
+#  annotations:
+#    build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}
+#    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+#    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
+#    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+#    pipelinesascode.tekton.dev/max-keep-runs: "3"
+#    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
+#      == "main" && pac.component.name == "multiarch-tuning-operator" && (".tekton/***".pathChanged() || "apis/***".pathChanged() || ... )
+#  labels:
+#    appstudio.openshift.io/application: multiarch-tuning-operator
+#    appstudio.openshift.io/component: multiarch-tuning-operator
+#    pipelines.appstudio.openshift.io/type: build
   name: rapidast-integration-pipeline
   namespace: multiarch-tuning-ope-tenant
 spec:
@@ -117,7 +117,7 @@ spec:
             script: |
               #!/bin/bash
               set -euxo pipefail
-              
+
               IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[0].containerImage')
               echo "Extracted image: $IMAGE"
 

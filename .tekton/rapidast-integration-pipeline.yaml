@@ -2,7 +2,7 @@ apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
   name: rapidast-integration-pipeline
-  namespace: multiarch-tuning-ope-tenant
+#  namespace: multiarch-tuning-ope-tenant
 spec:
   description: >-
     Implement the RapidDAST scanning task in rh-trex to service as a proof of concept for users.
@@ -36,7 +36,7 @@ spec:
         params:
           - name: SNAPSHOT
             description: Expected output of the application endpoint
-          - default: 'default'
+          - default: 'openshift-multiarch-tuning-operator'
             name: NAMESPACE
             description: Namespace of the application under test
           - default: ""

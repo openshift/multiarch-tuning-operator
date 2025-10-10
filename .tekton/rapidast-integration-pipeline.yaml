@@ -89,7 +89,7 @@ spec:
 
           # deploy an instance of our app using the snapshot image in our test env
           - name: deploy-app
-            image: quay.io/konflux-ci/konflux-test:latest
+            image: quay.io/operator-framework/operator-sdk:latest
             env:
               - name: SNAPSHOT
                 value: "$(params.SNAPSHOT)"
@@ -102,11 +102,35 @@ spec:
               #!/bin/bash
               set -euxo pipefail
 
-              IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[0].containerImage')
-              echo "Extracted image: $IMAGE"
+              OO_BUNDLE=$(echo "$SNAPSHOT" | jq -r '.components[1].containerImage')
+              NAMESPACE=$(oc project --short)
+              echo "Deploying bundle $OO_BUNDLE to namespace $NAMESPACE"
 
-              oc create deployment multiarch-tuning-operator --image=$IMAGE
-              oc wait --for=condition=Available=true deployment/multiarch-tuning-operator --timeout=120s
+              operator-sdk run bundle "$OO_BUNDLE" -n "$NAMESPACE" --timeout=5m
+
+              # Wait for the operator installation (CSV) to succeed, which is more reliable than waiting for a deployment
+              echo "Waiting for operator to be installed..."
+              # First, get the name of the CSV that the subscription is installing
+              CSV_NAME=""
+              for i in {1..10}; do
+              # The subscription name is usually the same as the package name from the bundle
+                CSV_NAME=$(oc get subscription -n "$NAMESPACE" -l operators.coreos.com/oc-create-deployment-78db6-multiarch-tuning-operator.multiarch-tuning-ope-tenant -o jsonpath='{.items[0].status.installedCSV}' || true)
+                if [[ -n "$CSV_NAME" ]]; then
+                echo "Found installed CSV: $CSV_NAME"
+                break
+                fi
+                echo "Waiting for subscription to report installed CSV..."
+                sleep 15
+                done
+                
+                if [[ -z "$CSV_NAME" ]]; then
+                echo "Timed out waiting for subscription to be created and report installed CSV."
+                oc get all -n "$NAMESPACE"
+                exit 1
+              fi
+                      
+              oc wait --for=condition=Succeeded csv/"$CSV_NAME" -n "$NAMESPACE" --timeout=5m
+              echo "Operator deployment successful."
     - name: setup-test
       runAfter: [deploy-app]
       taskSpec:

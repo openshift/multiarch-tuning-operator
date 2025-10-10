@@ -28,81 +28,85 @@ spec:
         - name: ownerUid
           value: $(context.pipelineRun.uid)
     - name: deploy-app
-      runAfter: [provision-env]
       params:
         - name: SNAPSHOT
-          value: $(params.SNAPSHOT)
+          value: "$(params.SNAPSHOT)"
+      runAfter:
+        - provision-env
       taskSpec:
         params:
           - name: SNAPSHOT
-            description: Expected output of the application endpoint
-          - default: 'openshift-multiarch-tuning-operator'
-            name: NAMESPACE
-            description: Namespace of the application under test
-          - default: ""
-            name: PORT
-            description: Application endpoint Port
-        results:
-          - name: APP_URL
-            description: APP URL
+            type: string
+        volumes:
+          - name: credentials
+            emptyDir: {}
         steps:
-          - name: deploy-component
-            image: registry.redhat.io/openshift4/ose-cli:latest
+          # write the kubeconfig to a volume we can use in subsequent steps
+          # and emptyDir volume will be exist for the lifetime of a single taskRun
+          - name: get-kubeconfig
+            image: quay.io/konflux-ci/konflux-test:latest
             env:
-              - name: SNAPSHOT
-                value: $(params.SNAPSHOT)
+              - name: KUBECONFIG
+                value: /credentials/kubeconfig.yml
               - name: KUBECONFIG_VALUE
                 valueFrom:
                   secretKeyRef:
                     name: "$(tasks.provision-env.results.secretRef)"
                     key: kubeconfig
-              - name: CLIENT_ID
-                valueFrom:
-                  secretKeyRef:
-                    name: ocm
-                    key: client_id
-              - name: CLIENT_SEC
-                valueFrom:
-                  secretKeyRef:
-                    name: ocm
-                    key: client_secret
+            volumeMounts:
+              - name: credentials
+                mountPath: /credentials
             script: |
-              #!/usr/bin/env bash
-              cat <<< "$KUBECONFIG_VALUE" > /tmp/cfg
-              dnf -y install jq git
-              export KUBECONFIG=/tmp/cfg
+              #!/bin/bash
+              set -euxo pipefail
 
-              # ENABLE_HTTPS is set to false in service-template for this test 
-              # when the clusters only have self-signed certificates.
-              # This option should not be used in production.
+              cat <<< "$KUBECONFIG_VALUE" > "$KUBECONFIG"
+              echo "Wrote kubeconfig for new environment to $KUBECONFIG"
 
-              COMPONENT_NAME=$(echo -n ${SNAPSHOT} | jq -r .components[0].name)
+          # we need to copy the pull secret into our fresh test environment
+          # for the SNAPSHOT image stored in a private quay repo
+          - name: copy-pull-secret
+            image: quay.io/konflux-ci/konflux-test:latest
+            env:
+              - name: DEST_KUBECONFIG
+                value: /credentials/kubeconfig.yml
+              # used to pull SNAPSHOT image, should already exist in user namespace
+              - name: PULL_SECRET
+                value: imagerepository-for-multiarch-tuning-operator-multiarch-tuning-operator-image-pull
+            volumeMounts:
+              - name: credentials
+                mountPath: /credentials
+            script: |
+              #!/bin/bash
+              set -euxo pipefail
 
-              echo "Deploying component ${COMPONENT_NAME}..."
-              COMPONENT_NAME=$(echo -n ${SNAPSHOT} | jq -r .components[0].name)
+              oc get secrets $PULL_SECRET -o json | jq 'del(.metadata.creationTimestamp,
+                .metadata.uid, .metadata.resourceVersion,
+                .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration",
+                .metadata.namespace)' > /tmp/pull-secret.json
+              oc --kubeconfig=$DEST_KUBECONFIG apply -f /tmp/pull-secret.json
+              oc --kubeconfig=$DEST_KUBECONFIG secret link --for=pull default $PULL_SECRET
 
-              TARGET_COMPONENT_NAME="/tmp/rh-trex"
-              REPO_URL=$(echo $SNAPSHOT | jq -r '.components[] | .source.git.url')
-              REPO_COMMIT=$(echo $SNAPSHOT | jq -r '.components[] | .source.git.revision')
-              REPO_IMG=$(echo $SNAPSHOT | jq -r '.components[] | .containerImage')
-              git clone $REPO_URL $TARGET_COMPONENT_NAME
-              cd $TARGET_COMPONENT_NAME
-              git checkout $REPO_COMMIT
-              rev=$(echo ${REPO_IMG#*/})
-              image_reg=$(echo ${REPO_IMG%%/*})
-              image_tag=$(echo ${rev#*:})
-              image_rep=$(echo ${rev%:*})
-              mkdir -p /tmp/templates/
-              for i in $(ls templates/*yml); do j=${i#*/}; outf=${j%.*};oc process --kubeconfig /tmp/cfg --filename="$i" --local="true" --ignore-unknown-parameters="true" --param="ENVIRONMENT"=development --param="GLOG_V"=10  --param="DATABASE_HOST"=trex-db.$(oc project --short) --param="DATABASE_NAME"=rhtrex  --param="DATABASE_PASSWORD"=foobar-bizz-buzz  --param="DATABASE_PORT"=5432 --param="DATABASE_USER"=trex  --param="DATABASE_SSLMODE"=disable --param="ENABLE_SENTRY"=false --param="SENTRY_KEY"=TODO --param="JWKS_URL"=https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/certs  --param="OCM_SERVICE_CLIENT_ID"=${CLIENT_ID} --param="OCM_SERVICE_CLIENT_SECRET"=${CLIENT_SEC}  --param="OCM_BASE_URL"=https://api.integration.openshift.com --param="IMAGE_REGISTRY="$image_reg --param="IMAGE_REPOSITORY="$image_rep --param="IMAGE_TAG="$image_tag  > /tmp/templates/${outf}.json; done
-              oc apply --kubeconfig /tmp/cfg  -f /tmp/templates/db-template.json
-              sleep 60
-              oc apply --kubeconfig /tmp/cfg  -f /tmp/templates/secrets-template.json
-              oc apply --kubeconfig /tmp/cfg  -f /tmp/templates/service-template.json
-              sleep 60
-              oc get --kubeconfig /tmp/cfg all
-              oc get --kubeconfig /tmp/cfg events
-              oc describe --kubeconfig /tmp/cfg pod -l app=trex
-              oc logs --kubeconfig /tmp/cfg -l app=trex
+          # deploy an instance of our app using the snapshot image in our test env
+          - name: deploy-app
+            image: quay.io/konflux-ci/konflux-test:latest
+            env:
+              - name: SNAPSHOT
+                value: "$(params.SNAPSHOT)"
+              - name: KUBECONFIG
+                value: /credentials/kubeconfig.yml
+            volumeMounts:
+              - name: credentials
+                mountPath: /credentials
+            script: |
+              #!/bin/bash
+              set -euxo pipefail
+
+              IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[0].containerImage')
+              echo "Extracted image: $IMAGE"
+
+              oc create deployment multiarch-tuning-operator --image=$IMAGE
+              oc wait --for=condition=Available=true deployment/multiarch-tuning-operator --timeout=120s
     - name: setup-test
       runAfter: [deploy-app]
       taskSpec:

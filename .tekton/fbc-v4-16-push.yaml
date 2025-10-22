@@ -29,7 +29,7 @@ spec:
     value: '{{revision}}'
   - name: hermetic
     value: "true"
-  - name: BUILD_ARGS
+  - name: build-args
     value:
     - BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.16
     - OCP_VERSION=fbc-v4-16

@@ -101,12 +101,26 @@ spec:
             script: |
               #!/bin/bash
               set -euxo pipefail
-              
-              dnf install -y jq
+
+              # Download jq binary instead of installing via package manager
+              curl -L -o /usr/local/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64
+              chmod +x /usr/local/bin/jq
+
+              # Download oc (OpenShift CLI) binary
+              curl -L -o /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+              tar -xzf /tmp/oc.tar.gz -C /usr/local/bin oc
+              chmod +x /usr/local/bin/oc
+              rm /tmp/oc.tar.gz
 
               OO_BUNDLE=$(echo "$SNAPSHOT" | jq -r '.components[1].containerImage')
               NAMESPACE=$(oc project --short)
               echo "Deploying bundle $OO_BUNDLE to namespace $NAMESPACE"
+
+              # Grant necessary permissions to the namespace-manager service account for OLM operations
+              # This is needed for operator-sdk run bundle to create CatalogSource, OperatorGroup, and Subscription
+              SA_NAME=$(oc whoami)
+              echo "Granting cluster-admin to ${SA_NAME} for OLM operations..."
+              oc adm policy add-cluster-role-to-user cluster-admin "${SA_NAME}"
 
               operator-sdk run bundle "$OO_BUNDLE" -n "$NAMESPACE" --timeout=5m
 
@@ -191,11 +205,15 @@ spec:
               BASE_URL="http://127.0.0.1:8000"
               CONFIG_PATH="/workspace/config.yaml"
 
-              wget -O /tmp/ocm https://github.com/openshift-online/ocm-cli/releases/download/v1.0.3/ocm-linux-amd64
+              # Download ocm CLI binary
+              curl -L -o /tmp/ocm https://github.com/openshift-online/ocm-cli/releases/download/v1.0.3/ocm-linux-amd64
               chmod +x /tmp/ocm
-              export PATH=$PATH:/tmp
 
-              dnf install -y jq
+              # Download jq binary
+              curl -L -o /tmp/jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64
+              chmod +x /tmp/jq
+
+              export PATH=$PATH:/tmp
 
               /tmp/ocm login --token=${OCM_TOKEN} --url=${BASE_URL}
 

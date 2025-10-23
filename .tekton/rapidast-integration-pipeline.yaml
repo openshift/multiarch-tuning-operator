@@ -101,6 +101,8 @@ spec:
             script: |
               #!/bin/bash
               set -euxo pipefail
+              
+              dnf install -y jq
 
               OO_BUNDLE=$(echo "$SNAPSHOT" | jq -r '.components[1].containerImage')
               NAMESPACE=$(oc project --short)

@@ -64,8 +64,10 @@ import (
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
 
 	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
+	enoexeceventhandler "github.com/openshift/multiarch-tuning-operator/controllers/enoexecevent/handler"
 	"github.com/openshift/multiarch-tuning-operator/controllers/operator"
 	"github.com/openshift/multiarch-tuning-operator/controllers/podplacement"
+	"github.com/openshift/multiarch-tuning-operator/controllers/podplacementconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
@@ -89,10 +91,11 @@ var (
 	enableLeaderElection,
 	enableClusterPodPlacementConfigOperandWebHook,
 	enableClusterPodPlacementConfigOperandControllers,
+	enableENoExecEventControllers bool
 	enableCPPCInformer bool
-	enableOperator  bool
-	initialLogLevel int
-	postFuncs       []func()
+	enableOperator     bool
+	initialLogLevel    int
+	postFuncs          []func()
 )
 
 func init() {
@@ -122,6 +125,12 @@ func main() {
 			&corev1.Pod{}: {
 				Field: fields.OneTermEqualSelector("status.phase", "Pending"),
 			},
+		}
+	}
+	if enableENoExecEventControllers {
+		leaderID = fmt.Sprintf("enoexecevent-controllers-%s", leaderID)
+		cacheOpts.DefaultNamespaces = map[string]cache.Config{
+			utils.Namespace(): {},
 		}
 	}
 
@@ -179,12 +188,16 @@ func main() {
 
 	if enableOperator {
 		RunOperator(mgr)
+		RunPodPlacementConfigWebHook(mgr)
 	}
 	if enableClusterPodPlacementConfigOperandControllers {
 		RunClusterPodPlacementConfigOperandControllers(mgr)
 	}
 	if enableClusterPodPlacementConfigOperandWebHook {
 		RunClusterPodPlacementConfigOperandWebHook(mgr)
+	}
+	if enableENoExecEventControllers {
+		RunENoExecEventControllers(mgr)
 	}
 
 	setupLog.Info("starting manager")
@@ -260,13 +273,29 @@ func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: handler})
 }
 
+func RunPodPlacementConfigWebHook(mgr ctrl.Manager) {
+	mgr.GetWebhookServer().Register("/validate-multiarch-openshift-io-v1beta1-podplacementconfig",
+		&webhook.Admission{Handler: podplacementconfig.NewPodPlacementConfigWebhook(mgr.GetAPIReader(), mgr.GetScheme())})
+}
+
+func RunENoExecEventControllers(mgr ctrl.Manager) {
+	config := ctrl.GetConfigOrDie()
+	clientset := kubernetes.NewForConfigOrDie(config)
+	must(enoexeceventhandler.NewReconciler(
+		mgr.GetClient(),
+		clientset,
+		mgr.GetScheme(),
+		mgr.GetEventRecorderFor(utils.EnoexecControllerName),
+	).SetupWithManager(mgr), unableToCreateController, controllerKey, "ENoExecEventController")
+}
+
 func validateFlags() error {
-	if !enableOperator && !enableClusterPodPlacementConfigOperandControllers && !enableClusterPodPlacementConfigOperandWebHook {
-		return errors.New("at least one of the following flags must be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook")
+	if !enableOperator && !enableClusterPodPlacementConfigOperandControllers && !enableClusterPodPlacementConfigOperandWebHook && !enableENoExecEventControllers {
+		return errors.New("at least one of the following flags must be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook, --enable-enoexec-event-controllers")
 	}
 	// no more than one of the flags can be set
-	if btoi(enableOperator)+btoi(enableClusterPodPlacementConfigOperandControllers)+btoi(enableClusterPodPlacementConfigOperandWebHook) > 1 {
-		return errors.New("only one of the following flags can be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook")
+	if btoi(enableOperator)+btoi(enableClusterPodPlacementConfigOperandControllers)+btoi(enableClusterPodPlacementConfigOperandWebHook)+btoi(enableENoExecEventControllers) > 1 {
+		return errors.New("only one of the following flags can be set: --enable-operator, --enable-ppc-controllers, --enable-ppc-webhook, --enable-enoexec-event-controllers")
 	}
 	return nil
 }
@@ -286,6 +315,7 @@ func bindFlags() {
 	flag.BoolVar(&enableClusterPodPlacementConfigOperandControllers, "enable-ppc-controllers", false, "Enable the pod placement config operand controllers")
 	flag.BoolVar(&enableOperator, "enable-operator", false, "Enable the operator")
 	flag.BoolVar(&enableCPPCInformer, "enable-cppc-informer", false, "Enable informer for ClusterPodPlacementConfig")
+	flag.BoolVar(&enableENoExecEventControllers, "enable-enoexec-event-controllers", false, "Enable the ENoExecEvent controllers")
 	// This may be deprecated in the future. It is used to support the current way of setting the log level for operands
 	// If operands will start to support a controller that watches the ClusterPodPlacementConfig, this flag may be removed
 	// and the log level will be set in the ClusterPodPlacementConfig at runtime (with no need for reconciliation)

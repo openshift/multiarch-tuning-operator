@@ -1,5 +1,5 @@
-apiVersion: tekton.dev/v1beta1
-kind: PipelineRun
+apiVersion: tekton.dev/v1
+ind: PipelineRun
 metadata:
   annotations:
     build.appstudio.openshift.io/repo: https://github.com/openshift/multiarch-tuning-operator?rev={{revision}}

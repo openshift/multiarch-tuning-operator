@@ -36,7 +36,8 @@ spec:
     value:
       - 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.18'
       - 'OCP_VERSION=fbc-v4-18'
-  taskRunTemplate: {}
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-fbc-v4-18
   pipelineRef:
     resolver: bundles
     params:

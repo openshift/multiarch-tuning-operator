@@ -208,30 +208,52 @@ func (i *registryInspector) GetCompatibleArchitecturesSet(ctx context.Context, i
 //  2. A digest-only reference if a digest is present, dropping the tag when both
 //     a tag and digest are specified in the pod's container image field
 func parseImageReference(imageName string) (string, error) {
-	digestSplit := strings.Split(imageName, "@sha256:")
-	switch len(digestSplit) {
-	case 0:
+	// Check for empty image name first
+	if imageName == "" {
 		return "", errors.New("invalid image name, must not be empty")
-	case 1:
+	}
+
+	// Find digest separator (supports sha256, sha512, sha384, etc.)
+	digestIdx := strings.Index(imageName, "@sha")
+
+	// Check if digest is present
+	switch digestIdx {
+	case -1:
+		// No digest is present
 		return imageName, nil
-	case 2:
+	case 0:
+		// Image name can't start with digest
+		return "", errors.New("invalid image name, image must not be empty")
 	default:
+		// Now check that if there is a tag present
+	}
+
+	// Validate there's only one digest
+	if strings.Count(imageName[digestIdx+1:], "@sha") > 0 {
 		return "", errors.New("invalid image name, must only have one digest")
 	}
 
-	// Since the length is 2, imageName is either a digest-only image or both the tag and the digest have been provided.
-	tagSplit := strings.Split(digestSplit[0], ":")
-	switch len(tagSplit) {
-	case 0:
-		return "", errors.New("invalid image name, image must not be empty")
-	case 1:
-		// Since the length is 1, no tag has been found: imageName is a digest-only image.
+	namePart := imageName[:digestIdx]
+	digestPart := imageName[digestIdx:] // includes the @
+
+	// Find last "/" and last ":" to determine if we have a tag to remove
+	// Format: [registry[:port]/][namespace/]image[:tag]@digest
+	lastSlash := strings.LastIndex(namePart, "/")
+	lastColon := strings.LastIndex(namePart, ":")
+
+	//determine what to do with colons
+	switch {
+	case lastColon == -1:
+		// No colon at all - no port, no tag
 		return imageName, nil
-	case 2:
+	case lastColon > lastSlash:
+		// Colon is after last slash (or no slash) - it's a tag, remove it
+		namePart = namePart[:lastColon]
+		return namePart + digestPart, nil
 	default:
-		return "", errors.New("invalid image name, image contains more than one digest or tag")
+		// Colon is before last slash - it's a port, keep it
+		return imageName, nil
 	}
-	return tagSplit[0] + "@sha256:" + digestSplit[1], nil
 }
 
 func isBundleImage(image ociv1.ImageConfig) bool {

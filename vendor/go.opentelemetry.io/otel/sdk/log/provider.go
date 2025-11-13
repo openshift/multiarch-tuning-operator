@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/log/embedded"
 	"go.opentelemetry.io/otel/log/noop"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
-	"go.opentelemetry.io/otel/sdk/log/internal/x"
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
@@ -32,11 +31,19 @@ type providerConfig struct {
 	processors    []Processor
 	attrCntLim    setting[int]
 	attrValLenLim setting[int]
+	allowDupKeys  setting[bool]
+}
+
+type experimentalOption interface {
+	Experimental()
 }
 
 func newProviderConfig(opts []LoggerProviderOption) providerConfig {
 	var c providerConfig
 	for _, opt := range opts {
+		if _, ok := opt.(experimentalOption); ok {
+			continue
+		}
 		c = opt.apply(c)
 	}
 
@@ -66,9 +73,7 @@ type LoggerProvider struct {
 	processors                []Processor
 	attributeCountLimit       int
 	attributeValueLengthLimit int
-
-	fltrProcessorsOnce sync.Once
-	fltrProcessors     []x.FilterProcessor
+	allowDupKeys              bool
 
 	loggersMu sync.Mutex
 	loggers   map[instrumentation.Scope]*logger
@@ -94,18 +99,8 @@ func NewLoggerProvider(opts ...LoggerProviderOption) *LoggerProvider {
 		processors:                cfg.processors,
 		attributeCountLimit:       cfg.attrCntLim.Value,
 		attributeValueLengthLimit: cfg.attrValLenLim.Value,
+		allowDupKeys:              cfg.allowDupKeys.Value,
 	}
-}
-
-func (p *LoggerProvider) filterProcessors() []x.FilterProcessor {
-	p.fltrProcessorsOnce.Do(func() {
-		for _, proc := range p.processors {
-			if f, ok := proc.(x.FilterProcessor); ok {
-				p.fltrProcessors = append(p.fltrProcessors, f)
-			}
-		}
-	})
-	return p.fltrProcessors
 }
 
 // Logger returns a new [log.Logger] with the provided name and configuration.
@@ -243,10 +238,10 @@ func WithAttributeCountLimit(limit int) LoggerProviderOption {
 	})
 }
 
-// AttributeValueLengthLimit sets the maximum allowed attribute value length.
+// WithAttributeValueLengthLimit sets the maximum allowed attribute value length.
 //
-// This limit only applies to string and string slice attribute values.
-// Any string longer than this value will be truncated to this length.
+// This limit only applies to string, string slice, and byte slice attribute values.
+// Strings and byte slices longer than this value will be truncated to this length.
 //
 // Setting this to a negative value means no limit is applied.
 //
@@ -258,6 +253,24 @@ func WithAttributeCountLimit(limit int) LoggerProviderOption {
 func WithAttributeValueLengthLimit(limit int) LoggerProviderOption {
 	return loggerProviderOptionFunc(func(cfg providerConfig) providerConfig {
 		cfg.attrValLenLim = newSetting(limit)
+		return cfg
+	})
+}
+
+// WithAllowKeyDuplication sets whether deduplication is skipped for log attributes or other key-value collections.
+//
+// By default, the key-value collections within a log record are deduplicated to comply with the OpenTelemetry Specification.
+// Deduplication means that if multiple key–value pairs with the same key are present, only a single pair
+// is retained and others are discarded.
+//
+// Disabling deduplication with this option can improve performance e.g. of adding attributes to the log record.
+//
+// Note that if you disable deduplication, you are responsible for ensuring that duplicate
+// key-value pairs within in a single collection are not emitted,
+// or that the telemetry receiver can handle such duplicates.
+func WithAllowKeyDuplication() LoggerProviderOption {
+	return loggerProviderOptionFunc(func(cfg providerConfig) providerConfig {
+		cfg.allowDupKeys = newSetting(true)
 		return cfg
 	})
 }

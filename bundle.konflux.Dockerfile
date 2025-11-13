@@ -1,6 +1,6 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 as builder
-ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:c73068eb5776773c4f9137070e7ba278c4d3616a36e1aba2dbf49882c66a1b06
-ARG ORIGINAL_IMG=registry.ci.openshift.org/origin/multiarch-tuning-operator:main
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.26 as builder
+ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:0ef4149443889423ea492d8be3172c5d38ab9bc37872f48075746381597f97d9
+ARG ORIGINAL_IMG=registry.ci.openshift.org/origin/multiarch-tuning-operator:v1.x
 WORKDIR /code
 COPY ./ ./
 
@@ -19,9 +19,9 @@ LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
 LABEL operators.operatorframework.io.bundle.package.v1=multiarch-tuning-operator
 LABEL operators.operatorframework.io.bundle.channels.v1=stable
 LABEL operators.operatorframework.io.bundle.channel.default.v1=stable
-LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.31.0
+LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.33.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
-LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v3
+LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 
 # Labels for testing.
 LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
@@ -36,9 +36,9 @@ COPY --from=builder /code/bundle/tests/scorecard /tests/scorecard/
 LABEL com.redhat.component="Multiarch Tuning Operator"
 LABEL distribution-scope="public"
 LABEL name="multiarch-tuning/multiarch-tuning-operator-bundle"
-LABEL release="1.2.0"
-LABEL version="1.2.0"
-LABEL cpe="cpe:/a:redhat:multiarch_tuning_operator:1.1::el9"
+LABEL release="1.3.3"
+LABEL version="1.3.3"
+LABEL cpe="cpe:/a:redhat:multiarch_tuning_operator:1.3::el9"
 LABEL url="https://github.com/openshift/multiarch-tuning-operator"
 LABEL vendor="Red Hat, Inc."
 LABEL description="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \

@@ -73,6 +73,7 @@ message PodSecurityPolicyReviewSpec {
 // PodSecurityPolicyReviewStatus represents the status of PodSecurityPolicyReview.
 message PodSecurityPolicyReviewStatus {
   // allowedServiceAccounts returns the list of service accounts in *this* namespace that have the power to create the PodTemplateSpec.
+  // +optional
   repeated ServiceAccountPodSecurityPolicyReviewStatus allowedServiceAccounts = 1;
 }
 
@@ -134,14 +135,17 @@ message PodSecurityPolicySubjectReviewStatus {
   // allowedBy is a reference to the rule that allows the PodTemplateSpec.
   // A rule can be a SecurityContextConstraint or a PodSecurityPolicy
   // A `nil`, indicates that it was denied.
+  // +optional
   optional .k8s.io.api.core.v1.ObjectReference allowedBy = 1;
 
   // A machine-readable description of why this operation is in the
   // "Failure" status. If this value is empty there
   // is no information available.
+  // +optional
   optional string reason = 2;
 
   // template is the PodTemplateSpec after the defaulting is applied.
+  // +optional
   optional .k8s.io.api.core.v1.PodTemplateSpec template = 3;
 }
 
@@ -242,7 +246,7 @@ message SecurityContextConstraints {
   optional bool allowPrivilegedContainer = 3;
 
   // defaultAddCapabilities is the default set of capabilities that will be added to the container
-  // unless the pod spec specifically drops the capability.  You may not list a capabiility in both
+  // unless the pod spec specifically drops the capability.  You may not list a capability in both
   // DefaultAddCapabilities and RequiredDropCapabilities.
   // +nullable
   // +listType=atomic
@@ -298,7 +302,6 @@ message SecurityContextConstraints {
   // When "AllowHostLevel" is set, a pod author may set `hostUsers` to either `true` or `false`.
   // When "RequirePodLevel" is set, a pod author must set `hostUsers` to `false`.
   // When omitted, the default value is "AllowHostLevel".
-  // +openshift:enable:FeatureGate=UserNamespacesPodSecurityStandards
   // +kubebuilder:validation:Enum="AllowHostLevel";"RequirePodLevel"
   // +kubebuilder:default:="AllowHostLevel"
   // +default="AllowHostLevel"
@@ -354,7 +357,7 @@ message SecurityContextConstraints {
 
   // seccompProfiles lists the allowed profiles that may be set for the pod or
   // container's seccomp annotations.  An unset (nil) or empty value means that no profiles may
-  // be specifid by the pod or container.	The wildcard '*' may be used to allow all profiles.  When
+  // be specified by the pod or container.	The wildcard '*' may be used to allow all profiles.  When
   // used to generate a value for a pod the first non-wildcard profile will be used as
   // the default.
   // +nullable

@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -165,7 +166,7 @@ func (hrs *HTTPReadSeeker) reset() {
 	}
 }
 
-func (hrs *HTTPReadSeeker) reader() (io.Reader, error) {
+func (hrs *HTTPReadSeeker) reader() (_ io.Reader, retErr error) {
 	if hrs.err != nil {
 		return nil, hrs.err
 	}
@@ -191,6 +192,11 @@ func (hrs *HTTPReadSeeker) reader() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if retErr != nil {
+			_ = resp.Body.Close()
+		}
+	}()
 
 	// Normally would use client.SuccessStatus, but that would be a cyclic
 	// import
@@ -251,8 +257,8 @@ func (hrs *HTTPReadSeeker) reader() (io.Reader, error) {
 		encoding := strings.FieldsFunc(resp.Header.Get("Content-Encoding"), func(r rune) bool {
 			return unicode.IsSpace(r) || r == ','
 		})
-		for i := len(encoding) - 1; i >= 0; i-- {
-			algorithm := strings.ToLower(encoding[i])
+		for _, v := range slices.Backward(encoding) {
+			algorithm := strings.ToLower(v)
 			switch algorithm {
 			case "zstd":
 				r, err := zstd.NewReader(body)
@@ -276,8 +282,11 @@ func (hrs *HTTPReadSeeker) reader() (io.Reader, error) {
 
 		hrs.rc = body
 	} else {
-		defer resp.Body.Close()
 		if hrs.errorHandler != nil {
+			// Closing the body should be handled by the existing defer,
+			// but in case a custom "errHandler" is used that doesn't return
+			// an error, we close the body regardless.
+			defer resp.Body.Close()
 			return nil, hrs.errorHandler(resp)
 		}
 		return nil, fmt.Errorf("unexpected status resolving reader: %v", resp.Status)

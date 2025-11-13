@@ -244,6 +244,7 @@ func (repo *repository) Tags(ctx context.Context) distribution.TagService {
 		repository:       repo,
 		blobStore:        repo.registry.blobStore,
 		concurrencyLimit: limit,
+		deleteEnabled:    repo.registry.deleteEnabled,
 	}
 
 	return tags
@@ -259,6 +260,10 @@ func (repo *repository) Manifests(ctx context.Context, options ...distribution.M
 		blobStore:  repo.blobStore,
 		repository: repo,
 		linkPath:   manifestRevisionLinkPath,
+	}
+
+	if repo.descriptorCache != nil {
+		statter = cache.NewCachedBlobStatter(repo.descriptorCache, statter)
 	}
 
 	if repo.registry.blobDescriptorServiceFactory != nil {

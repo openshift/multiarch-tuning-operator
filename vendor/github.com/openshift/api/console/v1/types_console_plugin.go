@@ -90,7 +90,6 @@ type ConsolePluginSpec struct {
 	//   OpenShift web console server CSP response header:
 	//     Content-Security-Policy: default-src 'self'; base-uri 'self'; script-src 'self' https://script1.com/ https://script2.com/ https://script3.com/; font-src 'self' https://font1.com/ https://font2.com/; img-src 'self' https://img1.com/; style-src 'self'; frame-src 'none'; object-src 'none'
 	//
-	// +openshift:enable:FeatureGate=ConsolePluginContentSecurityPolicy
 	// +kubebuilder:validation:MaxItems=5
 	// +kubebuilder:validation:XValidation:rule="self.map(x, x.values.map(y, y.size()).sum()).sum() < 8192",message="the total combined size of values of all directives must not exceed 8192 (8kb)"
 	// +listType=map
@@ -339,7 +338,7 @@ type ConsolePluginBackend struct {
 	// Service serving certificate. The console backend will proxy the
 	// plugins assets from the Service using the service CA bundle.
 	// +optional
-	Service *ConsolePluginService `json:"service"`
+	Service *ConsolePluginService `json:"service,omitempty"`
 }
 
 // ConsolePluginService holds information on Service that is serving
@@ -368,7 +367,7 @@ type ConsolePluginService struct {
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9.\-_~!$&'()*+,;=:@\/]*$`
 	// +kubebuilder:default:="/"
 	// +optional
-	BasePath string `json:"basePath"`
+	BasePath string `json:"basePath,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

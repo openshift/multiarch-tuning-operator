@@ -22,8 +22,8 @@ import (
 	ocpconfigv1 "github.com/openshift/api/config/v1"
 	ocpoperatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common/plugins"
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	"github.com/openshift/multiarch-tuning-operator/api/common/plugins"
+	"github.com/openshift/multiarch-tuning-operator/api/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	. "github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
@@ -94,13 +94,21 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 })
 
 var _ = SynchronizedAfterSuite(func() {}, func() {
+	By("Waiting for any PodPlacementConfigs to be deleted")
+	Eventually(func(g Gomega) {
+		ppcList := &v1beta1.PodPlacementConfigList{}
+		err := client.List(ctx, ppcList)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(ppcList.Items).To(BeEmpty(), "all PodPlacementConfigs should be deleted")
+	}, e2e.WaitOverMedium).Should(Succeed())
+	By("Deleting ClusterPodPlacementConfig")
 	err := client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
 		},
 	})
-	Expect(err).NotTo(HaveOccurred())
-	Eventually(framework.ValidateDeletion(client, ctx)).Should(Succeed())
+	Expect(runtimeclient.IgnoreNotFound(err)).NotTo(HaveOccurred())
+	Eventually(framework.ValidateDeletion(client, ctx), e2e.WaitOverMedium).Should(Succeed())
 	if len(masterNodes.Items) == 0 {
 		By("Skipping registry config clean up because it is not supported on hosted clusters")
 	} else {
@@ -209,7 +217,7 @@ func createRegistryConfigTestData() {
 	image.Spec.RegistrySources.BlockedRegistries = append(image.Spec.RegistrySources.BlockedRegistries, framework.GetImageRepository(e2e.PausePublicMultiarchImage))
 	By("Configuring containerRuntimeSearchRegistries in image.config")
 	image.Spec.RegistrySources.ContainerRuntimeSearchRegistries = append(image.Spec.RegistrySources.ContainerRuntimeSearchRegistries,
-		"quay.io", "registry.access.redhat.com", "docker.io")
+		"quay.io")
 	err = client.Update(ctx, image)
 	Expect(err).NotTo(HaveOccurred())
 }

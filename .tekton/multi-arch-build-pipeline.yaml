@@ -1,0 +1,141 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: multi-arch-build-pipeline
+  labels:
+    pipelines.openshift.io/used-by: build-cloud
+    pipelines.openshift.io/runtime: generic
+    pipelines.openshift.io/strategy: docker
+spec:
+  description: |
+    Multi-architecture build pipeline that wraps the Konflux docker-build-multi-platform-oci-ta pipeline.
+    This pipeline can be referenced via git resolver instead of bundles resolver.
+
+  params:
+  - name: git-url
+    description: Source Repository URL
+    type: string
+  - name: revision
+    description: Revision of the Source Repository
+    type: string
+    default: ""
+  - name: output-image
+    description: Fully Qualified Output Image
+    type: string
+  - name: path-context
+    description: Path to the source code of an application's component from where to build image.
+    type: string
+    default: .
+  - name: dockerfile
+    description: Path to the Dockerfile inside the context specified by parameter path-context
+    type: string
+    default: Dockerfile
+  - name: rebuild
+    description: Force rebuild image
+    type: string
+    default: "false"
+  - name: hermetic
+    description: Execute the build with network isolation
+    type: string
+    default: "false"
+  - name: prefetch-input
+    description: Build dependencies to be prefetched by Cachi2
+    type: string
+    default: ""
+  - name: image-expires-after
+    description: Image tag expiration time, defaults to no expiration
+    type: string
+    default: ""
+  - name: build-source-image
+    description: Build a source image
+    type: string
+    default: "false"
+  - name: build-platforms
+    description: List of platforms to build the container image on
+    type: array
+    default:
+    - localhost
+    - linux/arm64
+    - linux/ppc64le
+    - linux/s390x
+
+  # Additional params that the underlying pipeline may use
+  - name: skip-checks
+    description: Skip checks against built image
+    type: string
+    default: "false"
+  - name: java
+    description: Java build
+    type: string
+    default: "false"
+  - name: build-image-index
+    description: Add built image into an OCI image index
+    type: string
+    default: "false"
+  workspaces:
+  - name: workspace
+    description: Workspace for the pipeline
+  - name: git-auth
+    description: |
+      Workspace with credentials for git operations
+    optional: true
+  - name: workspace-arm64
+    description: Workspace for ARM64 builds
+    optional: true
+  - name: workspace-s390x
+    description: Workspace for s390x builds
+    optional: true
+  - name: workspace-ppc64le
+    description: Workspace for ppc64le builds
+    optional: true
+  tasks:
+  - name: build
+    taskRef:
+      params:
+      - name: name
+        value: docker-build-multi-platform-oci-ta
+      - name: bundle
+        value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta@sha256:6cc873c432806b0f43c47824a0e5faf6470eec62291127483af3f788b5548679
+      - name: kind
+        value: pipeline
+      resolver: bundles
+    params:
+    - name: git-url
+      value: $(params.git-url)
+    - name: revision
+      value: $(params.revision)
+    - name: output-image
+      value: $(params.output-image)
+    - name: path-context
+      value: $(params.path-context)
+    - name: dockerfile
+      value: $(params.dockerfile)
+    - name: rebuild
+      value: $(params.rebuild)
+    - name: hermetic
+      value: $(params.hermetic)
+    - name: prefetch-input
+      value: $(params.prefetch-input)
+    - name: image-expires-after
+      value: $(params.image-expires-after)
+    - name: build-source-image
+      value: $(params.build-source-image)
+    - name: build-platforms
+      value: $(params.build-platforms[*])
+    - name: skip-checks
+      value: $(params.skip-checks)
+    - name: java
+      value: $(params.java)
+    - name: build-image-index
+      value: $(params.build-image-index)
+    workspaces:
+    - name: workspace
+      workspace: workspace
+    - name: git-auth
+      workspace: git-auth
+    - name: workspace-arm64
+      workspace: workspace-arm64
+    - name: workspace-s390x
+      workspace: workspace-s390x
+    - name: workspace-ppc64le
+      workspace: workspace-ppc64le

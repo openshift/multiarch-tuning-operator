@@ -25,14 +25,12 @@
       "/\\.yaml$/",
       "/\\.yml$/"
     ],
-    "ignoreTests": true,
     "includePaths": [
       ".tekton/**"
     ],
     "platformAutomerge": true,
-    "commitMessagePrefix": "NO-JIRA:",
     "schedule": [
-      "at any time"
+      "before 8am on saturday"
     ]
   }
 }

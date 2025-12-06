@@ -44,7 +44,7 @@ spec:
     - name: name
       value: docker-build-oci-ta
     - name: bundle
-      value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-oci-ta:devel@sha256:a1c9b96b3c372d241d5a25cd8c2ee440232c2fbde7e1543738b2f717ee223ad6
+      value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-oci-ta:devel@sha256:3fd1f9fdbbc26838a27b7a087f2d4bdf4c932e3cd454629bec1aa9e03e0004b8
     - name: kind
       value: pipeline
     resolver: bundles

@@ -29,8 +29,6 @@
       ".tekton/**"
     ],
     "platformAutomerge": true,
-    "schedule": [
-      "before 8am on saturday"
-    ]
+    "commitMessageSuffix": "{{baseBranch}}"
   }
 }

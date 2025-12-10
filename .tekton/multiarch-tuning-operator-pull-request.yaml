@@ -43,14 +43,7 @@ spec:
   - name: build-source-image
     value: "true"
   pipelineRef:
-    params:
-    - name: name
-      value: docker-build-multi-platform-oci-ta
-    - name: bundle
-      value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta:devel@sha256:cff621491230ac78cb4d360068d17c4bf8afcad23d6be7b6d0168df3ec8c2762
-    - name: kind
-      value: pipeline
-    resolver: bundles
+    name: multi-arch-build-pipeline
   taskRunTemplate:
     serviceAccountName: build-pipeline-multiarch-tuning-operator
   workspaces:

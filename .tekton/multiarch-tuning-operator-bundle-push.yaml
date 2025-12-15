@@ -43,8 +43,7 @@ spec:
       - name: name
         value: docker-build-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-oci-ta@sha256:411889e4f5855123aecba2f92b94588b3fa90cc0b8bcc8dd0b4dd3ab88c4a750
-      - name: kind
+        value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-oci-ta@sha256:2fe7286c3274b98a7722633d5b82c5764f035c67198ae7451a5f057d7e0e3570
         value: pipeline
   taskRunTemplate:
     serviceAccountName: build-pipeline-multiarch-tuning-operator-bundle-v1-x

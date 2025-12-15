@@ -246,7 +246,7 @@ relatedImages:
   name: ""
 schema: olm.bundle
 ---
-image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:300c83c72856f41ea9426029ca6dba05b3caf2bbddd816f72a9bf7b615d4bbd5
+image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:fe40f5abedd62e8ac2a354ddc7e81e158615682c753ef942bca238dcc3beb4c7
 name: multiarch-tuning-operator.v1.2.1
 package: multiarch-tuning-operator
 properties:
@@ -297,7 +297,7 @@ properties:
   value:
     data: eyJhcGlWZXJzaW9uIjoidjEiLCJraW5kIjoiU2VydmljZSIsIm1ldGFkYXRhIjp7ImNyZWF0aW9uVGltZXN0YW1wIjpudWxsLCJuYW1lIjoibXVsdGlhcmNoLXR1bmluZy1vcGVyYXRvci1jb250cm9sbGVyLW1hbmFnZXItc2VydmljZSJ9LCJzcGVjIjp7InBvcnRzIjpbeyJuYW1lIjoid2ViaG9vayIsInBvcnQiOjQ0MywidGFyZ2V0UG9ydCI6OTQ0M30seyJuYW1lIjoibWV0cmljcyIsInBvcnQiOjg0NDMsInRhcmdldFBvcnQiOjg0NDN9XSwic2VsZWN0b3IiOnsiY29udHJvbC1wbGFuZSI6ImNvbnRyb2xsZXItbWFuYWdlciJ9fSwic3RhdHVzIjp7ImxvYWRCYWxhbmNlciI6e319fQ==
 relatedImages:
-- image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:300c83c72856f41ea9426029ca6dba05b3caf2bbddd816f72a9bf7b615d4bbd5
+- image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:fe40f5abedd62e8ac2a354ddc7e81e158615682c753ef942bca238dcc3beb4c7
   name: ""
 - image: registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:e17ed141cb3ec0a6c6b87bab5164f5657607d12d7b205a5d451e08f795a34e08
   name: ""

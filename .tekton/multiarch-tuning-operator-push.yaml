@@ -40,14 +40,14 @@ spec:
     - name: build-source-image
       value: "true"
   pipelineRef:
-    resolver: bundles
+    resolver: git
     params:
-      - name: name
-        value: docker-build-multi-platform-oci-ta
-      - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/pipeline-docker-build-multi-platform-oci-ta@sha256:7b3134db46d0eb4401e6b20c63049139922e42e79306b32bd1502c09ffecb92d
-      - name: kind
-        value: pipeline
+      - name: url
+        value: https://github.com/openshift/multiarch-tuning-operator.git
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: .tekton/multi-arch-build-pipeline.yaml
   taskRunTemplate:
     serviceAccountName: build-pipeline-multiarch-tuning-operator-v1-x
   workspaces:

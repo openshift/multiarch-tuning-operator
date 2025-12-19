@@ -128,6 +128,7 @@ func main() {
 		}
 	}
 	if enableENoExecEventControllers {
+		// change to trigger
 		leaderID = fmt.Sprintf("enoexecevent-controllers-%s", leaderID)
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{
 			utils.Namespace(): {},

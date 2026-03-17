@@ -32,7 +32,7 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-var _ = Describe("Controllers/PodPlacementConfig/PodPlacementConfigReconciler", Serial, func() {
+var _ = Describe("Internal/Controller/PodPlacementConfig/PodPlacementConfigReconciler", Serial, func() {
 	When("Creating a local podplacementconfig", func() {
 		Context("with invalid values in the plugins.nodeAffinityScoring and invalid priority stanza", func() {
 			DescribeTable("The request should fail with", func(object *v1beta1.PodPlacementConfig) {
@@ -128,7 +128,7 @@ var _ = Describe("Controllers/PodPlacementConfig/PodPlacementConfigReconciler", 
 				Expect(err).NotTo(HaveOccurred())
 				//nolint:errcheck
 				defer k8sClient.Delete(ctx, ns)
-				By("Creating a local PodPlacementConfig with a Prioriry setting")
+				By("Creating a local PodPlacementConfig with a Priority setting")
 				err = k8sClient.Create(ctx,
 					builder.NewPodPlacementConfig().
 						WithName("test-ppc").
@@ -150,7 +150,7 @@ var _ = Describe("Controllers/PodPlacementConfig/PodPlacementConfigReconciler", 
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get podplacementconfig", err)
 					g.Expect(ppc.Spec.Priority).To(Equal(uint8(50)), "the ppc Priority should equal 50")
 				}).Should(Succeed(), "the PodPlacementConfig should be created")
-				By("Creating another local PodPlacementConfig with the same Prioriry")
+				By("Creating another local PodPlacementConfig with the same Priority")
 				err = k8sClient.Create(ctx,
 					builder.NewPodPlacementConfig().
 						WithName("test-ppc-2").
@@ -163,7 +163,7 @@ var _ = Describe("Controllers/PodPlacementConfig/PodPlacementConfigReconciler", 
 				)
 				Expect(err).To(HaveOccurred(), "the PodPlacementConfig should not be accepted", err)
 			})
-			It("when update a local ppc priority to an exsiting one", func() {
+			It("when update a local ppc priority to an existing one", func() {
 				By("Create an ephemeral namespace")
 				ns := framework.NewEphemeralNamespace()
 				err := k8sClient.Create(ctx, ns)

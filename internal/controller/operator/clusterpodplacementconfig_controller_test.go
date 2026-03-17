@@ -18,6 +18,7 @@ package operator
 
 import (
 	"fmt"
+	"strings"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/openshift/multiarch-tuning-operator/api/common"
 	"github.com/openshift/multiarch-tuning-operator/api/v1beta1"
+	"github.com/openshift/multiarch-tuning-operator/internal/controller/enoexecevent/handler"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -450,7 +452,7 @@ var _ = Describe("internal/Controller/ClusterPodPlacementConfig/ClusterPodPlacem
 					framework.NewConditionTypeStatusTuple(v1beta1.DegradedType, corev1.ConditionTrue),
 					framework.NewConditionTypeStatusTuple(v1beta1.PodPlacementControllerNotRolledOutType, corev1.ConditionTrue),
 					framework.NewConditionTypeStatusTuple(v1beta1.PodPlacementWebhookNotRolledOutType, corev1.ConditionFalse),
-					framework.NewConditionTypeStatusTuple(v1beta1.MutatingWebhookConfigurationNotAvailable, corev1.ConditionFalse),
+					framework.NewConditionTypeStatusTuple(v1beta1.MutatingWebhookConfigurationNotAvailable, corev1.ConditionTrue),
 					framework.NewConditionTypeStatusTuple(v1beta1.DeprovisioningType, corev1.ConditionFalse),
 				)).Should(Succeed(), "the ClusterPodPlacementConfig should have the correct conditions")
 				By("Verify no mutating webhook configuration is not available")
@@ -664,6 +666,75 @@ var _ = Describe("internal/Controller/ClusterPodPlacementConfig/ClusterPodPlacem
 			Expect(err).NotTo(HaveOccurred(), "failed to get deployment "+utils.EnoexecControllerName, err)
 			Expect(d.Finalizers).To(ContainElement(utils.ExecFormatErrorFinalizerName))
 		})
+		It("should delete errored ENoExecEvents during cleanup and allow plugin disable", func() {
+			By("Creating errored ENoExecEvents")
+			erroredENEE1 := builder.NewENoExecEvent().
+				WithName(framework.GenerateName()).
+				WithNamespace(utils.Namespace()).
+				Build()
+			erroredENEE1.Labels = map[string]string{
+				handler.ENoExecEventErrorLabel: handler.ErrorReasonPodNotFound,
+			}
+			Expect(k8sClient.Create(ctx, erroredENEE1)).To(Succeed(), "failed to create errored ENoExecEvent")
+
+			erroredENEE2 := builder.NewENoExecEvent().
+				WithName(framework.GenerateName()).
+				WithNamespace(utils.Namespace()).
+				Build()
+			erroredENEE2.Labels = map[string]string{
+				handler.ENoExecEventErrorLabel: handler.ErrorReasonNodeNotFound,
+			}
+			Expect(k8sClient.Create(ctx, erroredENEE2)).To(Succeed(), "failed to create errored ENoExecEvent")
+
+			By("Creating a non-errored ENoExecEvent that should block cleanup")
+			nonErroredENEE := builder.NewENoExecEvent().
+				WithName(framework.GenerateName()).
+				WithNamespace(utils.Namespace()).
+				Build()
+			Expect(k8sClient.Create(ctx, nonErroredENEE)).To(Succeed(), "failed to create non-errored ENoExecEvent")
+
+			By("Disabling the ExecFormatErrorMonitor plugin")
+			cppc := &v1beta1.ClusterPodPlacementConfig{}
+			err := k8sClient.Get(ctx, crclient.ObjectKey{Name: common.SingletonResourceObjectName}, cppc)
+			Expect(err).NotTo(HaveOccurred())
+			cppc.Spec.Plugins.ExecFormatErrorMonitor.Enabled = false
+			Expect(k8sClient.Update(ctx, cppc)).To(Succeed(), "failed to update ClusterPodPlacementConfig")
+
+			By("Verifying errored ENoExecEvents are deleted but non-errored blocks cleanup")
+			Eventually(func(g Gomega) {
+				// Errored events should be deleted
+				err1 := k8sClient.Get(ctx, crclient.ObjectKey{
+					Name:      erroredENEE1.Name,
+					Namespace: utils.Namespace(),
+				}, &v1beta1.ENoExecEvent{})
+				g.Expect(errors.IsNotFound(err1)).To(BeTrue(), "errored ENoExecEvent 1 should be deleted")
+
+				err2 := k8sClient.Get(ctx, crclient.ObjectKey{
+					Name:      erroredENEE2.Name,
+					Namespace: utils.Namespace(),
+				}, &v1beta1.ENoExecEvent{})
+				g.Expect(errors.IsNotFound(err2)).To(BeTrue(), "errored ENoExecEvent 2 should be deleted")
+
+				// Non-errored event should still exist (blocking cleanup)
+				err3 := k8sClient.Get(ctx, crclient.ObjectKey{
+					Name:      nonErroredENEE.Name,
+					Namespace: utils.Namespace(),
+				}, &v1beta1.ENoExecEvent{})
+				g.Expect(err3).NotTo(HaveOccurred(), "non-errored ENoExecEvent should still exist")
+			}).Should(Succeed(), "errored events should be deleted while non-errored remains")
+
+			By("Deleting the non-errored ENoExecEvent to allow cleanup to proceed")
+			Expect(k8sClient.Delete(ctx, nonErroredENEE)).To(Succeed(), "failed to delete non-errored ENoExecEvent")
+
+			By("Verifying the ExecFormatErrorMonitor finalizer is removed after all ENoExecEvents are gone")
+			Eventually(func(g Gomega) {
+				cppc := &v1beta1.ClusterPodPlacementConfig{}
+				err := k8sClient.Get(ctx, crclient.ObjectKey{Name: common.SingletonResourceObjectName}, cppc)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(cppc.Finalizers).NotTo(ContainElement(utils.ExecFormatErrorFinalizerName),
+					"ExecFormatErrorMonitor finalizer should be removed")
+			}).Should(Succeed(), "finalizer should be removed after cleanup")
+		})
 	})
 	Context("the webhook shoud deny PodPlacementConfig creation", func() {
 		It("when the ClusterPodPlacementConfig doesn't exist", func() {
@@ -816,6 +887,165 @@ var _ = Describe("internal/Controller/ClusterPodPlacementConfig/ClusterPodPlacem
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(cppc.Finalizers).NotTo(ContainElement(utils.CPPCNoPPCObjectFinalizer))
 			}).Should(Succeed(), "the ClusterPodPlacementConfig should remove the no-pod-placement-config finalizer")
+		})
+	})
+	Context("Validating FallbackArchitecture field", func() {
+		DescribeTable("should validate ClusterPodPlacementConfig correctly",
+			func(arch string, expectValid bool) {
+				By("Ensure no ClusterPodPlacementConfig exists")
+				cppc := &v1beta1.ClusterPodPlacementConfig{}
+				err := k8sClient.Get(ctx, crclient.ObjectKey{
+					Name: common.SingletonResourceObjectName,
+				}, cppc)
+				Expect(errors.IsNotFound(err)).To(BeTrue(), "ClusterPodPlacementConfig should not exist")
+
+				By("Create the ClusterPodPlacementConfig")
+				object := builder.NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithFallbackArchitecture(arch).
+					Build()
+				err = k8sClient.Create(ctx, object)
+				if expectValid {
+					By("Verify it is created successfully")
+					Expect(err).NotTo(HaveOccurred(), "Failed to create ClusterPodPlacementConfig with valid FallbackArchitecture")
+				} else {
+					By("Verify the creation fails")
+					Expect(err).To(HaveOccurred(), "ClusterPodPlacementConfig creation should fail for invalid FallbackArchitecture")
+					Expect(errors.IsInvalid(err)).To(BeTrue(), "Error should indicate invalid object")
+				}
+			},
+			// Valid architectures
+			Entry("amd64", "amd64", true),
+			Entry("arm64", "arm64", true),
+			Entry("ppc64le", "ppc64le", true),
+			Entry("s390x", "s390x", true),
+			Entry("empty string", "", true),
+			// Invalid architectures
+			Entry("wrong string", "wrong", false),
+			Entry("space string", " ", false),
+			Entry("uppercase architecture", "AMD64", false),
+			Entry("unsupported architecture", "arm32", false),
+			Entry("special characters", "@!$", false),
+			Entry("too long string", strings.Repeat("a", 100), false),
+		)
+		AfterEach(func() {
+			By("Clean up ClusterPodPlacementConfig")
+			err := k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().
+				WithName(common.SingletonResourceObjectName).Build())
+			Expect(crclient.IgnoreNotFound(err)).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig")
+			Eventually(framework.ValidateDeletion(k8sClient, ctx, framework.MainPlugin, framework.ENoExecPlugin)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
+		})
+	})
+	Context("deleteErroredENoExecEvents helper function", func() {
+		var reconciler *ClusterPodPlacementConfigReconciler
+
+		BeforeEach(func() {
+			reconciler = &ClusterPodPlacementConfigReconciler{
+				Client: k8sClient,
+			}
+		})
+
+		It("should delete only errored ENoExecEvents and return correct counts", func() {
+			By("Creating errored ENoExecEvents")
+			erroredENEE1 := builder.NewENoExecEvent().
+				WithName(framework.GenerateName()).
+				WithNamespace(utils.Namespace()).
+				Build()
+			erroredENEE1.Labels = map[string]string{
+				handler.ENoExecEventErrorLabel: handler.ErrorReasonPodNotFound,
+			}
+			Expect(k8sClient.Create(ctx, erroredENEE1)).To(Succeed())
+
+			erroredENEE2 := builder.NewENoExecEvent().
+				WithName(framework.GenerateName()).
+				WithNamespace(utils.Namespace()).
+				Build()
+			erroredENEE2.Labels = map[string]string{
+				handler.ENoExecEventErrorLabel: handler.ErrorReasonNodeNotFound,
+			}
+			Expect(k8sClient.Create(ctx, erroredENEE2)).To(Succeed())
+
+			By("Creating non-errored ENoExecEvents")
+			nonErroredENEE1 := builder.NewENoExecEvent().
+				WithName(framework.GenerateName()).
+				WithNamespace(utils.Namespace()).
+				Build()
+			Expect(k8sClient.Create(ctx, nonErroredENEE1)).To(Succeed())
+
+			nonErroredENEE2 := builder.NewENoExecEvent().
+				WithName(framework.GenerateName()).
+				WithNamespace(utils.Namespace()).
+				Build()
+			Expect(k8sClient.Create(ctx, nonErroredENEE2)).To(Succeed())
+
+			By("Listing all ENoExecEvents")
+			enoexecEventList := &v1beta1.ENoExecEventList{}
+			Expect(k8sClient.List(ctx, enoexecEventList, crclient.InNamespace(utils.Namespace()))).To(Succeed())
+
+			By("Calling deleteErroredENoExecEvents")
+			nonErroredCount, erroredCount := reconciler.deleteErroredENoExecEvents(ctx, enoexecEventList)
+
+			By("Verifying the counts")
+			Expect(nonErroredCount).To(Equal(2), "should have 2 non-errored events")
+			Expect(erroredCount).To(Equal(2), "should have 2 errored events")
+
+			By("Verifying errored events are deleted")
+			Eventually(func(g Gomega) {
+				err1 := k8sClient.Get(ctx, crclient.ObjectKey{
+					Name:      erroredENEE1.Name,
+					Namespace: utils.Namespace(),
+				}, &v1beta1.ENoExecEvent{})
+				g.Expect(errors.IsNotFound(err1)).To(BeTrue(), "errored event 1 should be deleted")
+
+				err2 := k8sClient.Get(ctx, crclient.ObjectKey{
+					Name:      erroredENEE2.Name,
+					Namespace: utils.Namespace(),
+				}, &v1beta1.ENoExecEvent{})
+				g.Expect(errors.IsNotFound(err2)).To(BeTrue(), "errored event 2 should be deleted")
+			}).Should(Succeed())
+
+			By("Verifying non-errored events still exist")
+			err := k8sClient.Get(ctx, crclient.ObjectKey{
+				Name:      nonErroredENEE1.Name,
+				Namespace: utils.Namespace(),
+			}, &v1beta1.ENoExecEvent{})
+			Expect(err).NotTo(HaveOccurred(), "non-errored event 1 should still exist")
+
+			err = k8sClient.Get(ctx, crclient.ObjectKey{
+				Name:      nonErroredENEE2.Name,
+				Namespace: utils.Namespace(),
+			}, &v1beta1.ENoExecEvent{})
+			Expect(err).NotTo(HaveOccurred(), "non-errored event 2 should still exist")
+
+			By("Cleaning up non-errored events")
+			Expect(k8sClient.Delete(ctx, nonErroredENEE1)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, nonErroredENEE2)).To(Succeed())
+		})
+
+		It("should handle empty list gracefully", func() {
+			emptyList := &v1beta1.ENoExecEventList{}
+			nonErroredCount, erroredCount := reconciler.deleteErroredENoExecEvents(ctx, emptyList)
+			Expect(nonErroredCount).To(Equal(0))
+			Expect(erroredCount).To(Equal(0))
+		})
+
+		It("should handle ENoExecEvents with no labels", func() {
+			By("Creating ENoExecEvent with no labels")
+			enee := builder.NewENoExecEvent().
+				WithName(framework.GenerateName()).
+				WithNamespace(utils.Namespace()).
+				Build()
+			Expect(k8sClient.Create(ctx, enee)).To(Succeed())
+
+			enoexecEventList := &v1beta1.ENoExecEventList{}
+			Expect(k8sClient.List(ctx, enoexecEventList, crclient.InNamespace(utils.Namespace()))).To(Succeed())
+
+			nonErroredCount, erroredCount := reconciler.deleteErroredENoExecEvents(ctx, enoexecEventList)
+			Expect(nonErroredCount).To(BeNumerically(">", 0), "should count events with no labels as non-errored")
+			Expect(erroredCount).To(Equal(0))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, enee)).To(Succeed())
 		})
 	})
 })

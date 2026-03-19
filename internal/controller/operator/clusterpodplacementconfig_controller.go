@@ -27,14 +27,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/library-go/pkg/operator/events"
 
@@ -44,6 +50,7 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/api/common"
 	"github.com/openshift/multiarch-tuning-operator/api/common/plugins"
 	multiarchv1beta1 "github.com/openshift/multiarch-tuning-operator/api/v1beta1"
+	enoexechandler "github.com/openshift/multiarch-tuning-operator/internal/controller/enoexecevent/handler"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
@@ -66,6 +73,7 @@ const (
 	waitingForUngatingPodsError         = "waiting for pods with the scheduling gate to be ungated"
 	waitingForWebhookSInterruptionError = "re-queueing to ensure the webhook objects deletion interrupt pods gating before checking the pods gating status"
 	clusterPodPlacementConfigNotReady   = "cluster pod placement config is not ready yet. re-queueing"
+	RemainingPodPlacementConfig         = "cannot delete: namespaced PodPlacementConfig resources still exist"
 )
 
 //+kubebuilder:rbac:groups=multiarch.openshift.io,resources=clusterpodplacementconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -138,8 +146,32 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 			log.Error(err, "Unable to update finalizers in the ClusterPodPlacementConfig")
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: 0}, nil
 	}
+
+	// Handle the no-pod-placement-config finalizer
+	ppcList := &multiarchv1beta1.PodPlacementConfigList{}
+	if err := r.List(ctx, ppcList); err != nil {
+		log.Error(err, "Unable to list PodPlacementConfigs")
+		return ctrl.Result{}, err
+	}
+	shouldHavePPCFinalizer := len(ppcList.Items) > 0
+	hasPPCFinalizer := controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer)
+	if shouldHavePPCFinalizer != hasPPCFinalizer {
+		if shouldHavePPCFinalizer {
+			log.V(1).Info("Adding no-pod-placement-config finalizer to the ClusterPodPlacementConfig")
+			controllerutil.AddFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer)
+		} else {
+			log.V(1).Info("Removing no-pod-placement-config finalizer from the ClusterPodPlacementConfig")
+			controllerutil.RemoveFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer)
+		}
+		if err := r.Update(ctx, clusterPodPlacementConfig); err != nil {
+			log.Error(err, "Unable to update finalizers on the ClusterPodPlacementConfig")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: 0}, nil
+	}
+
 	if clusterPodPlacementConfig.PluginsEnabled(common.ExecFormatErrorMonitorPluginName) {
 		if !controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.ExecFormatErrorFinalizerName) {
 			// Add the finalizer to the object
@@ -149,7 +181,7 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 				log.Error(err, "Unable to update finalizers in the ClusterPodPlacementConfig")
 				return ctrl.Result{}, err
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: 0}, nil
 		}
 
 		// Attempt to fetch the ENoExecEvent Deployment.
@@ -175,7 +207,7 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 					return ctrl.Result{}, err
 				}
 				// After a successful update, requeue to ensure the next state is processed.
-				return ctrl.Result{Requeue: true}, nil
+				return ctrl.Result{RequeueAfter: 0}, nil
 			}
 		}
 	}
@@ -352,6 +384,29 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 		return errors.New(waitingForWebhookSInterruptionError)
 	}
 
+	// Prevent deletion while PodPlacementConfig resources still exist
+	if controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer) {
+		log.V(1).Info("Checking for existing PodPlacementConfig resources before deletion")
+		ppcList := &multiarchv1beta1.PodPlacementConfigList{}
+		if err := r.List(ctx, ppcList); err != nil {
+			log.Error(err, "Unable to list PodPlacementConfigs during deletion")
+			return err
+		}
+		if len(ppcList.Items) > 0 {
+			err := errors.New(RemainingPodPlacementConfig)
+			log.Error(err, "Deletion blocked due to existing PodPlacementConfig resources")
+			return err
+		}
+		// All PPCs are gone, remove the finalizer
+		log.V(1).Info("No PodPlacementConfig resources found, removing no-pod-placement-config finalizer")
+		controllerutil.RemoveFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer)
+		if err := r.Update(ctx, clusterPodPlacementConfig); err != nil {
+			log.Error(err, "Unable to remove no-pod-placement-config finalizer from ClusterPodPlacementConfig")
+			return err
+		}
+		return nil
+	}
+
 	log.Info("Looking for pods with the scheduling gate")
 	// get pending pods as we cannot query for the scheduling gate
 	pods, err := r.ClientSet.CoreV1().Pods("").List(ctx, metav1.ListOptions{
@@ -462,6 +517,13 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 func (r *ClusterPodPlacementConfigReconciler) handleEnoexecDelete(ctx context.Context, clusterPodPlacementConfig *multiarchv1beta1.ClusterPodPlacementConfig) error {
 	var err error
 	log := ctrllog.FromContext(ctx, "operation", "handleEnoexecDelete")
+	// If the ENoExecEvent finalizer was never added, skip the entire cleanup process.
+	// This prevents attempting to list ENoExecEvent resources when the plugin was never enabled,
+	// which would cause the informer to be created and fail to sync in time.
+	if !controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.ExecFormatErrorFinalizerName) {
+		log.V(1).Info("ENoExecEvent finalizer not present, skipping ENoExecEvent cleanup")
+		return nil
+	}
 	daemonSetRelatedObjsToDelete := []utils.ToDeleteRef{
 		{
 			NamespacedTypedClient: r.ClientSet.RbacV1().ClusterRoles(),
@@ -519,27 +581,30 @@ func (r *ClusterPodPlacementConfigReconciler) handleEnoexecDelete(ctx context.Co
 		return err
 	}
 
-	// Check if any ENoExecEvent resources were found.
-	if len(enoexecEventList.Items) > 0 {
-		log.Info("Found existing ENoExecEvent resources", "count", len(enoexecEventList.Items))
-		return errors.New("found existing ENoExecEvent resources")
-	} else {
-		log.Info("No ENoExecEvent resources found in the cluster. Removing the ExecEvent finalizer from the ENoExec Deployment")
-		deployment := &appsv1.Deployment{}
-		err = r.Get(ctx, client.ObjectKey{
-			Name:      utils.EnoexecControllerName,
-			Namespace: utils.Namespace(),
-		}, deployment)
-		if client.IgnoreNotFound(err) != nil {
-			log.Error(err, "Could not fetch ENoExecEvent Deployment")
+	// Delete errored ENoExecEvent resources and count remaining non-errored ones
+	nonErroredCount, _ := r.deleteErroredENoExecEvents(ctx, enoexecEventList)
+
+	// Only block cleanup if there are non-errored ENoExecEvent resources
+	if nonErroredCount > 0 {
+		log.Info("Found existing non-errored ENoExecEvent resources, waiting for reconciliation", "nonErroredCount", nonErroredCount)
+		return errors.New("found existing ENoExecEvent resources that need reconciliation")
+	}
+
+	log.Info("No non-errored ENoExecEvent resources found in the cluster. Removing the ExecEvent finalizer from the ENoExec Deployment")
+	deployment := &appsv1.Deployment{}
+	err = r.Get(ctx, client.ObjectKey{
+		Name:      utils.EnoexecControllerName,
+		Namespace: utils.Namespace(),
+	}, deployment)
+	if client.IgnoreNotFound(err) != nil {
+		log.Error(err, "Could not fetch ENoExecEvent Deployment")
+		return err
+	}
+	if err == nil && controllerutil.RemoveFinalizer(deployment, utils.ExecFormatErrorFinalizerName) {
+		if err = r.Update(ctx, deployment); err != nil {
+			log.Error(err, "Unable to remove finalizers.",
+				deployment.Kind, deployment.Name)
 			return err
-		}
-		if err == nil && controllerutil.RemoveFinalizer(deployment, utils.ExecFormatErrorFinalizerName) {
-			if err = r.Update(ctx, deployment); err != nil {
-				log.Error(err, "Unable to remove finalizers.",
-					deployment.Kind, deployment.Name)
-				return err
-			}
 		}
 	}
 
@@ -875,10 +940,65 @@ func isDeploymentUpToDate(deployment *appsv1.Deployment) bool {
 		deployment.Status.ObservedGeneration == deployment.Generation
 }
 
+// deleteErroredENoExecEvents deletes ENoExecEvent resources that are marked with an error label.
+// Returns the count of non-errored and errored events found.
+func (r *ClusterPodPlacementConfigReconciler) deleteErroredENoExecEvents(ctx context.Context, enoexecEventList *multiarchv1beta1.ENoExecEventList) (nonErroredCount, erroredCount int) {
+	log := ctrllog.FromContext(ctx)
+	for i := range enoexecEventList.Items {
+		enoexecEvent := &enoexecEventList.Items[i]
+		// Check if this ENoExecEvent is marked as errored
+		if enoexecEvent.Labels == nil {
+			nonErroredCount++
+			continue
+		}
+		if _, hasError := enoexecEvent.Labels[enoexechandler.ENoExecEventErrorLabel]; !hasError {
+			nonErroredCount++
+			continue
+		}
+		// Delete errored ENoExecEvents to prevent accumulation of stale resources
+		erroredCount++
+		if deleteErr := r.Delete(ctx, enoexecEvent); deleteErr != nil {
+			log.Error(deleteErr, "Failed to delete errored ENoExecEvent", "name", enoexecEvent.Name)
+		} else {
+			log.V(1).Info("Deleted errored ENoExecEvent", "name", enoexecEvent.Name)
+		}
+	}
+
+	if erroredCount > 0 {
+		log.Info("Deleted errored ENoExecEvent resources during cleanup", "erroredCount", erroredCount)
+	}
+	return nonErroredCount, erroredCount
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := ctrl.NewControllerManagedBy(mgr).
 		For(&multiarchv1beta1.ClusterPodPlacementConfig{}).
+		// Watch PodPlacementConfig to reconcile ClusterPodPlacementConfig only on create/delete events.
+		// Updates to PodPlacementConfig are intentionally ignored.
+		Watches(
+			&multiarchv1beta1.PodPlacementConfig{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{
+							Name: common.SingletonResourceObjectName,
+						},
+					},
+				}
+			}),
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					return true
+				},
+				DeleteFunc: func(e event.DeleteEvent) bool {
+					return true
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					return false
+				},
+			}),
+		).
 		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&corev1.Service{}).

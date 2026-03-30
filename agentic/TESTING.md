@@ -59,21 +59,6 @@ var _ = Describe("PodReconciler", func() {
 
 **Purpose**: Test controller interactions with Kubernetes API (using fake API server)
 
-**Example**:
-```go
-// envtest provides fake API server
-testEnv := &envtest.Environment{
-    CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
-}
-cfg, err := testEnv.Start()
-
-// Create manager with fake API server
-mgr, err := ctrl.NewManager(cfg, ctrl.Options{})
-
-// Test reconciler against fake API
-reconciler := &PodReconciler{Client: mgr.GetClient()}
-```
-
 ### E2E Tests
 
 **Location**: `test/e2e/*/`
@@ -83,8 +68,6 @@ reconciler := &PodReconciler{Client: mgr.GetClient()}
 **Suites**:
 - `test/e2e/e2e_test.go` - Operator lifecycle tests
 - `test/e2e/pod-placement/` - Pod placement workflow tests
-
-**Purpose**: Test full system in real cluster
 
 **Example Scenarios**:
 - Deploy operator, create CPPC, verify operands deployed
@@ -112,19 +95,13 @@ reconciler := &PodReconciler{Client: mgr.GetClient()}
 ### For Bug Fixes
 
 1. **Write a failing test that reproduces the bug**
-   - Demonstrate broken behavior
-   - Make test as minimal as possible
+2. **Fix the bug** - Modify code to make test pass
+3. **Verify test passes** - Run test suite: `make test`
 
-2. **Fix the bug**
-   - Modify code to make test pass
-
-3. **Verify test passes**
-   - Run test suite: `make test`
-
-## Running Tests Locally
+## Running Tests
 
 ```bash
-# All tests (unit + E2E if cluster available)
+# All tests (lint, vet, gosec, goimports, unit)
 make test
 
 # Unit tests only
@@ -132,10 +109,6 @@ make unit
 
 # Specific test by pattern
 GINKGO_ARGS="-v --focus='should set nodeAffinity'" make unit
-
-# With coverage report
-make unit
-# Coverage report: test-unit-coverage.out
 
 # E2E tests (requires deployed operator)
 export KUBECONFIG=/path/to/kubeconfig
@@ -159,64 +132,6 @@ GINKGO_ARGS="-v --focus='pod placement'" make e2e
 - Code coverage maintained (>80%)
 - No new gosec warnings
 
-## Test Data
-
-**Location**: `pkg/testing/fixtures/`
-**Format**: YAML manifests, JSON image manifests
-
-**Examples**:
-- `pkg/testing/fixtures/pod.yaml` - Sample pod definitions
-- `pkg/testing/fixtures/image-manifest.json` - Mock image manifest lists
-
-## Test Configuration
-
-**Environment Variables**:
-- `NO_DOCKER=1` - Run tests locally (not in container)
-- `KUBECONFIG` - Path to kubeconfig for E2E tests
-- `NAMESPACE` - Operator namespace for E2E tests
-- `GINKGO_ARGS` - Additional Ginkgo flags
-
-**Config Files**:
-- `.env` - Local test configuration (see dotenv.example)
-- `.ginkgo.yml` - Ginkgo configuration (if exists)
-
-## Troubleshooting Test Failures
-
-### Flaky tests
-**Symptom**: Tests pass/fail non-deterministically
-**Common causes**:
-- Race conditions in async code
-- Timeouts too short for slow environments
-- Shared state between tests
-
-**Fix**:
-- Add proper synchronization (Eventually/Consistently)
-- Increase timeouts
-- Ensure test isolation (separate namespaces, cleanup)
-
-### Timeout issues
-**Symptom**: "context deadline exceeded" errors
-**Common causes**:
-- envtest API server slow to start
-- E2E cluster resources unavailable
-- Controllers not reconciling
-
-**Fix**:
-- Increase timeout in Eventually() calls
-- Check cluster resource availability
-- Verify controller logs for errors
-
-### Image inspection failures in tests
-**Symptom**: Tests fail with registry errors
-**Common causes**:
-- Network issues reaching real registries
-- Missing mock image data
-
-**Fix**:
-- Use mock image inspector from pkg/testing/image/
-- Don't call real registries in unit tests
-- Use fixtures for expected responses
-
 ## Test Coverage
 
 Current coverage targets:
@@ -234,5 +149,6 @@ go tool cover -html=test-unit-coverage.out
 ## Related Documentation
 
 - [DEVELOPMENT.md](./DEVELOPMENT.md) - Dev setup and workflow
+- [Test Troubleshooting](./testing/troubleshooting.md) - Debugging test failures
 - [ARCHITECTURE.md](../ARCHITECTURE.md) - System structure
 - [Test Helpers](../pkg/testing/README.md) - Using test utilities

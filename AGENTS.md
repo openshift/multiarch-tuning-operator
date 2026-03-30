@@ -2,6 +2,8 @@
 
 > **Purpose**: Table of contents for AI agents. Points to deeper knowledge.
 > **Do not expand this file**. Keep under 150 lines. Link to details instead.
+>
+> **New here?** Start with [README.md](./README.md) for project overview.
 
 ## What This Repository Does
 
@@ -12,14 +14,23 @@ Enhances operational experience within multi-architecture OpenShift clusters by 
 **I need to understand the system**
 → [ARCHITECTURE.md](./ARCHITECTURE.md)
 → [Core beliefs](./agentic/design-docs/core-beliefs.md)
-→ [Components](./agentic/design-docs/components/)
+→ [Design docs index](./agentic/design-docs/index.md)
+→ [Architecture decisions](./agentic/decisions/index.md)
 
 **I'm implementing a feature**
-1. INVESTIGATE: Read [ARCHITECTURE.md](./ARCHITECTURE.md), [design docs](./agentic/design-docs/), verify data structures
-2. CREATE plan in [active/](./agentic/exec-plans/active/) using [template](./agentic/exec-plans/template.md)
+1. INVESTIGATE: Read [ARCHITECTURE.md](./ARCHITECTURE.md), [design guide](./agentic/DESIGN.md), verify data structures
+2. CREATE plan in [active plans](./agentic/exec-plans/active/index.md) using [template](./agentic/exec-plans/template.md)
 3. READ [testing guide](./agentic/TESTING.md) and patterns
 4. Implement with tests
 5. Update plan to completed
+
+**I'm reviewing security**
+→ [Security model](./agentic/SECURITY.md)
+→ [Core beliefs](./agentic/design-docs/core-beliefs.md)
+
+**I need reliability context**
+→ [Reliability guide](./agentic/RELIABILITY.md)
+→ [Testing strategy](./agentic/TESTING.md)
 
 **I'm fixing a bug**
 → [Component map](./ARCHITECTURE.md#components)
@@ -27,9 +38,9 @@ Enhances operational experience within multi-architecture OpenShift clusters by 
 → [Tests](./agentic/TESTING.md)
 
 **I need to understand a concept**
+→ [Domain documentation index](./agentic/domain/index.md)
 → [Glossary](./agentic/domain/glossary.md)
 → [Concepts](./agentic/domain/concepts/)
-→ [Workflows](./agentic/domain/workflows/)
 
 ## Repository Structure
 
@@ -114,22 +125,18 @@ make test
 
 ## Documentation Structure
 
-```
-agentic/
-├── design-docs/   # Architecture, components
-├── domain/        # Concepts, workflows
-├── exec-plans/    # Active work, tech debt
-├── product-specs/ # Feature specifications
-├── decisions/     # ADRs
-├── references/    # External knowledge
-├── generated/     # Auto-generated docs
-├── DESIGN.md      # Design philosophy
-├── DEVELOPMENT.md # Dev setup
-├── TESTING.md     # Test strategy
-├── RELIABILITY.md # SLOs, observability
-├── SECURITY.md    # Security model
-└── QUALITY_SCORE.md
-```
+- [Design docs](./agentic/design-docs/index.md) - Architecture, components, patterns
+- [Domain](./agentic/domain/index.md) - Concepts, glossary, workflows
+- [Exec plans](./agentic/exec-plans/active/) - Active work tracking
+- [Product specs](./agentic/product-specs/index.md) - Feature specifications
+- [Decisions](./agentic/decisions/index.md) - Architecture Decision Records (ADRs)
+- [References](./agentic/references/index.md) - External knowledge, primers
+- [DESIGN.md](./agentic/DESIGN.md) - Design philosophy
+- [DEVELOPMENT.md](./agentic/DEVELOPMENT.md) - Development setup
+- [TESTING.md](./agentic/TESTING.md) - Test strategy
+- [RELIABILITY.md](./agentic/RELIABILITY.md) - SLOs, observability
+- [SECURITY.md](./agentic/SECURITY.md) - Security model
+- [QUALITY_SCORE.md](./agentic/QUALITY_SCORE.md) - Documentation quality metrics
 
 ## When You're Stuck
 

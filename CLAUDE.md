@@ -312,6 +312,36 @@ Image inspection requires the containers/image library which has CGO dependencie
 - CGO_ENABLED=1 is required
 - Multi-arch builds use platform-specific builder images with these dependencies
 
+### Minimal Runtime Container Image
+
+The operator uses a security-hardened minimal container image (see ADR-0004):
+- **Base**: `scratch` (empty base image) with explicit library dependencies
+- **No shell**: No `/bin/sh` or `/bin/bash` - prevents shell-based exploitation
+- **No package manager**: No `dnf`/`microdnf` - prevents runtime package installation
+- **Essential libraries only**: libgpgme (image inspection), glibc, CA certificates
+- **Non-root**: Runs as user 65532:65532
+
+**Runtime dependencies** (automatically copied in multi-stage build):
+- `/lib64/ld-linux-*.so.2` - Dynamic linker
+- `/lib64/libc.so.6` - GNU C Library
+- `/lib64/libgpgme.so.11` - GPGME for registry authentication
+- `/lib64/libassuan.so.0` - libgpgme dependency
+- `/lib64/libgpg-error.so.0` - libgpgme dependency
+- `/lib64/libresolv.so.2` - DNS resolver
+- `/etc/ssl/certs/` - CA certificates for TLS
+
+**Security benefits**:
+- Reduced attack surface for privileged eBPF daemon
+- No shell exploitation even if pod compromised
+- Fewer CVEs (minimal libraries)
+- Aligns with OpenShift security best practices
+
+**Debugging without shell**:
+- Primary: `kubectl logs -f <pod-name>`
+- Metrics: `kubectl port-forward <pod-name> 8080:8080` then `curl localhost:8080/metrics`
+- Events: `kubectl get events --field-selector involvedObject.name=<pod-name>`
+- Advanced: Ephemeral debug containers (Kubernetes 1.23+)
+
 ### Vendoring
 
 This project uses Go vendoring (`GOFLAGS=-mod=vendor`). After modifying dependencies:

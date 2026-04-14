@@ -3,9 +3,17 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/schema.go
 package semconv // import "go.opentelemetry.io/otel/semconv/v1.41.0"
+========
+package semconv // import "go.opentelemetry.io/otel/semconv/v1.40.0"
+>>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/schema.go
 
 // SchemaURL is the schema URL that matches the version of the semantic conventions
 // that this package defines. Semconv packages starting from v1.4.0 must declare
 // non-empty schema URL in the form https://opentelemetry.io/schemas/<version>
+<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/schema.go
 const SchemaURL = "https://opentelemetry.io/schemas/1.41.0"
+========
+const SchemaURL = "https://opentelemetry.io/schemas/1.40.0"
+>>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/schema.go

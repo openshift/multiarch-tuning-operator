@@ -1,9 +1,9 @@
 package builder
 
 import (
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common"
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/common/plugins"
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	"github.com/openshift/multiarch-tuning-operator/api/common"
+	"github.com/openshift/multiarch-tuning-operator/api/common/plugins"
+	"github.com/openshift/multiarch-tuning-operator/api/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -73,5 +73,10 @@ func (p *ClusterPodPlacementConfigBuilder) WithNodeAffinityScoringTerm(architect
 		Architecture: architecture,
 		Weight:       weight,
 	})
+	return p
+}
+
+func (p *ClusterPodPlacementConfigBuilder) WithFallbackArchitecture(architecture string) *ClusterPodPlacementConfigBuilder {
+	p.Spec.FallbackArchitecture = architecture
 	return p
 }

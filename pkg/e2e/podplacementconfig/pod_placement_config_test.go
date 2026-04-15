@@ -7,7 +7,7 @@ import (
 
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/multiarch-tuning-operator/apis/multiarch/v1beta1"
+	"github.com/openshift/multiarch-tuning-operator/api/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
@@ -34,6 +34,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 					Build(),
 			)
 			Expect(err).To(HaveOccurred(), "the PodPlacementConfig should not be accepted", err)
+			//nolint:errcheck
+			defer client.Delete(ctx, builder.NewPodPlacementConfig().WithName("test-ppc").WithNamespace(ns.Name).Build())
 		})
 		It("The webhook should deny creation when a PodPlacementConfig with the same priority already exists in the same namespace", func() {
 			By("Create an ephemeral namespace")
@@ -42,7 +44,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			//nolint:errcheck
 			defer client.Delete(ctx, ns)
-			By("Creating a local PodPlacementConfig with a Prioriry setting")
+			By("Creating a local PodPlacementConfig with a Priority setting")
 			err = client.Create(ctx,
 				builder.NewPodPlacementConfig().
 					WithName("test-ppc").
@@ -54,6 +56,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 					Build(),
 			)
 			Expect(err).NotTo(HaveOccurred(), "the PodPlacementConfig should be accepted", err)
+			//nolint:errcheck
+			defer client.Delete(ctx, builder.NewPodPlacementConfig().WithName("test-ppc").WithNamespace(ns.Name).Build())
 			By("Check the PodPlacementConfig is created and priority is 50")
 			Eventually(func(g Gomega) {
 				ppc := &v1beta1.PodPlacementConfig{}
@@ -64,7 +68,7 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 				g.Expect(err).NotTo(HaveOccurred(), "failed to get podplacementconfig", err)
 				g.Expect(ppc.Spec.Priority).To(Equal(uint8(50)), "the ppc Priority should equal 50")
 			}).Should(Succeed(), "the PodPlacementConfig should be created")
-			By("Creating another local PodPlacementConfig with the same Prioriry")
+			By("Creating another local PodPlacementConfig with the same Priority")
 			err = client.Create(ctx,
 				builder.NewPodPlacementConfig().
 					WithName("test-ppc-2").
@@ -76,8 +80,10 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 					Build(),
 			)
 			Expect(err).To(HaveOccurred(), "the PodPlacementConfig should not be accepted", err)
+			//nolint:errcheck
+			defer client.Delete(ctx, builder.NewPodPlacementConfig().WithName("test-ppc-2").WithNamespace(ns.Name).Build())
 		})
-		It("The webhook should deny creation when update a local ppc priority to an exsiting one", func() {
+		It("The webhook should deny creation when update a local ppc priority to an existing one", func() {
 			By("Create an ephemeral namespace")
 			ns := framework.NewEphemeralNamespace()
 			err := client.Create(ctx, ns)
@@ -96,6 +102,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 					Build(),
 			)
 			Expect(err).NotTo(HaveOccurred(), "the PodPlacementConfig should be accepted", err)
+			//nolint:errcheck
+			defer client.Delete(ctx, builder.NewPodPlacementConfig().WithName("test-ppc").WithNamespace(ns.Name).Build())
 			By("Creating another local PodPlacementConfig with priority 50")
 			err = client.Create(ctx,
 				builder.NewPodPlacementConfig().
@@ -108,6 +116,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 					Build(),
 			)
 			Expect(err).NotTo(HaveOccurred(), "the PodPlacementConfig should be accepted", err)
+			//nolint:errcheck
+			defer client.Delete(ctx, builder.NewPodPlacementConfig().WithName("test-ppc-2").WithNamespace(ns.Name).Build())
 			By("Check the PodPlacementConfig is created and priority is 50")
 			Eventually(func(g Gomega) {
 				ppc2 := &v1beta1.PodPlacementConfig{}
@@ -149,6 +159,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			)
 			By("Check it can be created")
 			Expect(err).NotTo(HaveOccurred(), "the PodPlacementConfig should be accepted", err)
+			//nolint:errcheck
+			defer client.Delete(ctx, builder.NewPodPlacementConfig().WithName("test-ppc").WithNamespace(ns.Name).Build())
 			By("Deleting above created PodPlacementConfig")
 			err = client.Delete(ctx, builder.NewPodPlacementConfig().
 				WithName("test-ppc").
@@ -176,6 +188,8 @@ var _ = Describe("The Multiarch Tuning Operator", func() {
 			)
 			By("Check it can be created again")
 			Expect(err).NotTo(HaveOccurred(), "the PodPlacementConfig should be accepted", err)
+			//nolint:errcheck
+			defer client.Delete(ctx, builder.NewPodPlacementConfig().WithName("test-ppc").WithNamespace(ns.Name).Build())
 		})
 	})
 })

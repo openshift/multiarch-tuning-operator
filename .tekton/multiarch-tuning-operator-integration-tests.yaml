@@ -4,49 +4,110 @@ metadata:
   name: integration-and-unit-tests
   namespace: multiarch-tuning-ope-tenant
 spec:
-  params: [ ]
+  params:
+    - name: SNAPSHOT
+      description: 'Snapshot of the application'
+      type: string
+      default: '{"components": [{"name":"multiarch-tuning-operator", "containerImage": "quay.io/example/repo:latest"}]}'
   tasks:
     - name: clone-and-test
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
       taskSpec:
+        params:
+          - name: SNAPSHOT
+            type: string
         volumes:
           - name: source
             emptyDir: { }
         steps:
           - image: brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.25
             env:
-              - name: URL
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.annotations['pac.test.appstudio.openshift.io/source-repo-url']
-              - name: REVISION
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.annotations['pac.test.appstudio.openshift.io/sha']
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
             computeResources:
               limits:
                 cpu: 8
-                memory: 4Gi
+                memory: 8Gi
               requests:
                 cpu: 500m
-                memory: 1Gi
+                memory: 2Gi
             volumeMounts:
               - name: source
                 mountPath: /workspace
             script: |
               #!/bin/bash
-              set -exuo pipefail
+              set -euo pipefail
+
+              # Extract git URL and revision from SNAPSHOT parameter
+              # Uses Python for JSON parsing (available in golang-builder image)
+              read -r URL REVISION <<< $(python3 -c "
+              import json
+              snapshot = json.loads('''${SNAPSHOT}''')
+              components = snapshot.get('components', [])
+              if components:
+                  comp = components[0]
+                  url = comp.get('source', {}).get('git', {}).get('url', '')
+                  rev = comp.get('source', {}).get('git', {}).get('revision', '')
+                  if not url:
+                      url = comp.get('repository', '')
+                  if not rev:
+                      rev = comp.get('revision', '')
+                  print(url, rev)
+              ")
+
+              # Fallback: Fetch from Snapshot resource if not in parameter (group tests)
               if [ -z "$URL" ] || [ -z "$REVISION" ]; then
-                echo "URL and REVISION must be set"
+                SNAPSHOT_NAME=$(python3 -c "
+              import json
+              try:
+                  snapshot = json.loads('''${SNAPSHOT}''')
+                  print(snapshot.get('application', ''))
+              except: pass
+              " 2>/dev/null || echo "")
+
+                if [ -n "$SNAPSHOT_NAME" ]; then
+                  if ! command -v oc &> /dev/null && ! command -v kubectl &> /dev/null; then
+                    curl -sL https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz | tar -xzf - -C /usr/local/bin/ oc
+                    chmod +x /usr/local/bin/oc
+                  fi
+
+                  K8S_CMD=$(command -v oc || command -v kubectl)
+                  SNAPSHOT_JSON=$($K8S_CMD get snapshot "$SNAPSHOT_NAME" -o json 2>/dev/null || echo "")
+
+                  if [ -n "$SNAPSHOT_JSON" ]; then
+                    read -r URL REVISION <<< $(echo "$SNAPSHOT_JSON" | python3 -c "
+              import json, sys
+              try:
+                  snapshot = json.load(sys.stdin)
+                  components = snapshot.get('spec', {}).get('components', [])
+                  for comp in components:
+                      if 'multiarch-tuning-operator' in comp.get('name', ''):
+                          url = comp.get('source', {}).get('git', {}).get('url', '')
+                          rev = comp.get('source', {}).get('git', {}).get('revision', '')
+                          if url and rev:
+                              print(url, rev)
+                              break
+              except: pass
+              ")
+                  fi
+                fi
+              fi
+
+              if [ -z "$URL" ] || [ -z "$REVISION" ]; then
+                echo "ERROR: Could not extract git URL and revision from SNAPSHOT"
                 exit 1
               fi
-              echo "Initializing the env vars"
-              echo "URL: $URL"
-              echo "REVISION: $REVISION"
+
+              echo "Cloning $URL at $REVISION"
+
               mkdir /workspace/source
               cd /workspace/source
               git init
-              git remote add origin $URL
-              git fetch origin $REVISION
+              git remote add origin "$URL"
+              git fetch origin "$REVISION"
               git checkout FETCH_HEAD
+
+              echo "Running integration tests..."
               make unit NO_DOCKER=1
-              exit $? # exit with the status of the tests

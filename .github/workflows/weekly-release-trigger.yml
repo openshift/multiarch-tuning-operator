@@ -1,0 +1,65 @@
+name: Weekly Release Trigger
+
+on:
+  schedule:
+    # Runs every Monday at 7:00 AM UTC
+    - cron: '0 7 * * 1'
+  workflow_dispatch: # Allow manual triggers
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update release timestamp in bundle.konflux.Dockerfile
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Check if timestamp label exists
+          if grep -q "LABEL io.openshift.build.commit.date=" bundle.konflux.Dockerfile; then
+            # Update existing timestamp
+            sed -i "s/LABEL io.openshift.build.commit.date=\".*\"/LABEL io.openshift.build.commit.date=\"${TIMESTAMP}\"/" bundle.konflux.Dockerfile
+          else
+            # Add timestamp label after the cpe label
+            sed -i "/LABEL cpe=/a LABEL io.openshift.build.commit.date=\"${TIMESTAMP}\"" bundle.konflux.Dockerfile
+          fi
+
+          echo "Updated timestamp to: ${TIMESTAMP}"
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet bundle.konflux.Dockerfile; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes needed - timestamp already current"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in bundle.konflux.Dockerfile"
+          fi
+
+      - name: Create Pull Request
+        if: steps.check_changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: weekly release trigger"
+          title: "chore: weekly release trigger"
+          body: |
+            Automated weekly release trigger.
+
+            Updates bundle timestamp to trigger Konflux release pipeline.
+          branch: weekly-release-trigger
+          delete-branch: true
+          labels: |
+            approved
+            lgtm
+          add-paths: |
+            bundle.konflux.Dockerfile

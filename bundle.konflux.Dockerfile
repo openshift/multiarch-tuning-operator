@@ -39,6 +39,7 @@ LABEL name="multiarch-tuning/multiarch-tuning-operator-bundle"
 LABEL release="1.3.0"
 LABEL version="1.3.0"
 LABEL cpe="cpe:/a:redhat:multiarch_tuning_operator:1.3::el9"
+LABEL io.openshift.build.commit.date="2026-04-28T00:00:00Z"
 LABEL url="https://github.com/openshift/multiarch-tuning-operator"
 LABEL vendor="Red Hat, Inc."
 LABEL description="The Multiarch Tuning Operator enhances the user experience for administrators of Openshift \

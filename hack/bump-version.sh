@@ -38,7 +38,7 @@ else
     # If we have a commit SHA, append it to the version
     if [ -n "$COMMIT_SHA_VALUE" ]; then
         COMMIT_SHORT="${COMMIT_SHA_VALUE:0:7}"
-        VERSION="${BASE_VERSION}-${COMMIT_SHORT}"
+        VERSION="${BASE_VERSION}+${COMMIT_SHORT}"
         echo "Generated version: $VERSION (from Makefile: $BASE_VERSION + commit: $COMMIT_SHORT)"
     else
         VERSION="$BASE_VERSION"
@@ -48,7 +48,7 @@ fi
 
 echo "Bumping version to: $VERSION"
 
-# Extract major.minor version for CPE label (e.g., 1.3.4 -> 1.3, 1.3.0-abc1234 -> 1.3)
+# Extract major.minor version for CPE label (e.g., 1.3.4 -> 1.3, 1.3.0+abc1234 -> 1.3)
 MAJOR_MINOR=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
 echo "CPE version (major.minor): $MAJOR_MINOR"
 

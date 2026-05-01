@@ -1,0 +1,847 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: fbc-update-final-pipeline
+  annotations:
+    description: |
+      Final pipeline that runs after release completion to update FBC branch
+      with new bundle references. Uses existing hack scripts from FBC branch.
+spec:
+  description: |
+    This pipeline extracts bundle information from a release snapshot and creates
+    a pull request to update the FBC branch using the existing build-indexs.sh
+    and update-graph.sh scripts.
+  params:
+    - name: snapshot
+      description: JSON string of the Snapshot from the release
+      type: string
+    - name: release
+      description: JSON string of the Release
+      type: string
+    - name: git-url
+      description: Repository URL
+      type: string
+      default: https://github.com/openshift/multiarch-tuning-operator
+    - name: fbc-branch
+      description: FBC branch to update (default is 'fbc')
+      type: string
+      default: fbc
+
+  results:
+    - name: VERSION
+      description: Release version
+      value: $(tasks.extract-snapshot-name.results.VERSION)
+    - name: FBC_PR_URL
+      description: URL to the FBC update pull request
+      value: $(tasks.update-fbc-and-create-pr.results.PR_URL)
+
+  tasks:
+    - name: extract-snapshot-name
+      taskSpec:
+        params:
+          - name: snapshot
+        results:
+          - name: SNAPSHOT_NAME
+            description: Name of the snapshot
+          - name: BUNDLE_IMAGE
+            description: Bundle image reference
+          - name: VERSION
+            description: Bundle version
+        steps:
+          - name: parse-snapshot
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              # Install jq to temp directory (no permissions needed)
+              TOOL_DIR="/tmp/tools"
+              mkdir -p "$TOOL_DIR"
+              JQ_VERSION=$(curl -s https://api.github.com/repos/jqlang/jq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+              echo "Latest jq version: $JQ_VERSION"
+              curl -L "https://github.com/jqlang/jq/releases/download/${JQ_VERSION}/jq-linux-amd64" -o "$TOOL_DIR/jq"
+              chmod +x "$TOOL_DIR/jq"
+              export PATH="$TOOL_DIR:$PATH"
+
+              echo "Fetching snapshot..."
+              SNAPSHOT_REF='$(params.snapshot)'
+              echo "Snapshot reference: $SNAPSHOT_REF"
+
+              # Parse namespace/name from reference
+              if [[ "$SNAPSHOT_REF" == *"/"* ]]; then
+                SNAPSHOT_NAMESPACE="${SNAPSHOT_REF%/*}"
+                SNAPSHOT_NAME="${SNAPSHOT_REF#*/}"
+              else
+                # If no namespace, assume current namespace
+                SNAPSHOT_NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                SNAPSHOT_NAME="$SNAPSHOT_REF"
+              fi
+
+              echo "Fetching snapshot $SNAPSHOT_NAME from namespace $SNAPSHOT_NAMESPACE..."
+
+              # Fetch the snapshot using kubectl
+              SNAPSHOT=$(oc get snapshot "$SNAPSHOT_NAME" -n "$SNAPSHOT_NAMESPACE" -o json)
+
+              # Extract snapshot name
+              echo "Snapshot name: $SNAPSHOT_NAME"
+              echo -n "$SNAPSHOT_NAME" > $(results.SNAPSHOT_NAME.path)
+
+              # Extract bundle image (find component with "bundle" in name)
+              BUNDLE_IMAGE=$(echo "$SNAPSHOT" | jq -r '.spec.components[] | select(.name | contains("bundle")) | .containerImage' | head -n1)
+              echo "Bundle image: $BUNDLE_IMAGE"
+              echo -n "$BUNDLE_IMAGE" > $(results.BUNDLE_IMAGE.path)
+
+              # Extract version from bundle CSV (the authoritative source)
+              echo "Extracting version from bundle CSV..."
+
+              # Install skopeo and yq
+              echo "Installing skopeo..."
+              curl -L "https://github.com/lework/skopeo-binary/releases/download/v1.17.0/skopeo-linux-amd64" -o "$TOOL_DIR/skopeo"
+              chmod +x "$TOOL_DIR/skopeo"
+
+              echo "Installing yq..."
+              YQ_VERSION=$(curl -s https://api.github.com/repos/mikefarah/yq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+              curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o "$TOOL_DIR/yq"
+              chmod +x "$TOOL_DIR/yq"
+
+              # Extract bundle image to get CSV
+              BUNDLE_DIR="/tmp/bundle"
+              mkdir -p "$BUNDLE_DIR"
+
+              echo "Copying bundle image..."
+              skopeo copy "docker://$BUNDLE_IMAGE" "dir:$BUNDLE_DIR"
+
+              # Find and extract the manifest layers
+              MANIFEST_FILE=$(find "$BUNDLE_DIR" -name "manifest.json" | head -1)
+              if [ -z "$MANIFEST_FILE" ]; then
+                echo "❌ ERROR: Could not find manifest.json in bundle image"
+                exit 1
+              fi
+
+              # Extract layers
+              LAYERS_DIR="/tmp/bundle-extracted"
+              mkdir -p "$LAYERS_DIR"
+              for layer in $(jq -r '.layers[].digest' "$MANIFEST_FILE" | cut -d: -f2); do
+                if [ -f "$BUNDLE_DIR/$layer" ]; then
+                  tar -xzf "$BUNDLE_DIR/$layer" -C "$LAYERS_DIR" 2>/dev/null || \
+                  tar -xf "$BUNDLE_DIR/$layer" -C "$LAYERS_DIR" 2>/dev/null || true
+                fi
+              done
+
+              # Find CSV file
+              CSV_FILE=$(find "$LAYERS_DIR" -name "*clusterserviceversion.yaml" | head -1)
+              if [ -z "$CSV_FILE" ]; then
+                echo "❌ ERROR: Could not find CSV file in bundle"
+                exit 1
+              fi
+
+              # Extract version from CSV
+              VERSION=$(yq eval '.spec.version' "$CSV_FILE")
+              if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+                echo "❌ ERROR: Could not extract version from CSV"
+                exit 1
+              fi
+
+              # Add 'v' prefix if not present
+              if [[ ! "$VERSION" =~ ^v ]]; then
+                VERSION="v${VERSION}"
+              fi
+
+              echo "Extracted version from bundle CSV: $VERSION"
+              echo -n "$VERSION" > $(results.VERSION.path)
+      params:
+        - name: snapshot
+          value: $(params.snapshot)
+
+    - name: update-fbc-and-create-pr
+      runAfter: [extract-snapshot-name]
+      taskSpec:
+        params:
+          - name: BUNDLE_IMAGE
+          - name: VERSION
+          - name: FBC_BRANCH
+          - name: GIT_URL
+        results:
+          - name: PR_URL
+            description: URL of created pull request
+        steps:
+          # Step 1: Clone FBC branch
+          - name: clone-fbc-branch
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              GIT_URL="$(params.GIT_URL)"
+              FBC_BRANCH="$(params.FBC_BRANCH)"
+
+              echo "Cloning FBC branch: $FBC_BRANCH"
+              git clone --branch "$FBC_BRANCH" --single-branch "$GIT_URL" /workspace/fbc-repo
+              cd /workspace/fbc-repo
+
+              echo "Repository cloned successfully"
+              git log -1 --oneline
+
+          # Step 2: Check if version already exists in CHANNEL GRAPH
+          - name: check-version-in-channel
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              VERSION="$(params.VERSION)"
+              # Remove 'v' prefix for catalog entry name
+              VERSION_NO_V="${VERSION#v}"
+              ENTRY_NAME="multiarch-tuning-operator.v${VERSION_NO_V}"
+
+              echo "Checking if version $ENTRY_NAME exists in channel graph..."
+
+              # Check if version exists in channel entries (entries with schema: olm.channel)
+              # These are the upgrade graph entries, not the bundle metadata
+              if grep -A 10 "schema: olm.channel" fbc-v*/catalog/multiarch-tuning-operator/index.yaml | grep -q "name: $ENTRY_NAME"; then
+                echo "✅ Version $ENTRY_NAME already exists in channel graph"
+                echo "This version has already been released - skipping all FBC updates"
+                touch /workspace/skip-all-updates
+              else
+                echo "Version $ENTRY_NAME not found in channel graph - will add it"
+              fi
+
+          # Step 3: Remove existing bundle metadata (only if re-running pipeline for same version)
+          - name: remove-existing-bundle
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              # Check if we should skip all updates (version already in channel graph = already committed)
+              if [ -f /workspace/skip-all-updates ]; then
+                echo "Skipping bundle removal - version already released and committed"
+                exit 0
+              fi
+
+              VERSION="$(params.VERSION)"
+              VERSION_NO_V="${VERSION#v}"
+              BUNDLE_NAME="multiarch-tuning-operator.v${VERSION_NO_V}"
+
+              echo "Checking if bundle $BUNDLE_NAME exists from a previous pipeline run..."
+
+              # Check if any catalog has this bundle entry
+              BUNDLE_EXISTS=false
+              for catalog_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
+                if grep -q "^name: $BUNDLE_NAME$" "$catalog_file"; then
+                  echo "Found existing bundle entry in $catalog_file (from previous run)"
+                  BUNDLE_EXISTS=true
+                  break
+                fi
+              done
+
+              if [ "$BUNDLE_EXISTS" = false ]; then
+                echo "No existing bundle found - this is a new version"
+                exit 0
+              fi
+
+              echo "Removing bundle entries from previous pipeline run to avoid duplicates..."
+
+              # Remove bundle entries using awk to preserve file formatting
+              for catalog_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
+                if ! grep -q "^name: $BUNDLE_NAME$" "$catalog_file"; then
+                  continue
+                fi
+
+                echo "Removing from $catalog_file..."
+                temp_file=$(mktemp)
+
+                # Remove the bundle entry block (from '---' or 'schema: olm.bundle' to next schema)
+                awk -v bundle="$BUNDLE_NAME" '
+                BEGIN { in_bundle = 0; skip_lines = 0 }
+                /^---$/ {
+                  if (in_bundle) {
+                    in_bundle = 0
+                    next
+                  }
+                  print
+                  next
+                }
+                /^schema: olm\.bundle$/ {
+                  getline
+                  if ($0 == "name: " bundle) {
+                    in_bundle = 1
+                    skip_lines = 1
+                    next
+                  } else {
+                    print "schema: olm.bundle"
+                    print
+                  }
+                  next
+                }
+                /^schema: / {
+                  if (in_bundle) {
+                    in_bundle = 0
+                  }
+                  print
+                  next
+                }
+                !in_bundle { print }
+                ' "$catalog_file" > "$temp_file"
+
+                mv "$temp_file" "$catalog_file"
+                echo "✅ Removed from $catalog_file"
+              done
+
+              echo "Cleanup complete - ready to append new bundle"
+
+          # Step 4: Run build-indexs.sh to append bundle to catalogs
+          - name: build-indexes
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              # Check if we should skip all updates
+              if [ -f /workspace/skip-all-updates ]; then
+                echo "Skipping bundle addition - version already released"
+                exit 0
+              fi
+
+              BUNDLE_IMAGE="$(params.BUNDLE_IMAGE)"
+
+              # Verify pre-installed tools
+              echo "Checking pre-installed tools..."
+              jq --version
+              yq --version
+
+              # Install opm (not included in appstudio-utils)
+              echo "Installing opm..."
+              mkdir -p /tmp/tools
+              export PATH="/tmp/tools:$PATH"
+
+              # Use fixed version to avoid API calls and ensure reproducibility
+              OPM_VERSION="v1.48.0"
+              echo "Installing opm ${OPM_VERSION}..."
+              curl -sL "https://github.com/operator-framework/operator-registry/releases/download/${OPM_VERSION}/linux-amd64-opm" -o /tmp/tools/opm
+              chmod +x /tmp/tools/opm
+              opm version
+
+              echo ""
+              echo "Running build-indexs.sh with bundle: $BUNDLE_IMAGE"
+
+              # Make script executable
+              chmod +x hack/build-indexs.sh
+
+              # Run the script with bundle image
+              # appstudio-utils has container credentials to pull the image
+              hack/build-indexs.sh "$BUNDLE_IMAGE"
+
+              echo "Catalog indexes updated successfully"
+
+          # Step 5: Commit bundle metadata updates
+          - name: commit-index-updates
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              VERSION="$(params.VERSION)"
+              BUNDLE_IMAGE="$(params.BUNDLE_IMAGE)"
+
+              # Configure git
+              git config user.name "Konflux Release Bot"
+              git config user.email "konflux-release@redhat.com"
+
+              # Check if there are changes to the indexes
+              if ! git diff --quiet fbc-v*/catalog/multiarch-tuning-operator/index.yaml; then
+                echo "Committing bundle metadata updates..."
+
+                git add fbc-v*/catalog/multiarch-tuning-operator/index.yaml
+
+                git commit -m "Update bundle metadata for ${VERSION}
+
+              Updated bundle image reference in catalog indexes.
+
+              Bundle image: ${BUNDLE_IMAGE}
+              Version: ${VERSION}
+
+              Co-Authored-By: Konflux Release Bot <konflux-release@redhat.com>"
+
+                echo "✅ Bundle metadata committed"
+                git log -1 --oneline
+              else
+                echo "No changes to bundle metadata - skipping commit"
+              fi
+
+          # Step 6: Update channel graph (insert into existing entries array)
+          - name: update-graph
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              # Check if we should skip all updates (version already released)
+              if [ -f /workspace/skip-all-updates ]; then
+                echo "Skipping update-graph - version already exists in channel graph"
+                exit 0
+              fi
+
+              VERSION="$(params.VERSION)"
+              VERSION_NO_V="${VERSION#v}"
+              ENTRY_NAME="multiarch-tuning-operator.v${VERSION_NO_V}"
+
+              echo "Updating channel graph with version: $VERSION_NO_V"
+
+              # Verify pre-installed tools
+              echo "Checking pre-installed tools..."
+              jq --version
+              yq --version
+
+              # Extract base version and determine if this is a clean or commit-based version
+              if [[ "$VERSION_NO_V" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\+(.+)$ ]]; then
+                  BASE_VERSION="${BASH_REMATCH[1]}"
+                  COMMIT_SUFFIX="${BASH_REMATCH[2]}"
+                  IS_CLEAN_VERSION=false
+                  echo "Commit-based patch version: $VERSION_NO_V (base: $BASE_VERSION, commit: $COMMIT_SUFFIX)"
+              else
+                  # Clean version (no commit suffix)
+                  BASE_VERSION="$VERSION_NO_V"
+                  COMMIT_SUFFIX=""
+                  IS_CLEAN_VERSION=true
+                  echo "Clean version detected: $BASE_VERSION"
+              fi
+
+              # Determine strategy based on version type
+              # Release pattern: Clean version FIRST (1.4.0), then patches (1.4.0+abc, 1.4.0+def, ...)
+              if [ "$IS_CLEAN_VERSION" = true ]; then
+                  # Adding a clean version - this is a new base version release
+                  # Replaces: latest version from previous base (any version, clean or commit)
+                  # Skips: none (clean versions are upgrade milestones and start a new series)
+
+                  echo "Clean version - new base version release"
+                  echo "Will replace latest version from previous base"
+                  USE_SKIPS=false
+
+                  # Check if this clean version already exists
+                  for check_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
+                      if grep -q "name: multiarch-tuning-operator.v${BASE_VERSION}\$" "$check_file"; then
+                          echo "ERROR: Clean version $BASE_VERSION already exists in catalog"
+                          echo "Cannot add duplicate clean version"
+                          exit 1
+                      fi
+                  done
+              else
+                  # Adding a commit-based patch version
+                  # These come AFTER the clean version for this base
+                  # Replaces:
+                  #   - If first patch: replaces clean version (e.g., 1.4.0+abc replaces 1.4.0)
+                  #   - If subsequent patch: replaces previous patch (e.g., 1.4.0+def replaces 1.4.0+abc)
+                  # Skips: older patches (but NOT the clean version - it's a milestone)
+
+                  echo "Patch version - adds to existing base $BASE_VERSION"
+
+                  # Verify clean version exists for this base
+                  CLEAN_VERSION_EXISTS=false
+                  for check_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
+                      if grep -q "name: multiarch-tuning-operator.v${BASE_VERSION}\$" "$check_file"; then
+                          CLEAN_VERSION_EXISTS=true
+                          break
+                      fi
+                  done
+
+                  if [ "$CLEAN_VERSION_EXISTS" = false ]; then
+                      echo "ERROR: Clean version $BASE_VERSION does not exist in catalog"
+                      echo "Cannot add patch versions before the clean version is released"
+                      echo "Release pattern: clean version FIRST (1.4.0), then patches (1.4.0+abc, 1.4.0+def)"
+                      exit 1
+                  fi
+
+                  # Check if other patches exist for this base
+                  COMMIT_VERSIONS_EXIST=false
+                  for check_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
+                      if grep -q "name: multiarch-tuning-operator.v${BASE_VERSION}+" "$check_file"; then
+                          COMMIT_VERSIONS_EXIST=true
+                          break
+                      fi
+                  done
+
+                  if [ "$COMMIT_VERSIONS_EXIST" = true ]; then
+                      echo "Other patches exist for base $BASE_VERSION - will skip older patches"
+                      USE_SKIPS=true
+                  else
+                      echo "First patch for base $BASE_VERSION - will replace clean version"
+                      USE_SKIPS=false
+                  fi
+              fi
+
+              # Update each catalog's channel graph
+              for index_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
+                  echo "Processing $index_file..."
+                  temp_file=$(mktemp)
+
+                  if [ "$USE_SKIPS" = true ]; then
+                      # Adding a patch version when other patches exist
+                      # Replaces: the latest patch (first in file)
+                      # Skips: all older patches (excluding clean version - it's a milestone)
+
+                      # Find all existing patch versions for this base version
+                      # IMPORTANT: Only collect patch versions (with +), NEVER clean versions
+                      # Clean versions are permanent milestones that cannot be skipped
+                      # File order is insertion order (newest first)
+                      # Exclude the version we're currently adding
+                      ALL_PATCHES=$(grep "name: multiarch-tuning-operator.v${BASE_VERSION}+" "$index_file" | \
+                          sed 's/.*name: //' | sed 's/^[[:space:]]*//' | \
+                          grep -v "^${ENTRY_NAME}$" || true)
+
+                      if [ -n "$ALL_PATCHES" ]; then
+                          echo "Found existing patches for base $BASE_VERSION:"
+                          echo "$ALL_PATCHES"
+
+                          # Get the first (most recent, newest in file) patch to replace
+                          # File order is insertion order with newest first
+                          REPLACES_TARGET=$(echo "$ALL_PATCHES" | head -1)
+
+                          # Build skip list: all patches except the one we're replacing
+                          # We want users to auto-upgrade through the chain, but allow skipping older patches
+                          # So we skip everything except the immediate predecessor
+                          SKIP_VERSIONS=$(echo "$ALL_PATCHES" | tail -n +2 || true)
+
+                          echo "Will replace: $REPLACES_TARGET"
+                          if [ -n "$SKIP_VERSIONS" ]; then
+                              echo "Will skip (older patches only): $SKIP_VERSIONS"
+
+                              # Insert new entry with skips using awk
+                              awk -v entry="$ENTRY_NAME" -v replaces="$REPLACES_TARGET" -v skips="$SKIP_VERSIONS" '
+                              /^  - name: / && !inserted && in_channel {
+                                # Found first entry in channel, insert new one before it
+                                print "  - name: " entry
+                                print "    replaces: " replaces
+                                print "    skips:"
+                                # Split and print skip versions
+                                n = split(skips, skip_array, "\n")
+                                for (i = 1; i <= n; i++) {
+                                  if (skip_array[i] != "") {
+                                    print "      - " skip_array[i]
+                                  }
+                                }
+                                inserted = 1
+                              }
+                              /^schema: olm.channel$/ { in_channel = 1 }
+                              /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                              { print }
+                              ' "$index_file" > "$temp_file"
+                          else
+                              echo "No older patches to skip (only one existing patch)"
+
+                              # Insert new entry without skips (only replaces)
+                              awk -v entry="$ENTRY_NAME" -v replaces="$REPLACES_TARGET" '
+                              /^  - name: / && !inserted && in_channel {
+                                print "  - name: " entry
+                                print "    replaces: " replaces
+                                inserted = 1
+                              }
+                              /^schema: olm.channel$/ { in_channel = 1 }
+                              /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                              { print }
+                              ' "$index_file" > "$temp_file"
+                          fi
+                      else
+                          echo "ERROR: USE_SKIPS=true but no existing patches found for base $BASE_VERSION"
+                          echo "This should not happen - existence check should have prevented this"
+                          exit 1
+                      fi
+                  else
+                      # No skips - either clean version or first patch
+                      # For clean version: replaces latest from previous base
+                      # For first patch: replaces clean version of same base
+
+                      if [ "$IS_CLEAN_VERSION" = true ]; then
+                          # Clean version - replaces latest version overall (from any base)
+                          PREV_VERSION=$(grep -A 5 "schema: olm.channel" "$index_file" | \
+                              grep "name: multiarch-tuning-operator.v" | head -1 | \
+                              sed 's/.*name: multiarch-tuning-operator.v//' | sed 's/^[[:space:]]*//' || true)
+
+                          if [ -n "$PREV_VERSION" ]; then
+                              echo "Clean version - replaces latest version: $PREV_VERSION"
+
+                              # Insert new entry
+                              awk -v entry="$ENTRY_NAME" -v prev="$PREV_VERSION" '
+                              /^  - name: / && !inserted && in_channel {
+                                print "  - name: " entry
+                                print "    replaces: multiarch-tuning-operator.v" prev
+                                inserted = 1
+                              }
+                              /^schema: olm.channel$/ { in_channel = 1 }
+                              /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                              { print }
+                              ' "$index_file" > "$temp_file"
+                          else
+                              echo "No previous version found - adding as initial version"
+
+                              # Insert new entry without replaces
+                              awk -v entry="$ENTRY_NAME" '
+                              /^  - name: / && !inserted && in_channel {
+                                print "  - name: " entry
+                                inserted = 1
+                              }
+                              /^schema: olm.channel$/ { in_channel = 1 }
+                              /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                              { print }
+                              ' "$index_file" > "$temp_file"
+                          fi
+                      else
+                          # First patch for this base - replaces clean version
+                          echo "First patch for base $BASE_VERSION - replaces clean version"
+
+                          # Insert new entry
+                          awk -v entry="$ENTRY_NAME" -v base="$BASE_VERSION" '
+                          /^  - name: / && !inserted && in_channel {
+                            print "  - name: " entry
+                            print "    replaces: multiarch-tuning-operator.v" base
+                            inserted = 1
+                          }
+                          /^schema: olm.channel$/ { in_channel = 1 }
+                          /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                          { print }
+                          ' "$index_file" > "$temp_file"
+                      fi
+                  fi
+
+                  # Replace original file
+                  mv "$temp_file" "$index_file"
+                  echo "✅ Updated $index_file"
+              done
+
+              echo "Channel graph update complete"
+
+          # Step 7: Commit channel graph updates
+          - name: commit-channel-updates
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              VERSION="$(params.VERSION)"
+
+              # Configure git
+              git config user.name "Konflux Release Bot"
+              git config user.email "konflux-release@redhat.com"
+
+              # Check if there are uncommitted changes (channel graph updates)
+              if ! git diff --quiet fbc-v*/catalog/multiarch-tuning-operator/index.yaml; then
+                echo "Committing channel graph updates..."
+
+                git add fbc-v*/catalog/multiarch-tuning-operator/index.yaml
+
+                git commit -m "Add ${VERSION} to channel graph
+
+              Added version entry to upgrade channel graph.
+
+              Version: ${VERSION}
+
+              Co-Authored-By: Konflux Release Bot <konflux-release@redhat.com>"
+
+                echo "✅ Channel graph committed"
+                git log -1 --oneline
+              else
+                echo "No changes to channel graph - skipping commit"
+              fi
+
+          # Step 8: Show changes for verification
+          - name: verify-changes
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              echo "=== Changes made to FBC catalogs ==="
+
+              git status
+              echo ""
+              echo "=== Diff of changes ==="
+              git diff --stat
+
+          # Step 9: Push branch and create/update PR
+          - name: push-and-create-pr
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            env:
+              - name: APP_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: github-app-credentials
+                    key: app-id
+                    optional: true
+              - name: INSTALLATION_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: github-app-credentials
+                    key: installation-id
+                    optional: true
+              - name: PRIVATE_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: github-app-credentials
+                    key: private-key
+                    optional: true
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              VERSION="$(params.VERSION)"
+              FBC_BRANCH="$(params.FBC_BRANCH)"
+
+              # Install gh CLI to user directory
+              mkdir -p /tmp/tools
+              export PATH="/tmp/tools:$PATH"
+
+              echo "Downloading gh CLI..."
+              GH_VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+              curl -L "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" -o /tmp/gh.tar.gz
+              tar -xzf /tmp/gh.tar.gz -C /tmp
+              mv /tmp/gh_${GH_VERSION}_linux_amd64/bin/gh /tmp/tools/
+              chmod +x /tmp/tools/gh
+
+              # Generate GitHub App installation token if credentials are available
+              if [ -n "${APP_ID:-}" ] && [ -n "${INSTALLATION_ID:-}" ] && [ -n "${PRIVATE_KEY:-}" ]; then
+                echo "Generating GitHub App installation token..."
+
+                # Install jq if not already available
+                if ! command -v jq &> /dev/null; then
+                  echo "Installing jq..."
+                  JQ_VERSION=$(curl -s https://api.github.com/repos/jqlang/jq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+                  curl -L "https://github.com/jqlang/jq/releases/download/${JQ_VERSION}/jq-linux-amd64" -o /tmp/tools/jq
+                  chmod +x /tmp/tools/jq
+                fi
+
+                # Generate JWT
+                # Header
+                HEADER='{"alg":"RS256","typ":"JWT"}'
+                HEADER_B64=$(echo -n "$HEADER" | base64 -w0 | tr '+/' '-_' | tr -d '=')
+
+                # Payload (expires in 10 minutes)
+                NOW=$(date +%s)
+                EXPIRES=$((NOW + 600))
+                PAYLOAD="{\"iat\":$NOW,\"exp\":$EXPIRES,\"iss\":\"$APP_ID\"}"
+                PAYLOAD_B64=$(echo -n "$PAYLOAD" | base64 -w0 | tr '+/' '-_' | tr -d '=')
+
+                # Signature
+                SIGNATURE_INPUT="${HEADER_B64}.${PAYLOAD_B64}"
+                echo -n "$PRIVATE_KEY" > /tmp/private-key.pem
+                SIGNATURE=$(echo -n "$SIGNATURE_INPUT" | openssl dgst -sha256 -sign /tmp/private-key.pem | base64 -w0 | tr '+/' '-_' | tr -d '=')
+                rm -f /tmp/private-key.pem
+
+                JWT="${SIGNATURE_INPUT}.${SIGNATURE}"
+
+                # Exchange JWT for installation access token
+                echo "Exchanging JWT for installation token..."
+                RESPONSE=$(curl -s -X POST \
+                  -H "Authorization: Bearer $JWT" \
+                  -H "Accept: application/vnd.github+json" \
+                  "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens")
+
+                GITHUB_TOKEN=$(echo "$RESPONSE" | jq -r '.token')
+
+                if [ "$GITHUB_TOKEN" = "null" ] || [ -z "$GITHUB_TOKEN" ]; then
+                  echo "❌ ERROR: Failed to generate installation token"
+                  echo "Response: $RESPONSE"
+                  exit 1
+                fi
+
+                echo "✅ Generated installation token successfully"
+                # Export for gh CLI (which uses GH_TOKEN instead of GITHUB_TOKEN)
+                export GH_TOKEN="$GITHUB_TOKEN"
+              else
+                echo "❌ ERROR: GitHub App credentials not found"
+                echo "Cannot push branch or create PR without GitHub authentication"
+                exit 1
+              fi
+
+              # Configure git
+              git config user.name "Konflux Release Bot"
+              git config user.email "konflux-release@redhat.com"
+
+              # Configure git authentication
+              echo "Configuring GitHub authentication..."
+              git remote set-url origin "https://oauth2:${GITHUB_TOKEN}@github.com/openshift/multiarch-tuning-operator.git"
+
+              # Use consistent branch name for all FBC updates
+              PR_BRANCH="auto-fbc-update"
+
+              # Save current commit (includes our index and channel commits)
+              CURRENT_COMMIT=$(git rev-parse HEAD)
+              echo "Current HEAD: $CURRENT_COMMIT"
+
+              # Check if branch exists locally or remotely and create/update it
+              if git ls-remote --heads origin "$PR_BRANCH" | grep -q "$PR_BRANCH"; then
+                echo "Branch $PR_BRANCH exists on remote, fetching..."
+                git fetch origin "$PR_BRANCH"
+                git checkout -B "$PR_BRANCH" "$CURRENT_COMMIT"
+              else
+                echo "Creating new branch $PR_BRANCH..."
+                git checkout -b "$PR_BRANCH"
+              fi
+
+              # Show what we're about to push
+              echo "Branch $PR_BRANCH is now at:"
+              git log --oneline -5
+
+              # Always force push the branch to keep it updated
+              echo "Pushing branch $PR_BRANCH (force push)..."
+              git push --force origin "$PR_BRANCH"
+
+              # Check if PR already exists for this branch
+              EXISTING_PR=$(gh pr list --head "$PR_BRANCH" --json number,url --jq '.[0].url' 2>/dev/null || echo "")
+
+              if [ -n "$EXISTING_PR" ]; then
+                echo "✅ Updated existing pull request: $EXISTING_PR"
+                PR_URL="$EXISTING_PR"
+              else
+                echo "Creating new pull request..."
+                PR_URL=$(gh pr create \
+                  --title "chore: Update FBC catalogs for ${VERSION}" \
+                  --body "## Automated FBC Catalog Update
+
+              This PR was automatically generated by the Konflux release pipeline.
+
+              **Version:** \`${VERSION}\`
+              **Base Branch:** \`${FBC_BRANCH}\`
+
+              ### Commits
+
+              This PR includes separate commits for:
+              1. Bundle metadata update (always updated with latest image digest)
+              2. Channel graph update (only if version is new)
+
+              ### Verification
+
+              - [ ] Bundle metadata is correct
+              - [ ] Channel graph properly ordered
+              - [ ] \`opm validate\` passes for all catalogs
+
+              🤖 Generated by Konflux Release Pipeline" \
+                    --base "${FBC_BRANCH}" \
+                    --head "$PR_BRANCH" | grep -oP 'https://[^\s]+' || echo "")
+
+                if [ -n "$PR_URL" ]; then
+                  echo "✅ Pull request created: $PR_URL"
+                else
+                  echo "⚠️  PR creation completed but URL not captured"
+                  PR_URL="unknown"
+                fi
+              fi
+
+              # Save PR_URL result
+              echo -n "$PR_URL" > $(results.PR_URL.path)
+      params:
+        - name: BUNDLE_IMAGE
+          value: $(tasks.extract-snapshot-name.results.BUNDLE_IMAGE)
+        - name: VERSION
+          value: $(tasks.extract-snapshot-name.results.VERSION)
+        - name: FBC_BRANCH
+          value: $(params.fbc-branch)
+        - name: GIT_URL
+          value: $(params.git-url)

@@ -1,0 +1,260 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: tag-release-commit-pipeline
+  annotations:
+    description: |
+      Pipeline to tag the release commit with the version from the release.
+      Extracts version from release name and creates/pushes a git tag.
+spec:
+  description: |
+    This pipeline tags the source commit referenced in a release with the appropriate version tag.
+    It extracts the commit SHA from the release metadata and the version from the release name.
+  params:
+    - name: snapshot
+      description: Snapshot reference (namespace/name format)
+      type: string
+    - name: release
+      description: Release reference (namespace/name format)
+      type: string
+    - name: git-url
+      description: Git repository URL
+      type: string
+      default: "https://github.com/openshift/multiarch-tuning-operator.git"
+    - name: git-branch
+      description: Git branch that was built
+      type: string
+      default: "v1.x"
+
+  results:
+    - name: TAG_NAME
+      description: The git tag that was created
+      value: $(tasks.tag-release-commit.results.TAG_NAME)
+    - name: COMMIT_SHA
+      description: The commit that was tagged
+      value: $(tasks.extract-release-commit.results.COMMIT_SHA)
+
+  tasks:
+    - name: extract-release-commit
+      taskSpec:
+        params:
+          - name: release
+        results:
+          - name: COMMIT_SHA
+            description: The commit SHA from the release
+          - name: RELEASE_NAME
+            description: The release name
+          - name: GIT_BRANCH
+            description: The git branch from the release
+        steps:
+          - name: parse-commit
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              # Install jq
+              mkdir -p /tmp/tools
+              export PATH="/tmp/tools:$PATH"
+              echo "Installing jq (latest)..."
+              JQ_VERSION=$(curl -s https://api.github.com/repos/jqlang/jq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+              echo "Latest jq version: $JQ_VERSION"
+              curl -L "https://github.com/jqlang/jq/releases/download/${JQ_VERSION}/jq-linux-amd64" -o /tmp/tools/jq
+              chmod +x /tmp/tools/jq
+
+              RELEASE_REF='$(params.release)'
+              echo "Release reference: $RELEASE_REF"
+
+              # Parse namespace/name from reference (same as snapshot handling)
+              if [[ "$RELEASE_REF" == *"/"* ]]; then
+                RELEASE_NAMESPACE="${RELEASE_REF%/*}"
+                RELEASE_NAME="${RELEASE_REF#*/}"
+              else
+                RELEASE_NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                RELEASE_NAME="$RELEASE_REF"
+              fi
+
+              echo "Fetching release $RELEASE_NAME from namespace $RELEASE_NAMESPACE..."
+
+              # Fetch the release using oc
+              RELEASE=$(oc get release "$RELEASE_NAME" -n "$RELEASE_NAMESPACE" -o json)
+
+              # Parse release JSON
+              COMMIT_SHA=$(echo "$RELEASE" | jq -r '.metadata.labels."pac.test.appstudio.openshift.io/sha"')
+              GIT_BRANCH=$(echo "$RELEASE" | jq -r '.metadata.annotations."pac.test.appstudio.openshift.io/source-branch" // empty' | sed 's|^refs/heads/||')
+
+              # Default to git-branch parameter if not found in release
+              if [ -z "$GIT_BRANCH" ] || [ "$GIT_BRANCH" = "null" ]; then
+                GIT_BRANCH="v1.x"
+              fi
+
+              echo "Release: $RELEASE_NAME"
+              echo "Commit SHA: $COMMIT_SHA"
+              echo "Git branch: $GIT_BRANCH"
+
+              echo -n "$COMMIT_SHA" > $(results.COMMIT_SHA.path)
+              echo -n "$RELEASE_NAME" > $(results.RELEASE_NAME.path)
+              echo -n "$GIT_BRANCH" > $(results.GIT_BRANCH.path)
+      params:
+        - name: release
+          value: $(params.release)
+
+    - name: extract-version
+      runAfter:
+        - extract-release-commit
+      taskSpec:
+        params:
+          - name: release-name
+        results:
+          - name: VERSION
+            description: Version extracted from release name
+        steps:
+          - name: parse-version
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              RELEASE_NAME='$(params.release-name)'
+
+              # Extract version from release name (e.g., release-test-1-3-0-xyz -> v1.3.0)
+              VERSION=$(echo "$RELEASE_NAME" | grep -oP '\d+-\d+-\d+' | tr '-' '.' | sed 's/^/v/')
+
+              if [ -z "$VERSION" ] || [ "$VERSION" = "v" ]; then
+                echo "❌ ERROR: Unable to extract version from release name: $RELEASE_NAME"
+                echo "   Expected format: release-X-Y-Z-suffix"
+                exit 1
+              fi
+
+              echo "Extracted version: $VERSION"
+              echo -n "$VERSION" > $(results.VERSION.path)
+      params:
+        - name: release-name
+          value: $(tasks.extract-release-commit.results.RELEASE_NAME)
+
+    - name: tag-release-commit
+      runAfter:
+        - extract-version
+      taskSpec:
+        params:
+          - name: git-url
+          - name: git-branch
+          - name: commit-sha
+          - name: version
+        results:
+          - name: TAG_NAME
+            description: The tag that was created/pushed
+        steps:
+          - name: create-and-push-tag
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            env:
+              - name: GITHUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: github-token
+                    key: token
+                    optional: true
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              GIT_URL="$(params.git-url)"
+              GIT_BRANCH="$(params.git-branch)"
+              COMMIT_SHA="$(params.commit-sha)"
+              VERSION="$(params.version)"
+
+              echo "=========================================="
+              echo "Tagging Release Commit"
+              echo "=========================================="
+              echo "Repository: $GIT_URL"
+              echo "Branch: $GIT_BRANCH"
+              echo "Commit: $COMMIT_SHA"
+              echo "Version: $VERSION"
+              echo ""
+
+              # Clone the repository
+              REPO_DIR="/tmp/repo"
+              echo "Cloning repository (branch: $GIT_BRANCH)..."
+
+              if [ -n "${GITHUB_TOKEN:-}" ]; then
+                echo "Using authenticated clone..."
+                git clone --branch "$GIT_BRANCH" --single-branch \
+                  "https://oauth2:${GITHUB_TOKEN}@github.com/openshift/multiarch-tuning-operator.git" \
+                  "$REPO_DIR"
+              else
+                echo "⚠️  Warning: GITHUB_TOKEN not set, cloning without authentication..."
+                git clone --branch "$GIT_BRANCH" --single-branch \
+                  "$GIT_URL" \
+                  "$REPO_DIR"
+              fi
+
+              cd "$REPO_DIR"
+
+              # Configure git
+              git config user.name "Konflux Release Bot"
+              git config user.email "konflux-release@redhat.com"
+
+              # Configure authentication for push if token available
+              if [ -n "${GITHUB_TOKEN:-}" ]; then
+                git remote set-url origin "https://oauth2:${GITHUB_TOKEN}@github.com/openshift/multiarch-tuning-operator.git"
+              fi
+
+              # Check if tag already exists
+              if git rev-parse "$VERSION" >/dev/null 2>&1; then
+                EXISTING_COMMIT=$(git rev-parse "$VERSION^{commit}")
+                if [ "$EXISTING_COMMIT" = "$COMMIT_SHA" ]; then
+                  echo "✅ Tag $VERSION already exists on correct commit"
+                  echo -n "$VERSION" > $(results.TAG_NAME.path)
+
+                  # Still try to push in case tag exists locally but not on remote
+                  if [ -n "${GITHUB_TOKEN:-}" ]; then
+                    echo "Ensuring tag is pushed to remote..."
+                    git push origin "$VERSION" 2>&1 || echo "Tag may already exist on remote"
+                  fi
+                  exit 0
+                else
+                  echo "⚠️  Warning: Tag $VERSION already exists but on different commit:"
+                  echo "   Existing: $EXISTING_COMMIT"
+                  echo "   Expected: $COMMIT_SHA"
+                  echo "   Skipping tag creation to avoid conflicts"
+                  echo -n "$VERSION" > $(results.TAG_NAME.path)
+                  exit 0
+                fi
+              fi
+
+              # Create the tag
+              echo "Creating tag $VERSION on commit $COMMIT_SHA..."
+              git tag -a "$VERSION" "$COMMIT_SHA" -m "Release $VERSION
+
+              Automated tag created by Konflux release pipeline.
+
+              Release commit: $COMMIT_SHA
+              Source branch: $GIT_BRANCH"
+
+              echo "✅ Tag created successfully"
+
+              # Push the tag
+              if [ -n "${GITHUB_TOKEN:-}" ]; then
+                echo "Pushing tag to remote..."
+                git push origin "$VERSION"
+                echo "✅ Tag pushed successfully"
+                echo -n "$VERSION" > $(results.TAG_NAME.path)
+              else
+                echo "❌ ERROR: GITHUB_TOKEN not set"
+                echo "Cannot push tag without GitHub authentication"
+                echo ""
+                echo "To fix this, create the github-token secret:"
+                echo "  oc create secret generic github-token \\"
+                echo "    --from-literal=token=<your-github-token> \\"
+                echo "    -n <your-namespace>"
+                exit 1
+              fi
+      params:
+        - name: git-url
+          value: $(params.git-url)
+        - name: git-branch
+          value: $(tasks.extract-release-commit.results.GIT_BRANCH)
+        - name: commit-sha
+          value: $(tasks.extract-release-commit.results.COMMIT_SHA)
+        - name: version
+          value: $(tasks.extract-version.results.VERSION)

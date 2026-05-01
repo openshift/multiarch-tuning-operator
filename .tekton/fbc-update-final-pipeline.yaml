@@ -1,0 +1,390 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: fbc-update-final-pipeline
+  annotations:
+    description: |
+      Final pipeline that runs after release completion to update FBC branch
+      with new bundle references. Uses existing hack scripts from FBC branch.
+spec:
+  description: |
+    This pipeline extracts bundle information from a release snapshot and creates
+    a pull request to update the FBC branch using the existing build-indexs.sh
+    and update-graph.sh scripts.
+  params:
+    - name: snapshot
+      description: JSON string of the Snapshot from the release
+      type: string
+    - name: release
+      description: JSON string of the Release
+      type: string
+    - name: git-url
+      description: Repository URL
+      type: string
+      default: https://github.com/openshift/multiarch-tuning-operator
+    - name: fbc-branch
+      description: FBC branch to update (default is 'fbc')
+      type: string
+      default: fbc
+
+  results:
+    - name: VERSION
+      description: Release version
+      value: $(tasks.extract-snapshot-name.results.VERSION)
+    - name: FBC_PR_URL
+      description: URL to the FBC update pull request
+      value: $(tasks.update-fbc-and-create-pr.results.PR_URL)
+
+  tasks:
+    - name: extract-snapshot-name
+      taskSpec:
+        params:
+          - name: snapshot
+        results:
+          - name: SNAPSHOT_NAME
+            description: Name of the snapshot
+          - name: BUNDLE_IMAGE
+            description: Bundle image reference
+          - name: VERSION
+            description: Bundle version
+        steps:
+          - name: parse-snapshot
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              # Install jq to temp directory (no permissions needed)
+              TOOL_DIR="/tmp/tools"
+              mkdir -p "$TOOL_DIR"
+              JQ_VERSION=$(curl -s https://api.github.com/repos/jqlang/jq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+              echo "Latest jq version: $JQ_VERSION"
+              curl -L "https://github.com/jqlang/jq/releases/download/${JQ_VERSION}/jq-linux-amd64" -o "$TOOL_DIR/jq"
+              chmod +x "$TOOL_DIR/jq"
+              export PATH="$TOOL_DIR:$PATH"
+
+              echo "Fetching snapshot..."
+              SNAPSHOT_REF='$(params.snapshot)'
+              echo "Snapshot reference: $SNAPSHOT_REF"
+
+              # Parse namespace/name from reference
+              if [[ "$SNAPSHOT_REF" == *"/"* ]]; then
+                SNAPSHOT_NAMESPACE="${SNAPSHOT_REF%/*}"
+                SNAPSHOT_NAME="${SNAPSHOT_REF#*/}"
+              else
+                # If no namespace, assume current namespace
+                SNAPSHOT_NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                SNAPSHOT_NAME="$SNAPSHOT_REF"
+              fi
+
+              echo "Fetching snapshot $SNAPSHOT_NAME from namespace $SNAPSHOT_NAMESPACE..."
+
+              # Fetch the snapshot using kubectl
+              SNAPSHOT=$(oc get snapshot "$SNAPSHOT_NAME" -n "$SNAPSHOT_NAMESPACE" -o json)
+
+              # Extract snapshot name
+              echo "Snapshot name: $SNAPSHOT_NAME"
+              echo -n "$SNAPSHOT_NAME" > $(results.SNAPSHOT_NAME.path)
+
+              # Extract bundle image (find component with "bundle" in name)
+              BUNDLE_IMAGE=$(echo "$SNAPSHOT" | jq -r '.spec.components[] | select(.name | contains("bundle")) | .containerImage' | head -n1)
+              echo "Bundle image: $BUNDLE_IMAGE"
+              echo -n "$BUNDLE_IMAGE" > $(results.BUNDLE_IMAGE.path)
+
+              # Try to extract version from image tag or component
+              VERSION=$(echo "$BUNDLE_IMAGE" | grep -oP 'v\d+\.\d+\.\d+' || echo "")
+              if [ -z "$VERSION" ]; then
+                # Try from snapshot component source
+                VERSION=$(echo "$SNAPSHOT" | jq -r '.spec.components[] | select(.name | contains("bundle")) | .source.git.revision' | head -n1 | grep -oP 'v\d+\.\d+\.\d+' || echo "")
+              fi
+              if [ -z "$VERSION" ]; then
+                # Try from release name (format: release-<prefix>-X-Y-Z-<suffix>)
+                echo "Fetching release for version extraction..."
+                RELEASE_REF='$(params.release)'
+                if [[ "$RELEASE_REF" == *"/"* ]]; then
+                  RELEASE_NAMESPACE="${RELEASE_REF%/*}"
+                  RELEASE_NAME="${RELEASE_REF#*/}"
+                else
+                  RELEASE_NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                  RELEASE_NAME="$RELEASE_REF"
+                fi
+                RELEASE=$(oc get release "$RELEASE_NAME" -n "$RELEASE_NAMESPACE" -o json)
+                RELEASE_NAME=$(echo "$RELEASE" | jq -r '.metadata.name')
+                # Extract X-Y-Z from release name and convert to vX.Y.Z
+                VERSION=$(echo "$RELEASE_NAME" | grep -oP '\d+-\d+-\d+' | tr '-' '.' | sed 's/^/v/')
+              fi
+              if [ -z "$VERSION" ]; then
+                echo "❌ ERROR: Unable to determine release version from bundle image, snapshot, or release name" >&2
+                echo "  Bundle image: $BUNDLE_IMAGE" >&2
+                echo "  Snapshot source: $(echo "$SNAPSHOT" | jq -r '.spec.components[] | select(.name | contains("bundle")) | .source.git.revision // "none"' | head -n1)" >&2
+                echo "  Release name: $RELEASE_NAME" >&2
+                exit 1
+              fi
+              echo "Version: $VERSION"
+              echo -n "$VERSION" > $(results.VERSION.path)
+      params:
+        - name: snapshot
+          value: $(params.snapshot)
+
+    - name: update-fbc-and-create-pr
+      runAfter: [extract-snapshot-name]
+      taskSpec:
+        params:
+          - name: BUNDLE_IMAGE
+          - name: VERSION
+          - name: FBC_BRANCH
+          - name: GIT_URL
+        results:
+          - name: PR_URL
+            description: URL of created pull request
+        steps:
+          # Step 1: Clone FBC branch
+          - name: clone-fbc-branch
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              GIT_URL="$(params.GIT_URL)"
+              FBC_BRANCH="$(params.FBC_BRANCH)"
+
+              echo "Cloning FBC branch: $FBC_BRANCH"
+              git clone --branch "$FBC_BRANCH" --single-branch "$GIT_URL" /workspace/fbc-repo
+              cd /workspace/fbc-repo
+
+              echo "Repository cloned successfully"
+              git log -1 --oneline
+
+          # Step 2: Run build-indexs.sh to append bundle to catalogs
+          - name: build-indexes
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              BUNDLE_IMAGE="$(params.BUNDLE_IMAGE)"
+
+              # Install tools to user directory
+              mkdir -p /tmp/tools
+              export PATH="/tmp/tools:$PATH"
+
+              echo "Installing jq (latest)..."
+              JQ_VERSION=$(curl -s https://api.github.com/repos/jqlang/jq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+              echo "Latest jq version: $JQ_VERSION"
+              curl -L "https://github.com/jqlang/jq/releases/download/${JQ_VERSION}/jq-linux-amd64" -o /tmp/tools/jq
+              chmod +x /tmp/tools/jq
+
+              echo "Installing opm (latest version)..."
+              # Get latest opm version from GitHub releases
+              OPM_VERSION=$(curl -s https://api.github.com/repos/operator-framework/operator-registry/releases/latest | jq -r '.tag_name')
+              echo "Latest opm version: $OPM_VERSION"
+
+              # Download and install opm
+              curl -L "https://github.com/operator-framework/operator-registry/releases/download/${OPM_VERSION}/linux-amd64-opm" -o /tmp/tools/opm
+              chmod +x /tmp/tools/opm
+
+              # Verify opm is installed
+              opm version
+
+              echo ""
+              echo "Running build-indexs.sh with bundle: $BUNDLE_IMAGE"
+
+              # Make script executable
+              chmod +x hack/build-indexs.sh
+
+              # Run the script with bundle image
+              # appstudio-utils has container credentials to pull the image
+              hack/build-indexs.sh "$BUNDLE_IMAGE"
+
+              echo "Catalog indexes updated successfully"
+
+          # Step 2: Run update-graph.sh to update channel graph
+          - name: update-graph
+            image: registry.access.redhat.com/ubi9/ubi:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              VERSION="$(params.VERSION)"
+
+              # Remove 'v' prefix if present for the script
+              VERSION_NO_V="${VERSION#v}"
+
+              echo "Running update-graph.sh with version: $VERSION_NO_V"
+
+              # Make script executable
+              chmod +x hack/update-graph.sh
+
+              # Run the script
+              hack/update-graph.sh "$VERSION_NO_V"
+
+              echo "Channel graph updated successfully"
+
+          # Step 3: Show changes for verification
+          - name: verify-changes
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              echo "=== Changes made to FBC catalogs ==="
+
+              git status
+              echo ""
+              echo "=== Diff of changes ==="
+              git diff --stat
+
+          # Step 4: Commit, push, and create PR
+          - name: commit-and-push
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            workingDir: /workspace/fbc-repo
+            env:
+              - name: GITHUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: github-token
+                    key: token
+                    optional: true
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              BUNDLE_IMAGE="$(params.BUNDLE_IMAGE)"
+              VERSION="$(params.VERSION)"
+              FBC_BRANCH="$(params.FBC_BRANCH)"
+
+              # Install gh CLI to user directory
+              mkdir -p /tmp/tools
+              export PATH="/tmp/tools:$PATH"
+
+              echo "Downloading gh CLI..."
+              GH_VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+              curl -L "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" -o /tmp/gh.tar.gz
+              tar -xzf /tmp/gh.tar.gz -C /tmp
+              mv /tmp/gh_${GH_VERSION}_linux_amd64/bin/gh /tmp/tools/
+              chmod +x /tmp/tools/gh
+
+              # Configure git
+              git config user.name "Konflux Release Bot"
+              git config user.email "konflux-release@redhat.com"
+
+              # Configure git authentication if token is available
+              if [ -n "${GITHUB_TOKEN:-}" ]; then
+                echo "Configuring GitHub authentication..."
+                git remote set-url origin "https://oauth2:${GITHUB_TOKEN}@github.com/openshift/multiarch-tuning-operator.git"
+              else
+                echo "⚠️  Warning: GITHUB_TOKEN not set - pipeline will fail if changes need to be pushed"
+              fi
+
+              # Check if there are changes
+              if git diff --quiet && git diff --staged --quiet; then
+                echo "No changes to commit - FBC catalogs already up to date"
+                echo -n "none" > $(results.PR_URL.path)
+                exit 0
+              fi
+
+              # Create a new branch for the PR
+              PR_BRANCH="auto-fbc-update-${VERSION}-$(date +%s)"
+              git checkout -b "$PR_BRANCH"
+
+              # Stage all changes
+              git add fbc-v*/catalog/multiarch-tuning-operator/index.yaml
+
+              # Create commit
+              git commit -m "chore: Update FBC catalogs with bundle ${VERSION}
+
+              Automated update from Konflux release pipeline.
+
+              Bundle image: ${BUNDLE_IMAGE}
+              Version: ${VERSION}
+
+              Updated catalogs:
+              $(git diff --staged --name-only | sed 's/^/- /')
+
+              Co-Authored-By: Konflux Release Bot <konflux-release@redhat.com>"
+
+              echo "Commit created successfully"
+              git log -1 --stat
+
+              # Push branch and create PR if GitHub token is available
+              if [ -n "${GITHUB_TOKEN:-}" ]; then
+                echo "Pushing branch $PR_BRANCH..."
+                git push origin "$PR_BRANCH"
+                echo "Creating pull request..."
+
+                PR_URL=$(gh pr create \
+                  --title "chore: Auto-update FBC catalogs with bundle ${VERSION}" \
+                  --body "$(cat <<EOF
+              ## Automated FBC Catalog Update
+
+              This PR was automatically generated by the Konflux release finalPipeline.
+
+              **Bundle Image:** \`${BUNDLE_IMAGE}\`
+              **Version:** \`${VERSION}\`
+              **Base Branch:** \`${FBC_BRANCH}\`
+
+              ### Changes
+
+              Updated catalog indexes with new bundle entry:
+              - Added bundle metadata from \`${BUNDLE_IMAGE}\`
+              - Updated channel graph to include version \`${VERSION}\`
+              - Set \`${VERSION}\` to replace previous channel head
+
+              ### Verification Checklist
+
+              - [ ] All catalog indexes updated successfully
+              - [ ] Channel graph properly ordered
+              - [ ] Bundle metadata is correct
+              - [ ] \`opm validate\` passes for all catalogs
+
+              ### Testing
+
+              Build FBC images to test:
+              \`\`\`bash
+              for dir in fbc-v*; do
+                version=\${dir#fbc-v}
+                docker build -f Dockerfile \\
+                  --build-arg BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v\${version} \\
+                  --build-arg OCP_VERSION=\${dir} \\
+                  -t test-fbc:\${version} .
+              done
+              \`\`\`
+
+              🤖 Generated by [Konflux Release Pipeline](https://konflux-ci.dev)
+              EOF
+              )" \
+                  --base "${FBC_BRANCH}" \
+                  --head "$PR_BRANCH" | grep -oP 'https://[^\s]+' || echo "")
+
+                if [ -n "$PR_URL" ]; then
+                  echo "✅ Pull request created: $PR_URL"
+                  echo -n "$PR_URL" > $(results.PR_URL.path)
+                else
+                  echo "⚠️  PR creation completed but URL not captured"
+                  echo "   This may indicate gh CLI output format changed"
+                  echo -n "unknown" > $(results.PR_URL.path)
+                fi
+              else
+                echo "❌ ERROR: GITHUB_TOKEN not set"
+                echo "Cannot push changes or create pull request without GitHub authentication"
+                echo "Commit created locally on branch: $PR_BRANCH"
+                echo ""
+                echo "To fix this, create the github-token secret:"
+                echo "  oc create secret generic github-token \\"
+                echo "    --from-literal=token=<your-github-token> \\"
+                echo "    -n multiarch-tuning-ope-tenant"
+                echo -n "no-token" > $(results.PR_URL.path)
+                exit 1
+              fi
+      params:
+        - name: BUNDLE_IMAGE
+          value: $(tasks.extract-snapshot-name.results.BUNDLE_IMAGE)
+        - name: VERSION
+          value: $(tasks.extract-snapshot-name.results.VERSION)
+        - name: FBC_BRANCH
+          value: $(params.fbc-branch)
+        - name: GIT_URL
+          value: $(params.git-url)

@@ -126,6 +126,10 @@ spec:
                 exit 1
               fi
 
+              # Append test suffix with timestamp to avoid conflicts
+              TIMESTAMP=$(date +%s)
+              VERSION="${VERSION}-test-${TIMESTAMP}"
+
               echo "Extracted version: $VERSION"
               echo -n "$VERSION" > $(results.VERSION.path)
       params:

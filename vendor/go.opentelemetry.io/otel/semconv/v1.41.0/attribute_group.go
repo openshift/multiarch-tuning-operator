@@ -3,11 +3,7 @@
 
 // Code generated from semantic convention specification. DO NOT EDIT.
 
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 package semconv // import "go.opentelemetry.io/otel/semconv/v1.41.0"
-========
-package semconv // import "go.opentelemetry.io/otel/semconv/v1.40.0"
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 
 import "go.opentelemetry.io/otel/attribute"
 
@@ -3440,11 +3436,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "a3bf90e006b2"
 	//
@@ -3480,11 +3472,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "gcr.io/opentelemetry/operator"
 	ContainerImageNameKey = attribute.Key("container.image.name")
@@ -3495,11 +3483,7 @@ const (
 	//
 	// Type: string[]
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples:
 	// "example@sha256:afcc7f1ac1b49db317a7196c902e61c6c3c4607d63599ee1a82d702d249a0ccb",
@@ -3518,11 +3502,7 @@ const (
 	//
 	// Type: string[]
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "v1.27.1", "3.5.7-0"
 	//
@@ -6788,7 +6768,6 @@ const (
 	// Examples: "gpt-4-0613"
 	GenAIResponseModelKey = attribute.Key("gen_ai.response.model")
 
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// GenAIResponseTimeToFirstChunkKey is the attribute Key conforming to the
 	// "gen_ai.response.time_to_first_chunk" semantic conventions. It represents the
 	// time to first chunk in a streaming response, measured from request issuance,
@@ -6802,8 +6781,6 @@ const (
 	// Examples: 0.5, 1.2
 	GenAIResponseTimeToFirstChunkKey = attribute.Key("gen_ai.response.time_to_first_chunk")
 
-========
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	// GenAIRetrievalDocumentsKey is the attribute Key conforming to the
 	// "gen_ai.retrieval.documents" semantic conventions. It represents the
 	// documents retrieved.
@@ -7284,7 +7261,6 @@ func GenAIResponseModel(val string) attribute.KeyValue {
 	return GenAIResponseModelKey.String(val)
 }
 
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 // GenAIResponseTimeToFirstChunk returns an attribute KeyValue conforming to the
 // "gen_ai.response.time_to_first_chunk" semantic conventions. It represents the
 // time to first chunk in a streaming response, measured from request issuance,
@@ -7294,8 +7270,6 @@ func GenAIResponseTimeToFirstChunk(val float64) attribute.KeyValue {
 	return GenAIResponseTimeToFirstChunkKey.Float64(val)
 }
 
-========
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 // GenAIRetrievalQueryText returns an attribute KeyValue conforming to the
 // "gen_ai.retrieval.query.text" semantic conventions. It represents the query
 // text used for retrieval.
@@ -9227,11 +9201,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "opentelemetry-cluster"
 	K8SClusterNameKey = attribute.Key("k8s.cluster.name")
@@ -9242,11 +9212,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "218fc5a9-a5f1-4b54-aa05-46717d0ab26d"
 	// Note: K8s doesn't have support for obtaining a cluster ID. If this is ever
@@ -9282,11 +9248,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "redis"
 	K8SContainerNameKey = attribute.Key("k8s.container.name")
@@ -9298,11 +9260,7 @@ const (
 	//
 	// Type: int
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples:
 	K8SContainerRestartCountKey = attribute.Key("k8s.container.restart_count")
@@ -9353,11 +9311,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "opentelemetry"
 	K8SCronJobNameKey = attribute.Key("k8s.cronjob.name")
@@ -9367,11 +9321,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
 	K8SCronJobUIDKey = attribute.Key("k8s.cronjob.uid")
@@ -9382,11 +9332,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "opentelemetry"
 	K8SDaemonSetNameKey = attribute.Key("k8s.daemonset.name")
@@ -9396,11 +9342,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
 	K8SDaemonSetUIDKey = attribute.Key("k8s.daemonset.uid")
@@ -9411,11 +9353,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "opentelemetry"
 	K8SDeploymentNameKey = attribute.Key("k8s.deployment.name")
@@ -9426,11 +9364,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
 	K8SDeploymentUIDKey = attribute.Key("k8s.deployment.uid")
@@ -9520,11 +9454,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "opentelemetry"
 	K8SJobNameKey = attribute.Key("k8s.job.name")
@@ -9534,11 +9464,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
 	K8SJobUIDKey = attribute.Key("k8s.job.uid")
@@ -9549,11 +9475,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "default"
 	K8SNamespaceNameKey = attribute.Key("k8s.namespace.name")
@@ -9618,11 +9540,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "node-1"
 	K8SNodeNameKey = attribute.Key("k8s.node.name")
@@ -9643,11 +9561,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "1eb3a0c6-0477-4080-a9cb-0cb7db65c6a2"
 	K8SNodeUIDKey = attribute.Key("k8s.node.uid")
@@ -9747,11 +9661,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "collector-gateway"
 	// Note: The K8s Pod spec has an optional hostname field, which can be used to
@@ -9771,11 +9681,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "172.18.0.2"
 	// Note: This attribute aligns with the `podIP` field of the
@@ -9789,11 +9695,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "opentelemetry-pod-autoconf"
 	K8SPodNameKey = attribute.Key("k8s.pod.name")
@@ -9804,11 +9706,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "2025-12-04T08:41:03Z"
 	// Note: Date and time at which the object was acknowledged by the Kubelet.
@@ -9852,11 +9750,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
 	K8SPodUIDKey = attribute.Key("k8s.pod.uid")
@@ -9867,11 +9761,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "opentelemetry"
 	K8SReplicaSetNameKey = attribute.Key("k8s.replicaset.name")
@@ -9882,11 +9772,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
 	K8SReplicaSetUIDKey = attribute.Key("k8s.replicaset.uid")
@@ -10099,11 +9985,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "opentelemetry"
 	K8SStatefulSetNameKey = attribute.Key("k8s.statefulset.name")
@@ -10114,11 +9996,7 @@ const (
 	//
 	// Type: string
 	// RequirementLevel: Recommended
-<<<<<<<< HEAD:vendor/go.opentelemetry.io/otel/semconv/v1.41.0/attribute_group.go
 	// Stability: Release_Candidate
-========
-	// Stability: Beta
->>>>>>>> 5c6d46b0 (Update go dependence):vendor/go.opentelemetry.io/otel/semconv/v1.40.0/attribute_group.go
 	//
 	// Examples: "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
 	K8SStatefulSetUIDKey = attribute.Key("k8s.statefulset.uid")

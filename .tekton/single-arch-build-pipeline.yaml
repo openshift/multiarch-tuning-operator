@@ -73,10 +73,6 @@ spec:
     default: 'true'
     description: Use the package registry proxy when prefetching dependencies
     type: string
-  - name: sast-target-dirs
-    type: string
-    default: .
-    description: Target directories to scan with SAST tools. Multiple values should be separated with commas.
   results:
   - name: IMAGE_URL
     value: $(tasks.build-image-index.results.IMAGE_URL)
@@ -185,6 +181,33 @@ spec:
       workspace: git-auth
     - name: netrc
       workspace: netrc
+  - name: run-script
+    params:
+    - name: ociStorage
+      value: $(params.output-image).script
+    - name: ociArtifactExpiresAfter
+      value: $(params.image-expires-after)
+    - name: SCRIPT_RUNNER_IMAGE
+      value: registry.access.redhat.com/ubi9/go-toolset:1.25
+    - name: SCRIPT
+      value: |
+        export COMMIT_SHA="$(tasks.clone-repository.results.commit)"
+        exec ./hack/bump-version.sh
+    - name: HERMETIC
+      value: "true"
+    - name: SOURCE_ARTIFACT
+      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+    runAfter:
+    - prefetch-dependencies
+    taskRef:
+      params:
+      - name: name
+        value: run-script-oci-ta
+      - name: bundle
+        value: quay.io/konflux-ci/tekton-catalog/task-run-script-oci-ta:0.1@sha256:0e13a74cc02c945e7119ecd4cc0c9148e7591b50f87e415b212154caad0479c0
+      - name: kind
+        value: task
+      resolver: bundles
   - name: build-container
     params:
     - name: IMAGE
@@ -217,11 +240,14 @@ spec:
     - name: NO_PROXY
       value: $(tasks.init.results.no-proxy)
     - name: SOURCE_ARTIFACT
-      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
     - name: CACHI2_ARTIFACT
       value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
+    - name: ADDITIONAL_BASE_IMAGES
+      value:
+      - $(tasks.run-script.results.SCRIPT_RUNNER_IMAGE_REFERENCE)
     runAfter:
-    - prefetch-dependencies
+    - run-script
     taskRef:
       params:
       - name: name
@@ -261,7 +287,7 @@ spec:
     - name: BINARY_IMAGE_DIGEST
       value: $(tasks.build-image-index.results.IMAGE_DIGEST)
     - name: SOURCE_ARTIFACT
-      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
     - name: CACHI2_ARTIFACT
       value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
     runAfter:
@@ -352,11 +378,9 @@ spec:
     - name: image-url
       value: $(tasks.build-image-index.results.IMAGE_URL)
     - name: SOURCE_ARTIFACT
-      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
     - name: CACHI2_ARTIFACT
       value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
-    - name: TARGET_DIRS
-      value: $(params.sast-target-dirs)
     runAfter:
     - build-image-index
     taskRef:
@@ -422,11 +446,9 @@ spec:
     - name: BUILD_ARGS_FILE
       value: $(params.build-args-file)
     - name: SOURCE_ARTIFACT
-      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
     - name: CACHI2_ARTIFACT
       value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
-    - name: TARGET_DIRS
-      value: $(params.sast-target-dirs)
     runAfter:
     - coverity-availability-check
     taskRef:
@@ -472,11 +494,9 @@ spec:
     - name: image-url
       value: $(tasks.build-image-index.results.IMAGE_URL)
     - name: SOURCE_ARTIFACT
-      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
     - name: CACHI2_ARTIFACT
       value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
-    - name: TARGET_DIRS
-      value: $(params.sast-target-dirs)
     runAfter:
     - build-image-index
     taskRef:
@@ -501,11 +521,9 @@ spec:
     - name: image-url
       value: $(tasks.build-image-index.results.IMAGE_URL)
     - name: SOURCE_ARTIFACT
-      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
     - name: CACHI2_ARTIFACT
       value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
-    - name: TARGET_DIRS
-      value: $(params.sast-target-dirs)
     runAfter:
     - build-image-index
     taskRef:
@@ -551,7 +569,7 @@ spec:
     - name: CONTEXT
       value: $(params.path-context)
     - name: SOURCE_ARTIFACT
-      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      value: $(tasks.run-script.results.SCRIPT_ARTIFACT)
     runAfter:
     - build-image-index
     taskRef:

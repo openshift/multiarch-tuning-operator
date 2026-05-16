@@ -17,7 +17,7 @@ spec:
           - name: name
             value: eaas-provision-space
           - name: bundle
-            value: quay.io/konflux-ci/tekton-catalog/task-eaas-provision-space:0.1@sha256:8a344ed61dfeabf741f3f08892414f223ade1849f995da0db172e79c4afc21a3
+            value: quay.io/konflux-ci/tekton-catalog/task-eaas-provision-space:0.1@sha256:5a571c2a26b5090d18d814bb2b8c4ba7a5ab490c6ec47b2df60e1f27da32726c
           - name: kind
             value: task
         resolver: bundles

@@ -29,6 +29,8 @@ schema: olm.channel
 package: multiarch-tuning-operator
 name: stable
 entries:
+  - name: multiarch-tuning-operator.v1.3.0-606dcba
+    replaces: multiarch-tuning-operator.v1.3.0
   - name: multiarch-tuning-operator.v1.3.0
     replaces: multiarch-tuning-operator.v1.2.2
   - name: multiarch-tuning-operator.v1.2.2

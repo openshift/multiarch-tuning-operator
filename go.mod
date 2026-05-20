@@ -15,7 +15,7 @@ require (
 	github.com/onsi/gomega v1.39.1
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/openshift/api v0.0.0-20260218112846-22c744831738
+	github.com/openshift/api 30525d574efa
 	github.com/openshift/library-go v0.0.0-20260223145824-7b234b47a906
 	github.com/panjf2000/ants/v2 v2.12.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.86.2

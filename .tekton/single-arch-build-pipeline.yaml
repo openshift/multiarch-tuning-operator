@@ -191,7 +191,21 @@ spec:
       value: registry.access.redhat.com/ubi9/go-toolset:1.25
     - name: SCRIPT
       value: |
-        export COMMIT_SHA="$(tasks.clone-repository.results.commit)"
+        COMMIT_MSG=$(git log -1 --format=%s)
+
+        # Check if this commit requests clean version
+        if [[ "$COMMIT_MSG" =~ \[clean-version\] ]]; then
+          VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
+          echo "Clean version requested: $VERSION"
+          export VERSION
+        else
+          # Normal commit - generate commit-based version
+          BASE_VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
+          COMMIT_SHA=$(tasks.clone-repository.results.commit)
+          export VERSION="${BASE_VERSION}+${COMMIT_SHA:0:7}"
+          echo "Generated commit-based version: $VERSION"
+        fi
+
         exec ./hack/bump-version.sh
     - name: HERMETIC
       value: "true"

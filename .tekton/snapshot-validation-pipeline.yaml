@@ -1,0 +1,248 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: snapshot-validation-pipeline
+  annotations:
+    description: |
+      Pre-release validation pipeline that checks snapshot consistency.
+      Validates that the operator image referenced in the bundle CSV matches
+      an image in the snapshot.
+spec:
+  description: |
+    This pipeline runs before a release is created to validate snapshot integrity.
+    It extracts the bundle image from the snapshot, inspects the CSV, and verifies
+    that the internal operator image SHA matches one of the snapshot component images.
+  params:
+    - name: snapshot
+      description: JSON string of the Snapshot to validate
+      type: string
+    - name: release
+      description: JSON string of the Release (optional for pre-release)
+      type: string
+      default: "{}"
+
+  results:
+    - name: VALIDATION_RESULT
+      description: Result of snapshot validation (PASS or FAIL)
+      value: $(tasks.validate-snapshot.results.VALIDATION_RESULT)
+    - name: INTERNAL_IMAGE
+      description: Internal operator image found in bundle CSV
+      value: $(tasks.validate-snapshot.results.INTERNAL_IMAGE)
+
+  tasks:
+    - name: validate-snapshot
+      taskSpec:
+        params:
+          - name: snapshot
+        results:
+          - name: VALIDATION_RESULT
+            description: PASS or FAIL
+          - name: INTERNAL_IMAGE
+            description: Internal operator image
+        steps:
+          - name: extract-and-validate
+            image: quay.io/konflux-ci/appstudio-utils:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              echo "=========================================="
+              echo "Snapshot Validation Pipeline"
+              echo "=========================================="
+
+              # Install tools to user directory
+              mkdir -p /tmp/tools
+              export PATH="/tmp/tools:$PATH"
+
+              echo "Installing jq (latest)..."
+              JQ_VERSION=$(curl -s https://api.github.com/repos/jqlang/jq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+              echo "Latest jq version: $JQ_VERSION"
+              curl -L "https://github.com/jqlang/jq/releases/download/${JQ_VERSION}/jq-linux-amd64" -o /tmp/tools/jq
+              chmod +x /tmp/tools/jq
+
+              echo "Installing yq (latest)..."
+              YQ_VERSION=$(curl -s https://api.github.com/repos/mikefarah/yq/releases/latest | jq -r '.tag_name')
+              echo "Latest yq version: $YQ_VERSION"
+              curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o /tmp/tools/yq
+              chmod +x /tmp/tools/yq
+              yq --version
+
+              echo "Installing skopeo (latest)..."
+              SKOPEO_VERSION=$(curl -s https://api.github.com/repos/lework/skopeo-binary/releases/latest | jq -r '.tag_name')
+              echo "Latest skopeo version: $SKOPEO_VERSION"
+              curl -L "https://github.com/lework/skopeo-binary/releases/download/${SKOPEO_VERSION}/skopeo-linux-amd64" -o /tmp/tools/skopeo
+              chmod +x /tmp/tools/skopeo
+              skopeo --version
+
+              # Fetch snapshot from Kubernetes
+              echo "Fetching snapshot..."
+              SNAPSHOT_REF='$(params.snapshot)'
+              echo "Snapshot reference: $SNAPSHOT_REF"
+
+              # Parse namespace/name from reference
+              if [[ "$SNAPSHOT_REF" == *"/"* ]]; then
+                SNAPSHOT_NAMESPACE="${SNAPSHOT_REF%/*}"
+                SNAPSHOT_NAME="${SNAPSHOT_REF#*/}"
+              else
+                SNAPSHOT_NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                SNAPSHOT_NAME="$SNAPSHOT_REF"
+              fi
+
+              echo "Fetching snapshot $SNAPSHOT_NAME from namespace $SNAPSHOT_NAMESPACE..."
+              SNAPSHOT=$(oc get snapshot "$SNAPSHOT_NAME" -n "$SNAPSHOT_NAMESPACE" -o json)
+
+              echo "$SNAPSHOT" | jq '.' > /tmp/snapshot.json
+              echo "Validating snapshot: $SNAPSHOT_NAME"
+
+              # Extract container images
+              echo ""
+              echo "Extracting container images from snapshot..."
+              IMAGES=$(echo "$SNAPSHOT" | jq -r '.spec.components[].containerImage')
+
+              echo "Container images in snapshot:"
+              echo "$IMAGES"
+
+              # Find bundle image by component name (any component with "bundle" in name)
+              echo ""
+              echo "Extracting bundle image from snapshot components..."
+              BUNDLE_IMAGE=$(echo "$SNAPSHOT" | jq -r '.spec.components[] | select(.name | contains("bundle")) | .containerImage' | head -n1)
+
+              if [ -z "$BUNDLE_IMAGE" ] || [ "$BUNDLE_IMAGE" = "null" ]; then
+                echo "❌ ERROR: No bundle image found in snapshot components."
+                echo "   Expected: component with 'bundle' in name"
+                echo "   Available components:"
+                echo "$SNAPSHOT" | jq -r '.spec.components[].name' | sed 's/^/     - /'
+                echo "FAIL" > $(results.VALIDATION_RESULT.path)
+                echo "none" > $(results.INTERNAL_IMAGE.path)
+                exit 1
+              fi
+
+              echo ""
+              echo "Bundle image: $BUNDLE_IMAGE"
+
+              # Copy the bundle image using skopeo (doesn't require privileged mode)
+              echo ""
+              echo "Copying bundle image..."
+              BUNDLE_OCI="/tmp/bundle_oci"
+              BUNDLE_DIR="/tmp/operator_bundle"
+              mkdir -p "$BUNDLE_OCI" "$BUNDLE_DIR"
+
+              # Use skopeo to copy image to OCI format
+              skopeo copy "docker://$BUNDLE_IMAGE" "oci:$BUNDLE_OCI"
+
+              echo "Bundle image copied to OCI format"
+
+              # Extract bundle layers using skopeo and tar
+              echo "Extracting bundle filesystem..."
+              # Get the image digest from OCI layout
+              IMAGE_DIGEST=$(jq -r '.manifests[0].digest' "$BUNDLE_OCI/index.json" | cut -d: -f2)
+
+              # Find and extract all layer blobs
+              MANIFEST_FILE="$BUNDLE_OCI/blobs/sha256/$IMAGE_DIGEST"
+              LAYER_DIGESTS=$(jq -r '.layers[].digest' "$MANIFEST_FILE" | cut -d: -f2)
+
+              for digest in $LAYER_DIGESTS; do
+                echo "  Extracting layer: $digest"
+                tar -xzf "$BUNDLE_OCI/blobs/sha256/$digest" -C "$BUNDLE_DIR" 2>/dev/null || \
+                tar -xf "$BUNDLE_OCI/blobs/sha256/$digest" -C "$BUNDLE_DIR" 2>/dev/null || true
+              done
+
+              # Find the CSV file
+              CSV_FILE=$(find "$BUNDLE_DIR" -name "*.clusterserviceversion.yaml" | head -n 1)
+
+              if [ -z "$CSV_FILE" ]; then
+                echo "❌ ERROR: ClusterServiceVersion YAML not found in bundle."
+                echo "FAIL" > $(results.VALIDATION_RESULT.path)
+                echo "none" > $(results.INTERNAL_IMAGE.path)
+                exit 1
+              fi
+
+              echo ""
+              echo "Found CSV file: $CSV_FILE"
+
+              # Extract internal image from CSV annotations
+              INTERNAL_IMAGE=$(yq '.spec.install.spec.deployments[0].spec.template.metadata.annotations."multiarch.openshift.io/image"' "$CSV_FILE")
+
+              if [ -z "$INTERNAL_IMAGE" ] || [ "$INTERNAL_IMAGE" = "null" ]; then
+                echo "❌ ERROR: Could not extract internal image from CSV annotations."
+                echo "Expected annotation: multiarch.openshift.io/image"
+                echo "FAIL" > $(results.VALIDATION_RESULT.path)
+                echo "none" > $(results.INTERNAL_IMAGE.path)
+                exit 1
+              fi
+
+              echo ""
+              echo "Internal operator image from CSV:"
+              echo "  $INTERNAL_IMAGE"
+
+              # Extract SHA from internal image
+              INTERNAL_SHA=$(echo "$INTERNAL_IMAGE" | grep -oP 'sha256:\K[a-f0-9]{64}' || true)
+
+              if [ -z "$INTERNAL_SHA" ]; then
+                echo "❌ ERROR: Could not extract SHA256 from internal image."
+                echo "Image format should be: registry/repo@sha256:..."
+                echo "FAIL" > $(results.VALIDATION_RESULT.path)
+                echo "$INTERNAL_IMAGE" > $(results.INTERNAL_IMAGE.path)
+                exit 1
+              fi
+
+              echo "Internal image SHA256: $INTERNAL_SHA"
+
+              # Extract SHAs from all snapshot images
+              echo ""
+              echo "Extracting SHAs from snapshot images..."
+              SNAPSHOT_SHAS=$(echo "$IMAGES" | grep -oP 'sha256:\K[a-f0-9]{64}' || true)
+
+              echo "Snapshot component SHAs:"
+              for sha in $SNAPSHOT_SHAS; do
+                echo "  $sha"
+              done
+
+              # Compare internal SHA to snapshot SHAs
+              echo ""
+              echo "Validating internal image SHA against snapshot..."
+              MATCH_FOUND=0
+              for sha in $SNAPSHOT_SHAS; do
+                if [ "$sha" = "$INTERNAL_SHA" ]; then
+                  MATCH_FOUND=1
+                  break
+                fi
+              done
+
+              # Report results
+              echo ""
+              echo "=========================================="
+              if [ $MATCH_FOUND -eq 1 ]; then
+                echo "✅ VALIDATION PASSED"
+                echo "=========================================="
+                echo "The internal operator image SHA matches a snapshot component."
+                echo "Snapshot is consistent and ready for release."
+                echo "PASS" > $(results.VALIDATION_RESULT.path)
+                echo "$INTERNAL_IMAGE" > $(results.INTERNAL_IMAGE.path)
+              else
+                echo "❌ VALIDATION FAILED"
+                echo "=========================================="
+                echo "The internal operator image SHA does NOT match any snapshot component."
+                echo ""
+                echo "This means the bundle references an operator image that is not"
+                echo "included in this snapshot. The snapshot is inconsistent."
+                echo ""
+                echo "Expected SHA: $INTERNAL_SHA"
+                echo "Snapshot SHAs:"
+                for sha in $SNAPSHOT_SHAS; do
+                  echo "  $sha"
+                done
+                echo ""
+                echo "FAIL" > $(results.VALIDATION_RESULT.path)
+                echo "$INTERNAL_IMAGE" > $(results.INTERNAL_IMAGE.path)
+                exit 1
+              fi
+
+              # Cleanup
+              echo ""
+              echo "Cleaning up..."
+              rm -rf "$BUNDLE_OCI" "$BUNDLE_DIR"
+              echo "Done."
+      params:
+        - name: snapshot
+          value: $(params.snapshot)

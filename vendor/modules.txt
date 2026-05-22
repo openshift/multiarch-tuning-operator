@@ -118,9 +118,6 @@ github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f
-## explicit
-github.com/dgryski/go-rendezvous
 # github.com/distribution/distribution/v3 v3.0.0
 ## explicit; go 1.23.7
 github.com/distribution/distribution/v3
@@ -566,8 +563,8 @@ github.com/redis/go-redis/extra/rediscmd/v9
 # github.com/redis/go-redis/extra/redisotel/v9 v9.18.0
 ## explicit; go 1.21
 github.com/redis/go-redis/extra/redisotel/v9
-# github.com/redis/go-redis/v9 v9.18.0
-## explicit; go 1.21
+# github.com/redis/go-redis/v9 v9.19.0
+## explicit; go 1.24
 github.com/redis/go-redis/v9
 github.com/redis/go-redis/v9/auth
 github.com/redis/go-redis/v9/internal

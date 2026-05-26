@@ -457,28 +457,31 @@ spec:
                       exit 1
                   fi
 
-                  # Check if other patches exist for this base
-                  COMMIT_VERSIONS_EXIST=false
-                  for check_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
-                      if grep -q "name: multiarch-tuning-operator.v${BASE_VERSION}+" "$check_file"; then
-                          COMMIT_VERSIONS_EXIST=true
-                          break
-                      fi
-                  done
-
-                  if [ "$COMMIT_VERSIONS_EXIST" = true ]; then
-                      echo "Other patches exist for base $BASE_VERSION - will skip older patches"
-                      USE_SKIPS=true
-                  else
-                      echo "First patch for base $BASE_VERSION - will replace clean version"
-                      USE_SKIPS=false
-                  fi
               fi
 
               # Update each catalog's channel graph
               for index_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
                   echo "Processing $index_file..."
                   temp_file=$(mktemp)
+
+                  # For patch versions, check if other patches exist in THIS catalog file's channel entries
+                  if [ "$IS_CLEAN_VERSION" = false ]; then
+                      # Check if other patches exist in this specific catalog file's channel section
+                      # Extract only the channel entries section to avoid matching bundle entries added by BUILD-INDEXES
+                      CHANNEL_PATCHES=$(awk '/^schema: olm.channel$/,/^schema:/ {print}' "$index_file" | \
+                          grep "name: multiarch-tuning-operator.v${BASE_VERSION}+" || true)
+
+                      if [ -n "$CHANNEL_PATCHES" ]; then
+                          echo "Other patches exist in $index_file channel - will skip older patches"
+                          USE_SKIPS=true
+                      else
+                          echo "First patch in $index_file channel - will replace clean version"
+                          USE_SKIPS=false
+                      fi
+                  else
+                      # Clean version never has skips
+                      USE_SKIPS=false
+                  fi
 
                   if [ "$USE_SKIPS" = true ]; then
                       # Adding a patch version when other patches exist

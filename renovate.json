@@ -12,15 +12,22 @@
     "addLabels": [
       "approved",
       "lgtm"
+    ],
+    "schedule": [
+      "on saturday"
     ]
   },
   "packageRules": [
     {
       "matchDatasources": ["golang-version"],
-      "allowedVersions": "<1.26.0",
-      "schedule": [
-        "on saturday"
-      ]
+      "allowedVersions": "<1.26.0"
+    },
+    {
+      "matchDatasources": ["go"],
+      "matchManagers": ["gomod"],
+      "constraints": {
+        "go": "<1.26"
+      }
     }
   ],
   "pruneBranchAfterAutomerge": true,
@@ -35,6 +42,13 @@
     "addLabels": [
       "approved",
       "lgtm"
+    ],
+    "managerFilePatterns": [
+      "/\\.yaml$/",
+      "/\\.yml$/"
+    ],
+    "includePaths": [
+      ".tekton/**"
     ]
   }
 }

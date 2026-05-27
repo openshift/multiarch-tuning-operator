@@ -191,17 +191,38 @@ spec:
       value: registry.access.redhat.com/ubi9/go-toolset:1.25
     - name: SCRIPT
       value: |
-        COMMIT_MSG=$(git log -1 --format=%s)
+        COMMIT_MSG=$(git log -1 --format=%B)
 
-        # Check if this commit requests clean version
-        if [[ "$COMMIT_MSG" =~ \[clean-version\] ]]; then
+        # Check if this is a nudge commit from konflux bot
+        if [[ "$COMMIT_MSG" =~ red-hat-konflux ]] && [[ "$COMMIT_MSG" =~ \?rev=([a-f0-9]+) ]]; then
+          # Extract the revision SHA from the commit message
+          REV_SHA="${BASH_REMATCH[1]}"
+          echo "Detected konflux nudge commit, checking referenced revision: $REV_SHA"
+
+          # Get the commit message of the referenced revision
+          REV_COMMIT_MSG=$(git log -1 --format=%B "$REV_SHA" 2>/dev/null || echo "")
+
+          # Check if the referenced commit has [clean-version]
+          if [[ "$REV_COMMIT_MSG" =~ \[clean-version\] ]]; then
+            VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
+            echo "Referenced commit has [clean-version], using clean version: $VERSION"
+            export VERSION
+          else
+            # Referenced commit doesn't have [clean-version], use commit-based version
+            BASE_VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
+            COMMIT_SHA=$(git rev-parse HEAD)
+            export VERSION="${BASE_VERSION}+${COMMIT_SHA:0:7}"
+            echo "Referenced commit has no [clean-version], using commit-based version: $VERSION"
+          fi
+        elif [[ "$COMMIT_MSG" =~ \[clean-version\] ]]; then
+          # Current commit has [clean-version]
           VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
           echo "Clean version requested: $VERSION"
           export VERSION
         else
           # Normal commit - generate commit-based version
           BASE_VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
-          COMMIT_SHA=$(tasks.clone-repository.results.commit)
+          COMMIT_SHA=$(git rev-parse HEAD)
           export VERSION="${BASE_VERSION}+${COMMIT_SHA:0:7}"
           echo "Generated commit-based version: $VERSION"
         fi

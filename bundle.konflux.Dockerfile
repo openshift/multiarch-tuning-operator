@@ -1,5 +1,5 @@
 FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.25 as builder
-ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:5e915406ce9536f49086b9762ae6c354acc531301d96dc0442e52309f413d6de
+ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:7177e2da153bef657599033b026894beb35990540685007d8717a04534335deb
 ARG ORIGINAL_IMG=registry.ci.openshift.org/origin/multiarch-tuning-operator:main
 WORKDIR /code
 COPY ./ ./

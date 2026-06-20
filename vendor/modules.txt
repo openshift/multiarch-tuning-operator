@@ -428,7 +428,7 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runtime-spec v1.3.0
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
-# github.com/openshift/api v0.0.0-20260521125114-09730f85d883
+# github.com/openshift/api v0.0.0-20260618083218-a3c8dea7f8bc
 ## explicit; go 1.25.0
 github.com/openshift/api
 github.com/openshift/api/apiextensions
@@ -505,7 +505,7 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/client-go v0.0.0-20260512113608-deb4dc54551a
+# github.com/openshift/client-go v0.0.0-20260618131434-17fd91ed6167
 ## explicit; go 1.25.0
 github.com/openshift/client-go/operator/applyconfigurations/internal
 github.com/openshift/client-go/operator/applyconfigurations/operator/v1

@@ -959,10 +959,13 @@ func (r *ClusterPodPlacementConfigReconciler) deleteErroredENoExecEvents(ctx con
 		}
 		// Delete errored ENoExecEvents to prevent accumulation of stale resources
 		erroredCount++
-		if deleteErr := r.Delete(ctx, enoexecEvent); client.IgnoreNotFound(deleteErr) != nil {
-			log.Error(deleteErr, "Failed to delete errored ENoExecEvent", "name", enoexecEvent.Name)
-		} else {
+		deleteErr := r.Delete(ctx, enoexecEvent)
+		if deleteErr == nil {
 			log.V(1).Info("Deleted errored ENoExecEvent", "name", enoexecEvent.Name)
+		} else if client.IgnoreNotFound(deleteErr) == nil {
+			log.V(1).Info("Errored ENoExecEvent already deleted", "name", enoexecEvent.Name)
+		} else {
+			log.Error(deleteErr, "Failed to delete errored ENoExecEvent", "name", enoexecEvent.Name)
 		}
 	}
 

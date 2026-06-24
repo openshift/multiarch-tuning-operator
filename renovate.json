@@ -28,6 +28,19 @@
       "constraints": {
         "go": "<1.26"
       }
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchFileNames": ["bundle.konflux.Dockerfile"],
+      "matchUpdateTypes": ["digest"],
+      "addLabels": [
+        "approved",
+        "lgtm"
+      ],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "rebase",
+      "platformAutomerge": true
     }
   ],
   "pruneBranchAfterAutomerge": true,

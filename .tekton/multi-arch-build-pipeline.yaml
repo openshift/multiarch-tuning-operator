@@ -181,43 +181,53 @@ spec:
       value: registry.access.redhat.com/ubi9/go-toolset:1.25
     - name: SCRIPT
       value: |
-        COMMIT_MSG=$(git log -1 --format=%B)
+        # Collect messages from all commits in this merge (merge commit + PR commits).
+        # GitHub merge commits don't include PR commit messages, so checking only
+        # HEAD misses nudge markers and [clean-version] from inner commits.
+        # Falls back to HEAD message if not a merge commit.
+        MERGE_MSGS=$(git log --format=%B HEAD^1..HEAD 2>/dev/null || git log -1 --format=%B)
+
+        # Find the latest release tag to bound ancestry searches.
+        # This prevents finding stale [clean-version] from a previous release.
+        LAST_TAG=$(git describe --tags --abbrev=0 --exclude='*test*' HEAD 2>/dev/null || echo "")
 
         # Check if this is a nudge commit from konflux bot
-        if [[ "$COMMIT_MSG" =~ red-hat-konflux ]] && [[ "$COMMIT_MSG" =~ \?rev=([a-f0-9]+) ]]; then
-          # Extract the revision SHA from the commit message
-          REV_SHA="${BASH_REMATCH[1]}"
+        if echo "$MERGE_MSGS" | grep -q 'red-hat-konflux' && REV_SHA=$(echo "$MERGE_MSGS" | grep -oE '[?]rev=[a-f0-9]+' | head -1 | cut -d= -f2) && [[ -n "$REV_SHA" ]]; then
           echo "Detected konflux nudge commit, checking referenced revision: $REV_SHA"
 
-          # Get the commit message of the referenced revision
-          REV_COMMIT_MSG=$(git log -1 --format=%B "$REV_SHA" 2>/dev/null || echo "")
+          # Search for [clean-version] between the last release tag and the
+          # referenced revision. The referenced rev may itself be a nudge merge,
+          # so we search ancestry rather than checking only that single commit.
+          # The tag bound ensures we don't match a [clean-version] from a prior release.
+          if [[ -n "$LAST_TAG" ]]; then
+            CLEAN_MATCH=$(git log --grep='\[clean-version\]' --oneline "${LAST_TAG}..${REV_SHA}" 2>/dev/null)
+          else
+            CLEAN_MATCH=$(git log --grep='\[clean-version\]' --oneline -20 "$REV_SHA" 2>/dev/null)
+          fi
 
-          # Check if the referenced commit has [clean-version]
-          if [[ "$REV_COMMIT_MSG" =~ \[clean-version\] ]]; then
+          if [[ -n "$CLEAN_MATCH" ]]; then
             VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
-            echo "Referenced commit has [clean-version], using clean version: $VERSION"
+            echo "Found [clean-version] since $LAST_TAG: $CLEAN_MATCH"
+            echo "Using clean version: $VERSION"
             export VERSION
           else
-            # Referenced commit doesn't have [clean-version], use commit-based version
             BASE_VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
             COMMIT_SHA=$(git rev-parse HEAD)
             export VERSION="${BASE_VERSION}+${COMMIT_SHA:0:7}"
-            echo "Referenced commit has no [clean-version], using commit-based version: $VERSION"
+            echo "No [clean-version] since ${LAST_TAG:-HEAD~20}, using commit-based version: $VERSION"
           fi
-        elif [[ "$COMMIT_MSG" =~ \[clean-version\] ]]; then
-          # Current commit has [clean-version]
+        elif echo "$MERGE_MSGS" | grep -q '\[clean-version\]'; then
           VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
           echo "Clean version requested: $VERSION"
           export VERSION
         else
-          # Normal commit - generate commit-based version
           BASE_VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
           COMMIT_SHA=$(git rev-parse HEAD)
           export VERSION="${BASE_VERSION}+${COMMIT_SHA:0:7}"
           echo "Generated commit-based version: $VERSION"
         fi
 
-        exec ./hack/bump-version.sh
+        exec ./hack/bump-version.sh "$VERSION"
     - name: HERMETIC
       value: "true"
     - name: SOURCE_ARTIFACT

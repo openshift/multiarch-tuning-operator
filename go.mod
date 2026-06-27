@@ -17,7 +17,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/openshift/api v0.0.0-20260521125114-09730f85d883
 	github.com/openshift/library-go v0.0.0-20260521161500-c83b770fc27c
-	github.com/panjf2000/ants/v2 v2.12.0
+	github.com/panjf2000/ants/v2 v2.12.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.91.0
 	github.com/prometheus/client_golang v1.23.2
 	go.uber.org/zap v1.28.0

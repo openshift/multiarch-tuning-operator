@@ -197,9 +197,20 @@ spec:
 
               echo "Checking if version $ENTRY_NAME exists in channel graph..."
 
-              # Check if version exists in channel entries (entries with schema: olm.channel)
-              # These are the upgrade graph entries, not the bundle metadata
-              if grep -A 10 "schema: olm.channel" fbc-v*/catalog/multiarch-tuning-operator/index.yaml | grep -q "name: $ENTRY_NAME"; then
+              # Check if version exists in channel entries (not bundle metadata)
+              VERSION_IN_CHANNEL=false
+              for check_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
+                  if awk '
+                    /^schema: olm.channel$/ { in_channel=1; next }
+                    (/^schema: / || /^---$/) && in_channel { exit }
+                    in_channel { print }
+                  ' "$check_file" | grep -q "name: $ENTRY_NAME\$"; then
+                      VERSION_IN_CHANNEL=true
+                      break
+                  fi
+              done
+
+              if [ "$VERSION_IN_CHANNEL" = true ]; then
                 echo "✅ Version $ENTRY_NAME already exists in channel graph"
                 echo "This version has already been released - skipping all FBC updates"
                 touch /workspace/skip-all-updates
@@ -253,37 +264,18 @@ spec:
                 echo "Removing from $catalog_file..."
                 temp_file=$(mktemp)
 
-                # Remove the bundle entry block (from '---' or 'schema: olm.bundle' to next schema)
+                # Remove the bundle block containing the matching name.
+                # Blocks are ---delimited; buffer each block and skip if it
+                # contains the target bundle name.
                 awk -v bundle="$BUNDLE_NAME" '
-                BEGIN { in_bundle = 0; skip_lines = 0 }
+                BEGIN { buf = ""; skip = 0 }
                 /^---$/ {
-                  if (in_bundle) {
-                    in_bundle = 0
-                    next
-                  }
-                  print
-                  next
+                  if (!skip && buf != "") { printf "%s", buf }
+                  buf = $0 "\n"; skip = 0; next
                 }
-                /^schema: olm\.bundle$/ {
-                  getline
-                  if ($0 == "name: " bundle) {
-                    in_bundle = 1
-                    skip_lines = 1
-                    next
-                  } else {
-                    print "schema: olm.bundle"
-                    print
-                  }
-                  next
-                }
-                /^schema: / {
-                  if (in_bundle) {
-                    in_bundle = 0
-                  }
-                  print
-                  next
-                }
-                !in_bundle { print }
+                { buf = buf $0 "\n" }
+                $0 == "name: " bundle { skip = 1 }
+                END { if (!skip && buf != "") printf "%s", buf }
                 ' "$catalog_file" > "$temp_file"
 
                 mv "$temp_file" "$catalog_file"
@@ -398,6 +390,15 @@ spec:
               jq --version
               yq --version
 
+              # Helper: extract only the olm.channel section from an index.yaml
+              extract_channel_section() {
+                awk '
+                  /^schema: olm.channel$/ { in_channel=1; next }
+                  (/^schema: / || /^---$/) && in_channel { exit }
+                  in_channel { print }
+                ' "$1"
+              }
+
               # Extract base version and determine if this is a clean or commit-based version
               if [[ "$VERSION_NO_V" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\+(.+)$ ]]; then
                   BASE_VERSION="${BASH_REMATCH[1]}"
@@ -423,10 +424,10 @@ spec:
                   echo "Will replace latest version from previous base"
                   USE_SKIPS=false
 
-                  # Check if this clean version already exists
+                  # Check if this clean version already exists in channel graph (not bundle entries)
                   for check_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
-                      if grep -q "name: multiarch-tuning-operator.v${BASE_VERSION}\$" "$check_file"; then
-                          echo "ERROR: Clean version $BASE_VERSION already exists in catalog"
+                      if extract_channel_section "$check_file" | grep -q "name: multiarch-tuning-operator.v${BASE_VERSION}\$"; then
+                          echo "ERROR: Clean version $BASE_VERSION already exists in channel graph"
                           echo "Cannot add duplicate clean version"
                           exit 1
                       fi
@@ -441,17 +442,17 @@ spec:
 
                   echo "Patch version - adds to existing base $BASE_VERSION"
 
-                  # Verify clean version exists for this base
+                  # Verify clean version exists for this base in channel graph (not bundle entries)
                   CLEAN_VERSION_EXISTS=false
                   for check_file in fbc-v*/catalog/multiarch-tuning-operator/index.yaml; do
-                      if grep -q "name: multiarch-tuning-operator.v${BASE_VERSION}\$" "$check_file"; then
+                      if extract_channel_section "$check_file" | grep -q "name: multiarch-tuning-operator.v${BASE_VERSION}\$"; then
                           CLEAN_VERSION_EXISTS=true
                           break
                       fi
                   done
 
                   if [ "$CLEAN_VERSION_EXISTS" = false ]; then
-                      echo "ERROR: Clean version $BASE_VERSION does not exist in catalog"
+                      echo "ERROR: Clean version $BASE_VERSION does not exist in channel graph"
                       echo "Cannot add patch versions before the clean version is released"
                       echo "Release pattern: clean version FIRST (1.4.0), then patches (1.4.0+abc, 1.4.0+def)"
                       exit 1
@@ -468,7 +469,7 @@ spec:
                   if [ "$IS_CLEAN_VERSION" = false ]; then
                       # Check if other patches exist in this specific catalog file's channel section
                       # Extract only the channel entries section to avoid matching bundle entries added by BUILD-INDEXES
-                      CHANNEL_PATCHES=$(awk '/^schema: olm.channel$/,/^schema:/ {print}' "$index_file" | \
+                      CHANNEL_PATCHES=$(extract_channel_section "$index_file" | \
                           grep "name: multiarch-tuning-operator.v${BASE_VERSION}+" || true)
 
                       if [ -n "$CHANNEL_PATCHES" ]; then
@@ -493,7 +494,8 @@ spec:
                       # Clean versions are permanent milestones that cannot be skipped
                       # File order is insertion order (newest first)
                       # Exclude the version we're currently adding
-                      ALL_PATCHES=$(grep "name: multiarch-tuning-operator.v${BASE_VERSION}+" "$index_file" | \
+                      ALL_PATCHES=$(extract_channel_section "$index_file" | \
+                          grep "name: multiarch-tuning-operator.v${BASE_VERSION}+" | \
                           sed 's/.*name: //' | sed 's/^[[:space:]]*//' | \
                           grep -v "^${ENTRY_NAME}$" || true)
 
@@ -531,7 +533,7 @@ spec:
                                 inserted = 1
                               }
                               /^schema: olm.channel$/ { in_channel = 1 }
-                              /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                              (/^schema: / && !/^schema: olm.channel$/) || /^---$/ { in_channel = 0 }
                               { print }
                               ' "$index_file" > "$temp_file"
                           else
@@ -545,7 +547,7 @@ spec:
                                 inserted = 1
                               }
                               /^schema: olm.channel$/ { in_channel = 1 }
-                              /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                              (/^schema: / && !/^schema: olm.channel$/) || /^---$/ { in_channel = 0 }
                               { print }
                               ' "$index_file" > "$temp_file"
                           fi
@@ -561,7 +563,7 @@ spec:
 
                       if [ "$IS_CLEAN_VERSION" = true ]; then
                           # Clean version - replaces latest version overall (from any base)
-                          PREV_VERSION=$(grep -A 5 "schema: olm.channel" "$index_file" | \
+                          PREV_VERSION=$(extract_channel_section "$index_file" | \
                               grep "name: multiarch-tuning-operator.v" | head -1 | \
                               sed 's/.*name: multiarch-tuning-operator.v//' | sed 's/^[[:space:]]*//' || true)
 
@@ -576,7 +578,7 @@ spec:
                                 inserted = 1
                               }
                               /^schema: olm.channel$/ { in_channel = 1 }
-                              /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                              (/^schema: / && !/^schema: olm.channel$/) || /^---$/ { in_channel = 0 }
                               { print }
                               ' "$index_file" > "$temp_file"
                           else
@@ -589,7 +591,7 @@ spec:
                                 inserted = 1
                               }
                               /^schema: olm.channel$/ { in_channel = 1 }
-                              /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                              (/^schema: / && !/^schema: olm.channel$/) || /^---$/ { in_channel = 0 }
                               { print }
                               ' "$index_file" > "$temp_file"
                           fi
@@ -605,7 +607,7 @@ spec:
                             inserted = 1
                           }
                           /^schema: olm.channel$/ { in_channel = 1 }
-                          /^schema: / && !/^schema: olm.channel$/ { in_channel = 0 }
+                          (/^schema: / && !/^schema: olm.channel$/) || /^---$/ { in_channel = 0 }
                           { print }
                           ' "$index_file" > "$temp_file"
                       fi
@@ -767,9 +769,11 @@ spec:
               git config user.name "Konflux Release Bot"
               git config user.email "konflux-release@redhat.com"
 
-              # Configure git authentication
+              # Configure git authentication using the pipeline's GIT_URL parameter
+              GIT_URL="$(params.GIT_URL)"
+              [[ "$GIT_URL" == *.git ]] || GIT_URL="${GIT_URL}.git"
               echo "Configuring GitHub authentication..."
-              git remote set-url origin "https://oauth2:${GITHUB_TOKEN}@github.com/openshift/multiarch-tuning-operator.git"
+              git remote set-url origin "https://oauth2:${GITHUB_TOKEN}@${GIT_URL#https://}"
 
               # Use consistent branch name for all FBC updates
               PR_BRANCH="auto-fbc-update"

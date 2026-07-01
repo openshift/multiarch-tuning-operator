@@ -104,10 +104,10 @@ spec:
         - extract-release-commit
       taskSpec:
         params:
-          - name: release-name
+          - name: snapshot
         results:
           - name: VERSION
-            description: Version extracted from release name
+            description: Version extracted from bundle CSV
         steps:
           - name: parse-version
             image: quay.io/konflux-ci/appstudio-utils:latest
@@ -115,26 +115,84 @@ spec:
               #!/bin/bash
               set -euo pipefail
 
-              RELEASE_NAME='$(params.release-name)'
+              # Install tools
+              mkdir -p /tmp/tools
+              export PATH="/tmp/tools:$PATH"
 
-              # Extract version from release name (e.g., release-test-1-3-0-xyz -> v1.3.0)
-              VERSION=$(echo "$RELEASE_NAME" | grep -oP '\d+-\d+-\d+' | tr '-' '.' | sed 's/^/v/')
+              if ! command -v jq &> /dev/null; then
+                JQ_VERSION=$(curl -s https://api.github.com/repos/jqlang/jq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+                curl -sL "https://github.com/jqlang/jq/releases/download/${JQ_VERSION}/jq-linux-amd64" -o /tmp/tools/jq
+                chmod +x /tmp/tools/jq
+              fi
 
-              if [ -z "$VERSION" ] || [ "$VERSION" = "v" ]; then
-                echo "❌ ERROR: Unable to extract version from release name: $RELEASE_NAME"
-                echo "   Expected format: release-X-Y-Z-suffix"
+              curl -sL "https://github.com/lework/skopeo-binary/releases/download/v1.17.0/skopeo-linux-amd64" -o /tmp/tools/skopeo
+              chmod +x /tmp/tools/skopeo
+
+              YQ_VERSION=$(curl -s https://api.github.com/repos/mikefarah/yq/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+              curl -sL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o /tmp/tools/yq
+              chmod +x /tmp/tools/yq
+
+              # Fetch snapshot
+              SNAPSHOT_REF='$(params.snapshot)'
+              if [[ "$SNAPSHOT_REF" == *"/"* ]]; then
+                SNAPSHOT_NAMESPACE="${SNAPSHOT_REF%/*}"
+                SNAPSHOT_NAME="${SNAPSHOT_REF#*/}"
+              else
+                SNAPSHOT_NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+                SNAPSHOT_NAME="$SNAPSHOT_REF"
+              fi
+
+              echo "Fetching snapshot $SNAPSHOT_NAME from namespace $SNAPSHOT_NAMESPACE..."
+              SNAPSHOT=$(oc get snapshot "$SNAPSHOT_NAME" -n "$SNAPSHOT_NAMESPACE" -o json)
+
+              # Extract bundle image from snapshot
+              BUNDLE_IMAGE=$(echo "$SNAPSHOT" | jq -r '.spec.components[] | select(.name | contains("bundle")) | .containerImage' | head -n1)
+              if [ -z "$BUNDLE_IMAGE" ] || [ "$BUNDLE_IMAGE" = "null" ]; then
+                echo "❌ ERROR: No bundle image found in snapshot"
+                exit 1
+              fi
+              echo "Bundle image: $BUNDLE_IMAGE"
+
+              # Copy and extract bundle to get CSV
+              BUNDLE_DIR="/tmp/bundle"
+              LAYERS_DIR="/tmp/bundle-extracted"
+              mkdir -p "$BUNDLE_DIR" "$LAYERS_DIR"
+
+              skopeo copy "docker://$BUNDLE_IMAGE" "dir:$BUNDLE_DIR"
+
+              MANIFEST_FILE=$(find "$BUNDLE_DIR" -name "manifest.json" | head -1)
+              if [ -z "$MANIFEST_FILE" ]; then
+                echo "❌ ERROR: Could not find manifest.json in bundle image"
                 exit 1
               fi
 
-              # Append test suffix with timestamp to avoid conflicts
-              TIMESTAMP=$(date +%s)
-              VERSION="${VERSION}-test-${TIMESTAMP}"
+              for layer in $(jq -r '.layers[].digest' "$MANIFEST_FILE" | cut -d: -f2); do
+                if [ -f "$BUNDLE_DIR/$layer" ]; then
+                  tar -xzf "$BUNDLE_DIR/$layer" -C "$LAYERS_DIR" 2>/dev/null || \
+                  tar -xf "$BUNDLE_DIR/$layer" -C "$LAYERS_DIR" 2>/dev/null || true
+                fi
+              done
 
-              echo "Extracted version: $VERSION"
+              CSV_FILE=$(find "$LAYERS_DIR" -name "*clusterserviceversion.yaml" | head -1)
+              if [ -z "$CSV_FILE" ]; then
+                echo "❌ ERROR: Could not find CSV file in bundle"
+                exit 1
+              fi
+
+              # Extract version from CSV
+              VERSION=$(yq eval '.spec.version' "$CSV_FILE")
+              if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+                echo "❌ ERROR: Could not extract version from CSV"
+                exit 1
+              fi
+
+              [[ "$VERSION" =~ ^v ]] || VERSION="v${VERSION}"
+
+              echo "Extracted version from bundle CSV: $VERSION"
               echo -n "$VERSION" > $(results.VERSION.path)
       params:
-        - name: release-name
-          value: $(tasks.extract-release-commit.results.RELEASE_NAME)
+        - name: snapshot
+          value: $(params.snapshot)
 
     - name: tag-release-commit
       runAfter:
@@ -246,6 +304,39 @@ spec:
                 GITHUB_TOKEN=""
               fi
 
+              # Derive authenticated URL from GIT_URL parameter
+              AUTH_GIT_URL="$GIT_URL"
+              [[ "$AUTH_GIT_URL" == *.git ]] || AUTH_GIT_URL="${AUTH_GIT_URL}.git"
+
+              # Check if tag already exists on the remote before cloning
+              echo "Checking if tag $VERSION already exists on remote..."
+              if [ -n "${GITHUB_TOKEN:-}" ]; then
+                REMOTE_CHECK_URL="https://oauth2:${GITHUB_TOKEN}@${AUTH_GIT_URL#https://}"
+              else
+                REMOTE_CHECK_URL="$GIT_URL"
+              fi
+
+              # Fetch both the tag ref and its peeled commit (^{})
+              TAG_REFS=$(git ls-remote --tags "$REMOTE_CHECK_URL" "refs/tags/$VERSION" "refs/tags/$VERSION^{}" 2>/dev/null)
+              EXISTING_TAG_SHA=$(echo "$TAG_REFS" | awk -v tag="refs/tags/$VERSION" '$2 == tag {print $1}')
+
+              if [ -n "$EXISTING_TAG_SHA" ]; then
+                # Resolve peeled commit (for annotated tags); fall back to tag SHA for lightweight tags
+                PEELED_SHA=$(echo "$TAG_REFS" | awk -v tag="refs/tags/$VERSION^{}" '$2 == tag {print $1}')
+                TAG_COMMIT="${PEELED_SHA:-$EXISTING_TAG_SHA}"
+
+                if [ "$TAG_COMMIT" = "$COMMIT_SHA" ]; then
+                  echo "✅ Tag $VERSION already exists on remote pointing to correct commit ($COMMIT_SHA)"
+                  echo -n "$VERSION" > $(results.TAG_NAME.path)
+                  exit 0
+                else
+                  echo "⚠️  Tag $VERSION exists on remote but points to $TAG_COMMIT, not $COMMIT_SHA"
+                  echo "Proceeding to clone and verify..."
+                fi
+              else
+                echo "Tag $VERSION does not exist on remote — will create it."
+              fi
+
               # Clone the repository
               REPO_DIR="/tmp/repo"
               echo "Cloning repository (branch: $GIT_BRANCH)..."
@@ -253,7 +344,7 @@ spec:
               if [ -n "${GITHUB_TOKEN:-}" ]; then
                 echo "Using authenticated clone..."
                 git clone --branch "$GIT_BRANCH" --single-branch \
-                  "https://oauth2:${GITHUB_TOKEN}@github.com/openshift/multiarch-tuning-operator.git" \
+                  "https://oauth2:${GITHUB_TOKEN}@${AUTH_GIT_URL#https://}" \
                   "$REPO_DIR"
               else
                 echo "⚠️  Warning: GITHUB_TOKEN not set, cloning without authentication..."
@@ -270,7 +361,7 @@ spec:
 
               # Configure authentication for push if token available
               if [ -n "${GITHUB_TOKEN:-}" ]; then
-                git remote set-url origin "https://oauth2:${GITHUB_TOKEN}@github.com/openshift/multiarch-tuning-operator.git"
+                git remote set-url origin "https://oauth2:${GITHUB_TOKEN}@${AUTH_GIT_URL#https://}"
               fi
 
               # Check if tag already exists

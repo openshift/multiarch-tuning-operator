@@ -1,4 +1,5 @@
-apiVersion: tekton.dev/v1beta1
+---
+apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: rapidast-integration-pipeline
@@ -7,10 +8,10 @@ spec:
     RapiDAST security scanning integration test for multiarch-tuning-operator.
     Follows the official RapiDAST Konflux pattern.
   params:
-    - description: 'Snapshot of the application'
-      name: SNAPSHOT
+    - name: SNAPSHOT
       type: string
   tasks:
+    # Create an ephemeral namespace to access the EaaS cluster provisioning API.
     - name: provision-env
       taskRef:
         params:
@@ -27,30 +28,103 @@ spec:
         - name: ownerUid
           value: $(context.pipelineRun.uid)
 
+    # Provision an ephemeral HyperShift cluster. An operator requires
+    # cluster-admin (for CRDs, ClusterRoles, webhooks), so we cannot use
+    # a plain eaas-provision-space namespace.
+    - name: provision-cluster
+      runAfter:
+        - provision-env
+      taskSpec:
+        results:
+          - name: clusterName
+            value: "$(steps.create-cluster.results.clusterName)"
+        steps:
+          - name: get-supported-versions
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-get-supported-ephemeral-cluster-versions/0.1/eaas-get-supported-ephemeral-cluster-versions.yaml
+            params:
+              - name: eaasSpaceSecretRef
+                value: $(tasks.provision-env.results.secretRef)
+          - name: pick-version
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-get-latest-openshift-version-by-prefix/0.1/eaas-get-latest-openshift-version-by-prefix.yaml
+            params:
+              - name: prefix
+                value: "$(steps.get-supported-versions.results.versions[0])."
+          - name: create-cluster
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-create-ephemeral-cluster-hypershift-aws/0.1/eaas-create-ephemeral-cluster-hypershift-aws.yaml
+            params:
+              - name: eaasSpaceSecretRef
+                value: $(tasks.provision-env.results.secretRef)
+              - name: version
+                value: "$(steps.pick-version.results.version)"
+
+    # Get the cluster credentials, deploy the operator, and store the
+    # kubeconfig as a secret so the rapidast-check task can port-forward.
     - name: deploy-app
       params:
         - name: SNAPSHOT
           value: "$(params.SNAPSHOT)"
       runAfter:
-        - provision-env
+        - provision-cluster
       taskSpec:
         params:
           - name: SNAPSHOT
             type: string
+        results:
+          - name: clusterKubeconfigSecret
+            description: Name of the secret containing the ephemeral cluster kubeconfig.
         volumes:
           - name: credentials
             emptyDir: {}
         steps:
           - name: get-kubeconfig
+            ref:
+              resolver: git
+              params:
+                - name: url
+                  value: https://github.com/konflux-ci/build-definitions.git
+                - name: revision
+                  value: main
+                - name: pathInRepo
+                  value: stepactions/eaas-get-ephemeral-cluster-credentials/0.1/eaas-get-ephemeral-cluster-credentials.yaml
+            params:
+              - name: eaasSpaceSecretRef
+                value: $(tasks.provision-env.results.secretRef)
+              - name: clusterName
+                value: "$(tasks.provision-cluster.results.clusterName)"
+              - name: credentials
+                value: credentials
+
+          # Store the cluster kubeconfig as a K8s secret in the pipeline
+          # namespace so the rapidast-check sidecar can consume it.
+          - name: store-cluster-kubeconfig
             image: quay.io/konflux-ci/konflux-test:latest
             env:
-              - name: KUBECONFIG
-                value: /credentials/kubeconfig.yml
-              - name: KUBECONFIG_VALUE
-                valueFrom:
-                  secretKeyRef:
-                    name: "$(tasks.provision-env.results.secretRef)"
-                    key: kubeconfig
+              - name: CLUSTER_KUBECONFIG
+                value: /credentials/$(steps.get-kubeconfig.results.kubeconfig)
             volumeMounts:
               - name: credentials
                 mountPath: /credentials
@@ -58,14 +132,21 @@ spec:
               #!/bin/bash
               set -euxo pipefail
 
-              cat <<< "$KUBECONFIG_VALUE" > "$KUBECONFIG"
-              echo "Wrote kubeconfig for new environment to $KUBECONFIG"
+              SECRET_NAME="cluster-kubeconfig"
 
+              kubectl create secret generic "$SECRET_NAME" \
+                --from-file=kubeconfig="$CLUSTER_KUBECONFIG" \
+                --dry-run=client -o yaml | kubectl apply -f -
+
+              printf '%s' "$SECRET_NAME" > "$(results.clusterKubeconfigSecret.path)"
+
+          # Copy the image pull secret so the ephemeral cluster can pull
+          # the snapshot image from the private Konflux registry.
           - name: copy-pull-secret
             image: quay.io/konflux-ci/konflux-test:latest
             env:
-              - name: DEST_KUBECONFIG
-                value: /credentials/kubeconfig.yml
+              - name: CLUSTER_KUBECONFIG
+                value: /credentials/$(steps.get-kubeconfig.results.kubeconfig)
               - name: PULL_SECRET
                 value: imagerepository-for-multiarch-tuning-operator-multiarch-tuning-operator-image-pull
             volumeMounts:
@@ -75,20 +156,28 @@ spec:
               #!/bin/bash
               set -euxo pipefail
 
-              oc get secrets $PULL_SECRET -o json | jq 'del(.metadata.creationTimestamp,
-                .metadata.uid, .metadata.resourceVersion,
-                .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration",
-                .metadata.namespace)' > /tmp/pull-secret.json
-              oc --kubeconfig=$DEST_KUBECONFIG apply -f /tmp/pull-secret.json
-              oc --kubeconfig=$DEST_KUBECONFIG secret link --for=pull default $PULL_SECRET
+              oc get secrets $PULL_SECRET -o json | \
+                jq 'del(.metadata.creationTimestamp,
+                  .metadata.uid, .metadata.resourceVersion,
+                  .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration",
+                  .metadata.namespace)' > /tmp/pull-secret.json
 
+              oc --kubeconfig=$CLUSTER_KUBECONFIG create namespace openshift-multiarch-tuning-operator \
+                --dry-run=client -o yaml | oc --kubeconfig=$CLUSTER_KUBECONFIG apply -f -
+              oc --kubeconfig=$CLUSTER_KUBECONFIG -n openshift-multiarch-tuning-operator apply -f /tmp/pull-secret.json
+              oc --kubeconfig=$CLUSTER_KUBECONFIG -n openshift-multiarch-tuning-operator create sa multiarch-tuning-operator-controller-manager \
+                --dry-run=client -o yaml | oc --kubeconfig=$CLUSTER_KUBECONFIG apply -f -
+              oc --kubeconfig=$CLUSTER_KUBECONFIG -n openshift-multiarch-tuning-operator secrets link \
+                --for=pull multiarch-tuning-operator-controller-manager $PULL_SECRET
+
+          # Deploy the operator using the full kustomize build.
           - name: deploy-app
             image: quay.io/konflux-ci/konflux-test:latest
             env:
               - name: SNAPSHOT
                 value: "$(params.SNAPSHOT)"
               - name: KUBECONFIG
-                value: /credentials/kubeconfig.yml
+                value: /credentials/$(steps.get-kubeconfig.results.kubeconfig)
             volumeMounts:
               - name: credentials
                 mountPath: /credentials
@@ -96,19 +185,12 @@ spec:
               #!/bin/bash
               set -euxo pipefail
 
-              # Extract operator image
               IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.name == "multiarch-tuning-operator") | .containerImage')
               [ -z "$IMAGE" ] && IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[0].containerImage')
               echo "Extracted image: $IMAGE"
 
-              # Install latest kustomize using official install script
               curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- /tmp
 
-              # Download latest yq using GitHub's latest release redirect
-              curl -sL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /tmp/yq
-              chmod +x /tmp/yq
-
-              # Clone repo to get manifests
               REPO_URL=$(echo "$SNAPSHOT" | jq -r '.components[0].source.git.url')
               REPO_REV=$(echo "$SNAPSHOT" | jq -r '.components[0].source.git.revision')
               git clone --depth 1 "$REPO_URL" /tmp/operator-repo
@@ -116,56 +198,22 @@ spec:
               git fetch origin "$REPO_REV" --depth=1 2>/dev/null || true
               git checkout "$REPO_REV" 2>/dev/null || true
 
-              # Update image in manager config
               cd config/manager
               /tmp/kustomize edit set image controller="$IMAGE"
+              /tmp/kustomize edit set annotation multiarch.openshift.io/image:"$IMAGE"
 
-              # Get current namespace for the test environment
-              CURRENT_NS=$(oc config view --minify -o jsonpath='{..namespace}')
-              echo "Deploying to namespace: $CURRENT_NS"
-
-              # Create self-signed TLS certificate for metrics server
-              openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
-                -keyout /tmp/tls.key -out /tmp/tls.crt \
-                -subj "/CN=controller-manager" 2>/dev/null
-              oc create secret tls multiarch-tuning-operator-controller-manager-service-cert \
-                --cert=/tmp/tls.crt --key=/tmp/tls.key \
-                --dry-run=client -o yaml | oc apply -f -
-
-              # Create ServiceAccount that the deployment references
-              oc create serviceaccount controller-manager --dry-run=client -o yaml | oc apply -f -
-
-              # Build and apply manager manifests
-              # Only need to filter out Namespace and remove hardcoded namespace fields
               cd /tmp/operator-repo
-              /tmp/kustomize build config/manager | \
-                /tmp/yq eval-all 'select(.kind != "Namespace") | del(.metadata.namespace)' | \
-                oc apply -f -
+              /tmp/kustomize build config/standalone | oc apply -f -
 
-              # Verify deployment exists
-              echo "Checking deployments..."
-              oc get deployments
-
-              # Create service for metrics endpoint (HTTPS on 8443)
-              # Deployment is named "controller-manager" when built from config/manager
-              oc expose deployment/controller-manager \
-                --port=8443 --target-port=8443 --name=operator-metrics || echo "Service already exists"
-
-              # Wait for deployment (or timeout and debug)
               echo "Waiting for deployment..."
-              if ! oc wait --for=condition=Available=true deployment/controller-manager --timeout=120s; then
-                echo "Deployment failed to become available. Debugging..."
-                oc get pods -l control-plane=controller-manager
-                oc describe pods -l control-plane=controller-manager
-                oc logs -l control-plane=controller-manager --all-containers=true --tail=50 || true
-                exit 1
-              fi
+              oc wait --for=condition=Available=true \
+                deployment/multiarch-tuning-operator-controller-manager \
+                -n openshift-multiarch-tuning-operator \
+                --timeout=300s
 
-              # Verify service and pods
-              echo "Deployment ready. Verifying service and pods..."
-              oc get service operator-metrics
-              oc get pods -l control-plane=controller-manager
+              oc get pods -n openshift-multiarch-tuning-operator
 
+    # Run the scanner.
     - name: rapidast-check
       runAfter:
         - deploy-app
@@ -175,28 +223,22 @@ spec:
           - name: url
             value: https://github.com/redhatproductsecurity/rapidast
           - name: revision
-            value: development
+            value: "2.13.0"
           - name: pathInRepo
             value: examples/konflux/rapidast-check.yaml
       params:
         - name: KUBECONFIG_SECRET
-          value: "$(tasks.provision-env.results.secretRef)"
+          value: "$(tasks.deploy-app.results.clusterKubeconfigSecret)"
         - name: PORT_FORWARD_TARGETS
-          value: "service/operator-metrics 8443:8443"
+          value: "-n openshift-multiarch-tuning-operator service/multiarch-tuning-operator-controller-manager-metrics-service 8443:8443"
         - name: RAPIDAST_CONFIG_VALUE
           value: |
+            ---
             config:
               configVersion: 6
-              results:
-                exclusions:
-                  rules:
-                    - name: "Exclude findings below a severity level of Important"
-                      cel_expression: ".result.level != 'error' && .result.level != 'warning'"
-
             application:
-              shortName: "multiarch-tuning-operator-metrics"
+              shortName: "multiarch-tuning-operator-dast-scan"
               url: "https://127.0.0.1:8443/metrics"
-
             scanners:
               zap:
                 spider:
@@ -204,141 +246,4 @@ spec:
                   url: "https://127.0.0.1:8443/metrics"
                 passiveScan: {}
                 activeScan:
-                  policy: "API-scan-minimal"
-                report:
-                  format:
-                    - "json"
-                    - "html"
-                    - "sarif"
-                miscOptions:
-                  enableUI: false
-                  updateAddons: false
-
-    - name: display-findings
-      runAfter:
-        - rapidast-check
-      taskSpec:
-        steps:
-          - name: show-detailed-findings
-            image: quay.io/konflux-ci/konflux-test:latest
-            script: |
-              #!/bin/bash
-              set -e
-
-              echo ""
-              echo "╔═══════════════════════════════════════════════════════════════════╗"
-              echo "║          RAPIDAST SECURITY SCAN - DETAILED FINDINGS REPORT        ║"
-              echo "╚═══════════════════════════════════════════════════════════════════╝"
-              echo ""
-
-              # Get outputs from rapidast-check task
-              SCAN_OUTPUT='$(tasks.rapidast-check.results.SCAN_OUTPUT)'
-              TEST_OUTPUT='$(tasks.rapidast-check.results.TEST_OUTPUT)'
-
-              echo "┌───────────────────────────────────────────────────────────────────┐"
-              echo "│  📊 VULNERABILITY SUMMARY                                         │"
-              echo "└───────────────────────────────────────────────────────────────────┘"
-              echo ""
-
-              # Parse and display vulnerability counts with color coding
-              critical=$(echo "$SCAN_OUTPUT" | jq -r '.vulnerabilities.critical')
-              high=$(echo "$SCAN_OUTPUT" | jq -r '.vulnerabilities.high')
-              medium=$(echo "$SCAN_OUTPUT" | jq -r '.vulnerabilities.medium')
-              low=$(echo "$SCAN_OUTPUT" | jq -r '.vulnerabilities.low')
-              unknown=$(echo "$SCAN_OUTPUT" | jq -r '.vulnerabilities.unknown')
-
-              total_vulns=$((critical + high + medium + low + unknown))
-
-              echo "   🔴 Critical:  $critical"
-              echo "   🟠 High:      $high"
-              echo "   🟡 Medium:    $medium"
-              echo "   🟢 Low:       $low"
-              echo "   ⚪ Unknown:   $unknown"
-              echo "   ━━━━━━━━━━━━━━━━━━"
-              echo "   📈 Total:     $total_vulns"
-              echo ""
-
-              if [ "$total_vulns" -eq 0 ]; then
-                echo "┌───────────────────────────────────────────────────────────────────┐"
-                echo "│  ✅ SCAN RESULT: PASS                                             │"
-                echo "└───────────────────────────────────────────────────────────────────┘"
-                echo ""
-                echo "  🎉 No security vulnerabilities detected!"
-                echo ""
-                echo "  The following aspects were verified:"
-                echo "    • Authentication mechanisms"
-                echo "    • SSL/TLS configuration"
-                echo "    • HTTP security headers"
-                echo "    • Information disclosure risks"
-                echo "    • Common web vulnerabilities (XSS, injection, etc.)"
-                echo "    • Session management"
-                echo "    • Content Security Policy"
-                echo ""
-                echo "  Note: Minor warnings (non-vulnerabilities) may still be present."
-                echo "  Check the rapidast-check task logs for full scan details."
-                echo ""
-              else
-                echo "┌───────────────────────────────────────────────────────────────────┐"
-                echo "│  ⚠️  SCAN RESULT: ISSUES FOUND                                    │"
-                echo "└───────────────────────────────────────────────────────────────────┘"
-                echo ""
-                echo "  $total_vulns security issue(s) detected during the scan."
-                echo ""
-                echo "  📋 Next Steps:"
-                echo ""
-                echo "  1. Review detailed findings:"
-                echo "     The rapidast-check task generates comprehensive reports including:"
-                echo "       • HTML Report:  Visual report with full details"
-                echo "       • JSON Report:  Machine-readable structured data"
-                echo "       • SARIF Report: Standard format for security tools"
-                echo ""
-                echo "  2. Extract reports from the pipeline run:"
-                echo "     Reports are generated but not automatically exported."
-                echo "     To access them, you need to extract from the pod artifacts."
-                echo ""
-                echo "  3. What's in the detailed reports:"
-                echo "       ✓ Vulnerability descriptions"
-                echo "       ✓ Step-by-step remediation instructions"
-                echo "       ✓ CWE and WASC vulnerability IDs"
-                echo "       ✓ OWASP references and documentation links"
-                echo "       ✓ Proof-of-concept attack evidence"
-                echo "       ✓ Affected URLs and HTTP request/response details"
-                echo ""
-                echo "  4. Check scan logs for warnings:"
-                echo "     Review the rapidast-check task logs for:"
-                echo "       • Specific URLs that triggered alerts"
-                echo "       • Warning messages (WARN-NEW entries)"
-                echo "       • Connection or authentication issues"
-                echo ""
-              fi
-
-              echo "┌───────────────────────────────────────────────────────────────────┐"
-              echo "│  🔍 SCAN CONFIGURATION                                            │"
-              echo "└───────────────────────────────────────────────────────────────────┘"
-              echo ""
-              echo "   Target:        https://127.0.0.1:8443/metrics"
-              echo "   Scanner:       OWASP ZAP"
-              echo "   Policy:        API-scan-minimal"
-              echo "   Spider Time:   1 second (optimized)"
-              echo "   Report Types:  JSON, HTML, SARIF"
-              echo ""
-
-              echo "┌───────────────────────────────────────────────────────────────────┐"
-              echo "│  📝 SCAN STATUS                                                   │"
-              echo "└───────────────────────────────────────────────────────────────────┘"
-              echo ""
-
-              # Display scan result from TEST_OUTPUT
-              result=$(echo "$TEST_OUTPUT" | jq -r '.result')
-              timestamp=$(echo "$TEST_OUTPUT" | jq -r '.timestamp')
-              note=$(echo "$TEST_OUTPUT" | jq -r '.note')
-
-              echo "   Status:    $result"
-              echo "   Timestamp: $timestamp"
-              echo "   Note:      $note"
-              echo ""
-
-              echo "╔═══════════════════════════════════════════════════════════════════╗"
-              echo "║                    END OF SECURITY SCAN REPORT                    ║"
-              echo "╚═══════════════════════════════════════════════════════════════════╝"
-              echo ""
+                  policy: API-scan-minimal

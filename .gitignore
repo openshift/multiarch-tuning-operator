@@ -27,8 +27,8 @@ Dockerfile.cross
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
+# Go workspace file (root only, not vendor/)
+/go.work
 # Kubernetes Generated files - skip generated files, except for vendored files
 
 !vendor/**/zz_generated.*

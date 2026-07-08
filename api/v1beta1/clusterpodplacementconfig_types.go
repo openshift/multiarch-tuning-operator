@@ -64,6 +64,7 @@ type ClusterPodPlacementConfigStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// The following fields are used to derive the conditions. They are not exposed to the user.
+	//nolint:revive // controller-gen requires json tags on all fields, even unexported ones
 	available                                bool `json:"-"`
 	progressing                              bool `json:"-"`
 	degraded                                 bool `json:"-"`
@@ -236,10 +237,6 @@ type ClusterPodPlacementConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterPodPlacementConfig `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&ClusterPodPlacementConfig{}, &ClusterPodPlacementConfigList{})
 }
 
 func conditionFromBool(b bool) metav1.ConditionStatus {

@@ -9,7 +9,7 @@ ARTIFACT_DIR ?= ./_output
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 1.3.1
+VERSION ?= 1.3.2
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -81,8 +81,7 @@ ENVTEST_K8S_VERSION = 1.35.0
 # https://github.com/golangci/golangci-lint/releases
 GOLINT_VERSION = v2.12.2
 
-# TODO: We'd need an upstream builder image that includes gpgme-devel (libgpgme-dev)
-BUILD_IMAGE ?= registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.21
+BUILD_IMAGE ?= registry.access.redhat.com/ubi9/go-toolset:1.26.3
 RUNTIME_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 NO_DOCKER ?= 0
@@ -125,7 +124,7 @@ ifeq ($(NO_DOCKER), 1)
   DOCKER_CMD =
   IMAGE_BUILD_CMD = imagebuilder
 else
-  DOCKER_CMD := $(ENGINE) run --env GO111MODULE=$(GO111MODULE) --env GOFLAGS=$(GOFLAGS) --env GOLINT_VERSION=$(GOLINT_VERSION) --rm  -v "$(PWD)":/go/src/github.com/outrigger-project/multiarch-tuning-operator:Z -v "$(PWD)":/go/src/github.com/openshift/multiarch-tuning-operator:Z -w /go/src/github.com/openshift/multiarch-tuning-operator $(BUILD_IMAGE)
+  DOCKER_CMD := $(ENGINE) run --user root --env GO111MODULE=$(GO111MODULE) --env GOFLAGS=$(GOFLAGS) --env GOLINT_VERSION=$(GOLINT_VERSION) --rm  -v "$(PWD)":/go/src/github.com/outrigger-project/multiarch-tuning-operator:Z -v "$(PWD)":/go/src/github.com/openshift/multiarch-tuning-operator:Z -w /go/src/github.com/openshift/multiarch-tuning-operator --entrypoint bash $(BUILD_IMAGE) -c 'if ! pkg-config --exists gpgme 2>/dev/null; then dnf install -y gpgme-devel > /dev/null 2>&1; fi && eval "$$@"' --
   IMAGE_BUILD_CMD = $(ENGINE) build
 endif
 

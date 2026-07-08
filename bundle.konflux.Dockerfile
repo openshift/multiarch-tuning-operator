@@ -1,4 +1,4 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.25 as builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.26 as builder
 ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:eff0028ef5aa39b778baf5f484ab5abc2452c2159aa2724635c5b2c07e09f3d8
 ARG ORIGINAL_IMG=registry.ci.openshift.org/origin/multiarch-tuning-operator:v1.x
 WORKDIR /code
@@ -36,8 +36,8 @@ COPY --from=builder /code/bundle/tests/scorecard /tests/scorecard/
 LABEL com.redhat.component="Multiarch Tuning Operator"
 LABEL distribution-scope="public"
 LABEL name="multiarch-tuning/multiarch-tuning-operator-bundle"
-LABEL release="1.3.1"
-LABEL version="1.3.1"
+LABEL release="1.3.2"
+LABEL version="1.3.2"
 LABEL cpe="cpe:/a:redhat:multiarch_tuning_operator:1.3::el9"
 LABEL url="https://github.com/openshift/multiarch-tuning-operator"
 LABEL vendor="Red Hat, Inc."

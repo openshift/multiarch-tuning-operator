@@ -1,5 +1,5 @@
 # TODO: delete this Dockerfile when https://issues.redhat.com/browse/KONFLUX-2361
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.25 as builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.26 as builder
 ARG TARGETOS
 ARG TARGETARCH
 ENV GOEXPERIMENT=strictfipsruntime
@@ -37,8 +37,8 @@ USER 65532:65532
 LABEL com.redhat.component="Multiarch Tuning Operator"
 LABEL distribution-scope="public"
 LABEL name="multiarch-tuning/multiarch-tuning-rhel9-operator"
-LABEL release="1.3.1"
-LABEL version="1.3.1"
+LABEL release="1.3.2"
+LABEL version="1.3.2"
 LABEL cpe="cpe:/a:redhat:multiarch_tuning_operator:1.3::el9"
 LABEL url="https://github.com/openshift/multiarch-tuning-operator"
 LABEL vendor="Red Hat, Inc."

@@ -19,6 +19,7 @@ package operator
 import (
 	"context"
 	"errors"
+	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -68,6 +69,17 @@ const (
 	operandName       = "pod-placement-controller"
 	priorityClassName = "system-cluster-critical"
 )
+
+type requeueAfterError struct {
+	duration time.Duration
+	msg      string
+}
+
+func (e *requeueAfterError) Error() string { return e.msg }
+
+func newRequeueAfterError(d time.Duration, msg string) error {
+	return &requeueAfterError{duration: d, msg: msg}
+}
 
 const (
 	waitingForUngatingPodsError         = "waiting for pods with the scheduling gate to be ungated"
@@ -133,7 +145,15 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 		return ctrl.Result{}, nil
 	case !clusterPodPlacementConfig.DeletionTimestamp.IsZero():
 		// Only execute deletion if the object is being deleted and the finalizer is present
-		return ctrl.Result{}, r.handleDelete(ctx, clusterPodPlacementConfig)
+		if err := r.handleDelete(ctx, clusterPodPlacementConfig); err != nil {
+			var requeueErr *requeueAfterError
+			if errors.As(err, &requeueErr) {
+				log.V(1).Info("Requeuing after delay", "reason", requeueErr.msg, "after", requeueErr.duration)
+				return ctrl.Result{RequeueAfter: requeueErr.duration}, nil
+			}
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 	// Move the finalizer block before applying the corresponding resources
 	// to ensure that finalizers are properly added and can be cleaned up
@@ -218,7 +238,15 @@ func (r *ClusterPodPlacementConfigReconciler) Reconcile(ctx context.Context, req
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, r.reconcile(ctx, clusterPodPlacementConfig)
+	if err := r.reconcile(ctx, clusterPodPlacementConfig); err != nil {
+		var requeueErr *requeueAfterError
+		if errors.As(err, &requeueErr) {
+			log.V(1).Info("Requeuing after delay", "reason", requeueErr.msg, "after", requeueErr.duration)
+			return ctrl.Result{RequeueAfter: requeueErr.duration}, nil
+		}
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
 }
 
 func (r *ClusterPodPlacementConfigReconciler) ensureNamespaceLabels(ctx context.Context) error {
@@ -343,6 +371,32 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 	// We execute the update here because this function returns multiple times before the whole deletion process is completed.
 	// Executing it here ensures that the conditions are updated throughout the deletion process.
 	_ = r.updateStatus(ctx, clusterPodPlacementConfig)
+
+	// Prevent deletion while PodPlacementConfig resources still exist
+	// Check this BEFORE tearing down webhook/operand resources to prevent orphaning PPCs
+	if controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer) {
+		log.V(1).Info("Checking for existing PodPlacementConfig resources before deletion")
+		ppcList := &multiarchv1beta1.PodPlacementConfigList{}
+		if err := r.List(ctx, ppcList); err != nil {
+			log.Error(err, "Unable to list PodPlacementConfigs during deletion")
+			return err
+		}
+		if len(ppcList.Items) > 0 {
+			// Block deletion - PPCs still exist
+			err := errors.New(RemainingPodPlacementConfig)
+			log.Error(err, "Deletion blocked due to existing PodPlacementConfig resources")
+			return err
+		}
+		// All PPCs are gone, remove the finalizer
+		log.V(1).Info("No PodPlacementConfig resources found, removing no-pod-placement-config finalizer")
+		controllerutil.RemoveFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer)
+		if err := r.Update(ctx, clusterPodPlacementConfig); err != nil {
+			log.Error(err, "Unable to remove no-pod-placement-config finalizer from ClusterPodPlacementConfig")
+			return err
+		}
+		return nil
+	}
+
 	objsToDelete := []utils.ToDeleteRef{
 		{
 			NamespacedTypedClient: r.ClientSet.AdmissionregistrationV1().MutatingWebhookConfigurations(),
@@ -382,29 +436,6 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 	// pods gating status and the webhook stopping to communicate with the API server.
 	if err == nil || client.IgnoreNotFound(err) != nil {
 		return errors.New(waitingForWebhookSInterruptionError)
-	}
-
-	// Prevent deletion while PodPlacementConfig resources still exist
-	if controllerutil.ContainsFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer) {
-		log.V(1).Info("Checking for existing PodPlacementConfig resources before deletion")
-		ppcList := &multiarchv1beta1.PodPlacementConfigList{}
-		if err := r.List(ctx, ppcList); err != nil {
-			log.Error(err, "Unable to list PodPlacementConfigs during deletion")
-			return err
-		}
-		if len(ppcList.Items) > 0 {
-			err := errors.New(RemainingPodPlacementConfig)
-			log.Error(err, "Deletion blocked due to existing PodPlacementConfig resources")
-			return err
-		}
-		// All PPCs are gone, remove the finalizer
-		log.V(1).Info("No PodPlacementConfig resources found, removing no-pod-placement-config finalizer")
-		controllerutil.RemoveFinalizer(clusterPodPlacementConfig, utils.CPPCNoPPCObjectFinalizer)
-		if err := r.Update(ctx, clusterPodPlacementConfig); err != nil {
-			log.Error(err, "Unable to remove no-pod-placement-config finalizer from ClusterPodPlacementConfig")
-			return err
-		}
-		return nil
 	}
 
 	log.Info("Looking for pods with the scheduling gate")
@@ -563,7 +594,7 @@ func (r *ClusterPodPlacementConfigReconciler) handleEnoexecDelete(ctx context.Co
 	if err == nil {
 		log.Info("Waiting for the eNoExecEvent DaemonSet to be fully deleted...")
 		// Return an error to force requeue. This is a common pattern for waiting.
-		return errors.New("enoexec DaemonSet is still terminating")
+		return newRequeueAfterError(5*time.Second, "enoexec DaemonSet is still terminating")
 	}
 	if client.IgnoreNotFound(err) != nil {
 		log.Error(err, "Failed to check for the eNoExecEvent DaemonSet status")
@@ -585,7 +616,7 @@ func (r *ClusterPodPlacementConfigReconciler) handleEnoexecDelete(ctx context.Co
 	// process the remaining events before we proceed.
 	if nonErroredCount > 0 {
 		log.Info("Found existing non-errored ENoExecEvent resources, waiting for reconciliation", "nonErroredCount", nonErroredCount)
-		return errors.New("found existing ENoExecEvent resources that need reconciliation")
+		return newRequeueAfterError(5*time.Second, "found existing ENoExecEvent resources that need reconciliation")
 	}
 
 	log.Info("No non-errored ENoExecEvent resources found in the cluster. Removing the ExecEvent finalizer from the ENoExec Deployment")

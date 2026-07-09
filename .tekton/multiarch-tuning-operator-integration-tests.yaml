@@ -22,7 +22,7 @@ spec:
           - name: source
             emptyDir: { }
         steps:
-          - image: brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.25
+          - image: brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.26
             env:
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)

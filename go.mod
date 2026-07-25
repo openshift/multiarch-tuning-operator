@@ -57,7 +57,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.8 // indirect; indirectk8s.io/api
 	github.com/docker/go-connections v0.7.0 // indirect
-	github.com/docker/go-events v0.0.0-20260706171732-9180b3777ac8 // indirect
+	github.com/docker/go-events v0.0.0-20260713150650-1ee7122bc07b // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect

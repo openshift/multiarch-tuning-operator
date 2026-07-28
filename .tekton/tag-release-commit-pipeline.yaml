@@ -148,8 +148,9 @@ spec:
               # Extract bundle image from snapshot
               BUNDLE_IMAGE=$(echo "$SNAPSHOT" | jq -r '.spec.components[] | select(.name | contains("bundle")) | .containerImage' | head -n1)
               if [ -z "$BUNDLE_IMAGE" ] || [ "$BUNDLE_IMAGE" = "null" ]; then
-                echo "❌ ERROR: No bundle image found in snapshot"
-                exit 1
+                echo "⚠️  No bundle image found in snapshot — skipping (another pipeline run will handle tagging)"
+                echo -n "SKIP" > $(results.VERSION.path)
+                exit 0
               fi
               echo "Bundle image: $BUNDLE_IMAGE"
 
@@ -236,6 +237,12 @@ spec:
               GIT_BRANCH="$(params.git-branch)"
               COMMIT_SHA="$(params.commit-sha)"
               VERSION="$(params.version)"
+
+              if [ "$VERSION" = "SKIP" ]; then
+                echo "⏭️  No bundle in snapshot — nothing to tag. Exiting successfully."
+                echo -n "SKIP" > $(results.TAG_NAME.path)
+                exit 0
+              fi
 
               echo "=========================================="
               echo "Tagging Release Commit"

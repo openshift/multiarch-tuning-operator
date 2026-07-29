@@ -4,45 +4,9 @@
     "enabled": false
   },
   "gomod": {
-    "enabled": true,
-    "automerge": true,
-    "automergeType": "pr",
-    "automergeStrategy": "rebase",
-    "platformAutomerge": true,
-    "addLabels": [
-      "approved",
-      "lgtm"
-    ],
-    "schedule": [
-      "on saturday"
-    ]
+    "enabled": false
   },
-  "packageRules": [
-    {
-      "matchDatasources": ["golang-version"],
-      "allowedVersions": "<1.26.0"
-    },
-    {
-      "matchDatasources": ["go"],
-      "matchManagers": ["gomod"],
-      "constraints": {
-        "go": "<1.26"
-      }
-    },
-    {
-      "matchManagers": ["dockerfile"],
-      "matchFileNames": ["bundle.konflux.Dockerfile"],
-      "matchUpdateTypes": ["digest"],
-      "addLabels": [
-        "approved",
-        "lgtm"
-      ],
-      "automerge": true,
-      "automergeType": "pr",
-      "automergeStrategy": "rebase",
-      "platformAutomerge": true
-    }
-  ],
+  "packageRules": [],
   "pruneBranchAfterAutomerge": true,
   "pruneStaleBranches": true,
   "semanticCommits": "enabled",

@@ -209,29 +209,69 @@ spec:
                 fi
               done
 
+              # Extract and compare version labels from both images
+              echo ""
+              echo "=========================================="
+              echo "Version Label Check"
+              echo "=========================================="
+
+              echo "Inspecting operator image: $INTERNAL_IMAGE"
+              OPERATOR_VERSION=$(skopeo inspect "docker://$INTERNAL_IMAGE" 2>/dev/null | jq -r '.Labels.version // "not set"')
+              OPERATOR_RELEASE=$(skopeo inspect "docker://$INTERNAL_IMAGE" 2>/dev/null | jq -r '.Labels.release // "not set"')
+              echo "  version: $OPERATOR_VERSION"
+              echo "  release: $OPERATOR_RELEASE"
+
+              echo ""
+              echo "Inspecting bundle image: $BUNDLE_IMAGE"
+              BUNDLE_VERSION=$(skopeo inspect "docker://$BUNDLE_IMAGE" 2>/dev/null | jq -r '.Labels.version // "not set"')
+              BUNDLE_RELEASE=$(skopeo inspect "docker://$BUNDLE_IMAGE" 2>/dev/null | jq -r '.Labels.release // "not set"')
+              echo "  version: $BUNDLE_VERSION"
+              echo "  release: $BUNDLE_RELEASE"
+
+              VERSION_MATCH=1
+              if [ "$OPERATOR_VERSION" != "$BUNDLE_VERSION" ]; then
+                echo ""
+                echo "⚠️  Version label mismatch:"
+                echo "  operator version: $OPERATOR_VERSION"
+                echo "  bundle version:   $BUNDLE_VERSION"
+                VERSION_MATCH=0
+              else
+                echo ""
+                echo "✅ Version labels match: $OPERATOR_VERSION"
+              fi
+
               # Report results
               echo ""
               echo "=========================================="
-              if [ $MATCH_FOUND -eq 1 ]; then
+              if [ $MATCH_FOUND -eq 1 ] && [ $VERSION_MATCH -eq 1 ]; then
                 echo "✅ VALIDATION PASSED"
                 echo "=========================================="
                 echo "The internal operator image SHA matches a snapshot component."
+                echo "Version labels match across operator and bundle."
                 echo "Snapshot is consistent and ready for release."
                 echo "PASS" > $(results.VALIDATION_RESULT.path)
                 echo "$INTERNAL_IMAGE" > $(results.INTERNAL_IMAGE.path)
               else
                 echo "❌ VALIDATION FAILED"
                 echo "=========================================="
-                echo "The internal operator image SHA does NOT match any snapshot component."
-                echo ""
-                echo "This means the bundle references an operator image that is not"
-                echo "included in this snapshot. The snapshot is inconsistent."
-                echo ""
-                echo "Expected SHA: $INTERNAL_SHA"
-                echo "Snapshot SHAs:"
-                for sha in $SNAPSHOT_SHAS; do
-                  echo "  $sha"
-                done
+                if [ $MATCH_FOUND -eq 0 ]; then
+                  echo "The internal operator image SHA does NOT match any snapshot component."
+                  echo ""
+                  echo "This means the bundle references an operator image that is not"
+                  echo "included in this snapshot. The snapshot is inconsistent."
+                  echo ""
+                  echo "Expected SHA: $INTERNAL_SHA"
+                  echo "Snapshot SHAs:"
+                  for sha in $SNAPSHOT_SHAS; do
+                    echo "  $sha"
+                  done
+                fi
+                if [ $VERSION_MATCH -eq 0 ]; then
+                  echo ""
+                  echo "Version labels do NOT match between operator and bundle images."
+                  echo "  operator: $OPERATOR_VERSION"
+                  echo "  bundle:   $BUNDLE_VERSION"
+                fi
                 echo ""
                 echo "FAIL" > $(results.VALIDATION_RESULT.path)
                 echo "$INTERNAL_IMAGE" > $(results.INTERNAL_IMAGE.path)

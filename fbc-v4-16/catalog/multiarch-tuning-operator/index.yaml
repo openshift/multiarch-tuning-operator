@@ -49,6 +49,34 @@ entries:
     replaces: multiarch-tuning-operator.v1.0.0
   - name: multiarch-tuning-operator.v1.0.0
 ---
+schema: olm.deprecations
+package: multiarch-tuning-operator
+entries:
+  - reference:
+      schema: olm.bundle
+      name: multiarch-tuning-operator.v1.0.0
+    message: "multiarch-tuning-operator.v1.0.0 is deprecated. Please upgrade to a supported version (>= v1.3.0)."
+  - reference:
+      schema: olm.bundle
+      name: multiarch-tuning-operator.v1.1.0
+    message: "multiarch-tuning-operator.v1.1.0 is deprecated. Please upgrade to a supported version (>= v1.3.0)."
+  - reference:
+      schema: olm.bundle
+      name: multiarch-tuning-operator.v1.1.1
+    message: "multiarch-tuning-operator.v1.1.1 is deprecated. Please upgrade to a supported version (>= v1.3.0)."
+  - reference:
+      schema: olm.bundle
+      name: multiarch-tuning-operator.v1.2.0
+    message: "multiarch-tuning-operator.v1.2.0 is deprecated. Please upgrade to a supported version (>= v1.3.0)."
+  - reference:
+      schema: olm.bundle
+      name: multiarch-tuning-operator.v1.2.1
+    message: "multiarch-tuning-operator.v1.2.1 is deprecated. Please upgrade to a supported version (>= v1.3.0)."
+  - reference:
+      schema: olm.bundle
+      name: multiarch-tuning-operator.v1.2.2
+    message: "multiarch-tuning-operator.v1.2.2 is deprecated. Please upgrade to a supported version (>= v1.3.0)."
+---
 image: registry.redhat.io/multiarch-tuning/multiarch-tuning-operator-bundle@sha256:3932cb10204a8d87c2b07b16be193d605567a3d0b9dab8cbc021317e83c551f5
 name: multiarch-tuning-operator.v1.1.0
 package: multiarch-tuning-operator

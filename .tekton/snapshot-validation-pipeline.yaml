@@ -215,9 +215,10 @@ spec:
               echo "Version Label Check"
               echo "=========================================="
 
-              echo "Inspecting operator image: $INTERNAL_IMAGE"
-              OPERATOR_VERSION=$(skopeo inspect "docker://$INTERNAL_IMAGE" 2>/dev/null | jq -r '.Labels.version // "not set"')
-              OPERATOR_RELEASE=$(skopeo inspect "docker://$INTERNAL_IMAGE" 2>/dev/null | jq -r '.Labels.release // "not set"')
+              OPERATOR_IMAGE=$(echo "$SNAPSHOT" | jq -r '.spec.components[] | select(.name | contains("bundle") | not) | .containerImage' | head -n1)
+              echo "Inspecting operator image: $OPERATOR_IMAGE"
+              OPERATOR_VERSION=$(skopeo inspect "docker://$OPERATOR_IMAGE" 2>/dev/null | jq -r '.Labels.version // "not set"')
+              OPERATOR_RELEASE=$(skopeo inspect "docker://$OPERATOR_IMAGE" 2>/dev/null | jq -r '.Labels.release // "not set"')
               echo "  version: $OPERATOR_VERSION"
               echo "  release: $OPERATOR_RELEASE"
 

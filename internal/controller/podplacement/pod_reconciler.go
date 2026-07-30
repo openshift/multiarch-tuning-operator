@@ -46,18 +46,16 @@ import (
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
+	APIReader client.Reader
 	Scheme    *runtime.Scheme
 	ClientSet *kubernetes.Clientset
 	Recorder  record.EventRecorder
 }
 
-// RBACs for the operands' controllers are added manually because kubebuilder can't handle multiple service accounts
-// and roles.
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
-//+kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
-//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
-//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
+// Note: The operand (pod-placement-controller) RBAC is defined programmatically in
+// podplacement_objects.go buildClusterRoleController(). Do NOT add operand-specific
+// RBAC markers here — kubebuilder merges all markers into the manager's ClusterRole,
+// which would over-provision the operator SA with permissions only the operand needs.
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -114,6 +112,15 @@ func (r *PodReconciler) processPod(ctx context.Context, pod *Pod) {
 	if err := r.List(ctx, ppcList, client.InNamespace(pod.Namespace)); err != nil {
 		pod.handleError(err, "failed to list existing PodPlacementConfigs in namespace")
 		return
+	}
+	// The informer cache can lag behind the API server. If the cache shows no PPCs,
+	// verify with a direct API read to avoid a race where a just-created PPC is missed
+	// and the pod is permanently ungated without its preferred affinity.
+	if len(ppcList.Items) == 0 {
+		if err := r.APIReader.List(ctx, ppcList, client.InNamespace(pod.Namespace)); err != nil {
+			pod.handleError(err, "failed to list PodPlacementConfigs from API server")
+			return
+		}
 	}
 
 	// Filter to only PPCs that match this pod's labels - do this once for efficiency

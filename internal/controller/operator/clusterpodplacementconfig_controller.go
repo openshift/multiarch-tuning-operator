@@ -19,6 +19,7 @@ package operator
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
@@ -1027,7 +1028,25 @@ func (r *ClusterPodPlacementConfigReconciler) deleteErroredENoExecEvents(ctx con
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := ctrl.NewControllerManagedBy(mgr).
-		For(&multiarchv1beta1.ClusterPodPlacementConfig{}).
+		For(&multiarchv1beta1.ClusterPodPlacementConfig{},
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool { return true },
+				DeleteFunc: func(e event.DeleteEvent) bool { return true },
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					if e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() {
+						return true
+					}
+					if !e.ObjectOld.GetDeletionTimestamp().Equal(e.ObjectNew.GetDeletionTimestamp()) {
+						return true
+					}
+					if !slices.Equal(e.ObjectOld.GetFinalizers(), e.ObjectNew.GetFinalizers()) {
+						return true
+					}
+					return false
+				},
+				GenericFunc: func(e event.GenericEvent) bool { return true },
+			}),
+		).
 		// Watch PodPlacementConfig to reconcile ClusterPodPlacementConfig only on create/delete events.
 		// Updates to PodPlacementConfig are intentionally ignored.
 		Watches(

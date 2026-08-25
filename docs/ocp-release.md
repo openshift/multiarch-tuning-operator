@@ -32,6 +32,25 @@ The issues will have to be remediated according to the timelines set in the stan
 
 If malware is detected, contact prodsec@redhat.com immediately.
 
+### RapiDAST testing
+
+RapiDAST (Dynamic Application Security Testing) must be run as part of the ProdSec release
+checklist. Scans are executed automatically in Konflux via a required
+`IntegrationTestScenario` named `rapidast-integration` (label
+`test.appstudio.openshift.io/optional=false`). 
+However, if the results need to be uploaded testing should be done manually. 
+
+The scenario is owned by the `multiarch-tuning-operator` Application in the
+`multiarch-tuning-ope-tenant` namespace and resolves the pipeline from this repository:
+
+- Pipeline: [`.tekton/rapidast-integration-pipeline.yaml`](../.tekton/rapidast-integration-pipeline.yaml)
+- Git resolver: `https://github.com/openshift/multiarch-tuning-operator` (`main`) 
+
+Before releasing, ensure the RapiDAST integration test has passed on the snapshot
+selected for release. Review any findings and remediate or classify them with the
+Security Architect per the ProdSec standards above. RapiDAST scans are intended for
+test environments only and must not be run against production systems.
+
 ## Pin to a new Golang and K8S API version
 
 1. Update go version in base images 
@@ -231,7 +250,7 @@ make version VERSION=1.0.1
 ```
 
  Verify that no other references to the previous versions are present in the codebase.
-If so, update `hack/bump-version.sh` to include any further patches required to update the version.
+If so, update `hack/bump-version-manual.sh` to include any further patches required to update the version.
 
 1. When planning to release a new version (e.g. v1.0) or a patch version (e.g., v1.0.z), select a snapshot from the
 corresponding Konflux application. This snapshot should be on-push that has the latest commit we want to release.
@@ -286,8 +305,11 @@ defaults:
     - # append new tags here
 # ...
 ```
-6. In [comet](https://comet.engineering.redhat.com/containers/repositories/6616582895a35187a06ba2ce) add the new tag in the content streams field
-7. Create a new release for the operator. The description should come from the docs team.
+5. Update the Multiarch Tuning Operator content streams in
+   [Pyxis repo configs](https://gitlab.cee.redhat.com/releng/pyxis-repo-configs)
+   by adding the new version tag. For the new workflow, see the
+   [comet2cicada documentation](https://gitlab.cee.redhat.com/releng/comet2cicada-documentation/-/tree/main).
+6. Create a new release for the operator. The description should come from the docs team.
 ```yaml
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: Release
@@ -323,8 +345,8 @@ spec:
         - https://github.com/openshift/openshift-docs/blob/989810607bedb7d3c727fb55907355de2ba80af8/post_installation_configuration/configuring-multi-arch-compute-machines/multi-arch-tuning-operator-release-notes.adoc
         - https://github.com/openshift/openshift-docs/blob/main/post_installation_configuration/configuring-multi-arch-compute-machines/multiarch-tuning-operator.adoc
 ```
-8. Watch the `status` of the `Release` Object or look in the Konflux UI to confirm that images and bundle were published
-    as expected. Note that the peipeline is run in a different namespace (rhtap-releng-tenant).
+7. Watch the `status` of the `Release` Object or look in the Konflux UI to confirm that images and bundle were published
+    as expected. Note that the pipeline is run in a different namespace (rhtap-releng-tenant).
 
 ## Publish a bundle in the OCP's OperatorHub's FBCs
 Note: these steps need to be applied to each FBC

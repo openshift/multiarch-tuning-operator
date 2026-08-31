@@ -78,6 +78,7 @@ const (
 	PodMutatingWebhookName              = "pod-placement-scheduling-gate.multiarch.openshift.io"
 	PodPlacementControllerName          = "pod-placement-controller"
 	PodPlacementWebhookName             = "pod-placement-web-hook"
+	PodPlacementNetworkPolicyName       = "pod-placement-network-policy"
 )
 
 const (

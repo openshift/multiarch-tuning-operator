@@ -169,7 +169,7 @@ spec:
     - name: ociArtifactExpiresAfter
       value: $(params.image-expires-after)
     - name: SCRIPT_RUNNER_IMAGE
-      value: registry.access.redhat.com/ubi9/go-toolset:1.25
+      value: registry.access.redhat.com/ubi9/go-toolset:1.26
     - name: SCRIPT
       value: |
         # Collect messages from all commits in this merge (merge commit + PR commits).

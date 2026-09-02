@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Red Hat, Inc.
+Copyright 2026 Red Hat, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -241,6 +241,7 @@ func runManager() {
 	}
 	Expect((&ClusterPodPlacementConfigReconciler{
 		Client:        mgr.GetClient(),
+		APIReader:     mgr.GetAPIReader(),
 		Scheme:        mgr.GetScheme(),
 		ClientSet:     clientset,
 		DynamicClient: dynamic.NewForConfigOrDie(cfg),

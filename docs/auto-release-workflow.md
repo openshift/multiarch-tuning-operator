@@ -182,15 +182,14 @@ oc describe releasePlanAdmission multiarch-tuning-operator-v1-x -n rhtap-releng-
          - name: url
            value: https://issues.redhat.com
          - name: query
-           value: 'project = "MULTIARCH" AND fixVersion = "1#### Verify ProjectDevelopmentStream Configuration
-.3" AND component = "Multiarch-Tuning-Operator"'
+           value: 'project = "MULTIARCH" AND fixVersion = "mto-x.y.z"  AND component = "Multiarch-Tuning-Operator"'
            # ↑ UPDATE THIS fixVersion to match your release
          - name: secretName
            value: jira-secret
    ```
    
    **Critical steps:**
-   - Find the `fixVersion = "X.Y"` or `fixVersion = "X.Y.Z"` in the JIRA query string
+   - Find the `fixVersion = "mto-X.Y.Z"` in the JIRA query string
    - Update it to match your target release version
    - Format can be either:
      - Minor version: `"1.3"` for all v1.3.x releases
@@ -199,13 +198,30 @@ oc describe releasePlanAdmission multiarch-tuning-operator-v1-x -n rhtap-releng-
    - Wrong fixVersion will collect incorrect issues or fail to find release-related tickets
    
    **Examples:**
-   - For v1.4.x stream: Change `fixVersion = "1.3"` to `fixVersion = "1.4"`
-   - For specific v1.4.1 release: Change to `fixVersion = "1.4.1"`
-   - For v2.0.0 release: Change to `fixVersion = "2.0.0"` or `fixVersion = "2.0"`
+   - For v1.4.x stream: Change `fixVersion = "mto-1.3"` to `fixVersion = "mto-1.4"`
+   - For specific v1.4.1 release: Change to `fixVersion = "mto-1.4.1"`
+   - For v2.0.0 release: Change to `fixVersion = "mto-2.0.0"` or `fixVersion = "mto-2.0"`
 
-#### Update Comet Content Streams (Preparation)
+   **Important: Update the deployed ReleasePlan object**
 
-**Location:** [Comet](https://comet.engineering.redhat.com/containers/repositories/6616582895a35187a06ba2ce)
+   The PDST (ProjectDevelopmentStream) does not automatically propagate changes to already-deployed `ReleasePlan` objects in the cluster. You must also update the `ReleasePlan` object directly.
+   
+   **Verify the current fixVersion in the deployed ReleasePlan:**
+   ```bash
+   oc get releaseplan -n multiarch-tuning-ope-tenant multiarch-tuning-operator-v1-x-release-as-operator -o jsonpath='{.spec.collectors.items[0].params[1].value}{"\n"}'
+   ```
+   
+   Example output:
+   ```text
+   project = "MULTIARCH" AND fixVersion = "mto-1.3.4" AND component = "Multiarch-Tuning-Operator"
+   ```
+   Note: until making v2.0.0 we only use RP `multiarch-tuning-ope-tenant multiarch-tuning-operator-v1-x-release-as-operato`
+   
+   If the `fixVersion` in the deployed `ReleasePlan` does not match your target release, update it manually using `oc edit` or by patching the object. The collectors query in the `ReleasePlan` must match the PDST configuration for the correct JIRA tickets to be collected during the release pipeline.
+
+#### Update Pyxis Content Streams (Preparation)
+
+**Location:** [pyxis](https://gitlab.cee.redhat.com/releng/pyxis-repo-configs/-/tree/main)
 
 **Action:** Prepare to add new tag to content streams (will be finalized after release)
 - Make note of the new version tag: `v1.0.1`
@@ -219,7 +235,7 @@ After preparing your release branch with the necessary changes, merge the PR to 
 #### Overview: Automatic Version Generation
 
 Versions are **generated automatically** during the build pipeline's `run-script` task in the format:
-- **Clean version**: `1.4.0` (when `[clean-version]` in commit message)
+- **Clean version**: `1.4.0` (when `[clean-version]` appears in any commit since the last release tag)
 - **Patch version**: `BASE_VERSION+COMMIT_SHA` (e.g., `1.4.0+abc1234`)
 
 **Why dynamic versioning?** Each build needs a unique version tag for the OLM (Operator Lifecycle Manager) File-Based Catalog (FBC). The catalog uses these versions to build the upgrade graph and enable skip logic - allowing users to upgrade directly from older patch versions to the latest without installing intermediate releases. Without unique versions for each build, OLM cannot distinguish between different snapshots or construct proper upgrade paths.
@@ -266,30 +282,41 @@ When the PR merges to the release branch (e.g., `v1.x`):
 
 2. **Version generation via `run-script` task:**
    
-   The pipeline runs the `run-script` task which executes `hack/bump-version.sh`:
+   The pipeline runs the `run-script` task which determines the version. For patch versions it calls `hack/bump-version.sh` to update source files; for clean versions the files are already correct (updated by the developer via `bump-version-manual.sh`) so the script only exports the version:
    
    ```bash
-   COMMIT_MSG=$(git log -1 --format=%s)
-   
-   # Check if this commit requests clean version
-   if [[ "$COMMIT_MSG" =~ \[clean-version\] ]]; then
+   # Find the latest release tag to bound ancestry searches.
+   # This prevents finding stale [clean-version] from a previous release.
+   LAST_TAG=$(git describe --tags --abbrev=0 --exclude='*test*' HEAD 2>/dev/null || echo "")
+
+   # Search all commits since the last release tag for [clean-version].
+   # This covers direct commits, nudge commits, and any commit in the
+   # ancestry — ensuring both operator and bundle get a clean version
+   # once [clean-version] appears anywhere since the last release.
+   if [[ -n "$LAST_TAG" ]]; then
+     CLEAN_MATCH=$(git log --grep='\[clean-version\]' --oneline "${LAST_TAG}..HEAD" 2>/dev/null)
+   else
+     CLEAN_MATCH=$(git log --grep='\[clean-version\]' --oneline -20 HEAD 2>/dev/null)
+   fi
+
+   if [[ -n "$CLEAN_MATCH" ]]; then
      VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
-     echo "Clean version requested: $VERSION"
+     echo "Found [clean-version] since ${LAST_TAG:-HEAD~20}: $CLEAN_MATCH"
+     echo "Using clean version: $VERSION"
      export VERSION
    else
-     # Normal commit - generate patch version with commit suffix
      BASE_VERSION=$(grep -E "^VERSION \?=" Makefile | awk '{print $3}')
-     COMMIT_SHA=$(tasks.clone-repository.results.commit)
+     COMMIT_SHA=$(git rev-parse HEAD)
      export VERSION="${BASE_VERSION}+${COMMIT_SHA:0:7}"
-     echo "Generated patch version: $VERSION"
+     echo "No [clean-version] since ${LAST_TAG:-HEAD~20}, using commit-based version: $VERSION"
+     exec ./hack/bump-version.sh "$VERSION"
    fi
-   
-   exec ./hack/bump-version.sh
    ```
    
-   - For `[clean-version]` commits: Version = `1.4.0`
-   - For normal commits: Version = `1.4.0+abc1234`
-   - Script updates all version references in CSV, Dockerfiles, Makefile
+   **Key behavior:** The pipeline searches the **entire commit history since the last release tag**, not just the HEAD commit. If `[clean-version]` appears in **any** commit since the last release (including inner PR commits or earlier commits in the branch), the clean version is used. This ensures that subsequent nudge commits (e.g., Konflux Renovate updating the bundle's operator image reference) don't revert to a `+commit` version after a `[clean-version]` commit was already made.
+   
+   - For `[clean-version]` found in history: Version = `1.4.0` (from Makefile, files already updated by `bump-version-manual.sh`)
+   - For no `[clean-version]` found: Version = `1.4.0+abc1234` (files updated dynamically by `bump-version.sh`)
    - All subsequent build tasks use this versioned source
 
 3. **Bundle built with correct operator reference:**
@@ -503,15 +530,14 @@ The FBC channel graph skip logic distinguishes between **clean versions** (offic
 
 The operator build pipeline (`.tekton/single-arch-build-pipeline.yaml` and `.tekton/multi-arch-build-pipeline.yaml`) automatically handles version generation through the `run-script` task:
 
-**Task: `run-script` (runs hack/bump-version.sh)**
-- Reads commit message to detect `[clean-version]` tag
-- Script generates version based on commit message:
-  - Clean version: `1.4.0` (when `[clean-version]` present)
-  - Patch version: `BASE_VERSION+COMMIT_SHA` (normal commits)
-- Reads `BASE_VERSION` from `Makefile`
-- Uses first 7 chars of `COMMIT_SHA` for patches
-- Updates CSV `.spec.version`, Dockerfiles, and Makefile
-- Manually updates bundle files (hermetic - no external tool downloads)
+**Task: `run-script` (determines version, then runs hack/bump-version.sh for patch versions)**
+- Searches all commits since the last release tag for `[clean-version]` using `git log --grep`
+- If `[clean-version]` found **anywhere** in the commit history since the last release tag:
+  - Uses the clean `VERSION` from the Makefile (e.g., `1.4.0`)
+  - Does NOT run `bump-version.sh` (files were already updated by the developer via `bump-version-manual.sh`)
+- If no `[clean-version]` found:
+  - Generates `BASE_VERSION+COMMIT_SHA` (e.g., `1.4.0+abc1234`) using first 7 chars of commit SHA
+  - Runs `bump-version.sh` to update CSV `.spec.version`, Dockerfiles, and Makefile dynamically
 - **Output:** Modified source with version `1.4.0` or `1.4.0+abc1234`
 
 **FBC Integration:**

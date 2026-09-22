@@ -169,7 +169,7 @@ func buildDeployment(logVerbosity int,
 									logVerbosity),
 							}, args...),
 							Command: []string{
-								"/manager",
+								"/usr/local/bin/manager",
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{

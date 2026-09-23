@@ -99,6 +99,17 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			err = client.Get(ctx, runtimeclient.ObjectKey{Name: "cluster"}, c)
 			Expect(err).NotTo(HaveOccurred())
 		})
+		It("should create NetworkPolicies for the operands and manager", func() {
+			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
+			Eventually(framework.VerifyOperandNetworkPolicies(ctx, client)).Should(Succeed())
+			Eventually(framework.VerifyManagerNetworkPolicy(ctx, client)).Should(Succeed())
+		})
 	})
 	Context("The webhook should get requests only for pods matching the namespaceSelector in the ClusterPodPlacementConfig CR", func() {
 		BeforeEach(func() {
@@ -679,6 +690,8 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create the ClusterPodPlacementConfig", err)
 			By("validate the clusterPodPlacementConfig and eNoExecEvent objects exist")
 			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin)).Should(Succeed())
+			Eventually(framework.VerifyOperandNetworkPolicies(ctx, client)).Should(Succeed())
+			Eventually(framework.VerifyENoExecDaemonNetworkPolicy(ctx, client)).Should(Succeed())
 			By("Deleting the clusterpodplacementconfig")
 			err = client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{

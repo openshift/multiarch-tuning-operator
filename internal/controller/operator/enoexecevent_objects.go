@@ -140,7 +140,7 @@ func buildDaemonSetENoExecEvent(serviceAccount string, name string, logVerbosity
 
 							Args: args,
 							Command: []string{
-								"/enoexec-daemon",
+								"/usr/local/bin/enoexec-daemon",
 								fmt.Sprintf("--initial-log-level=%d",
 									logVerbosity),
 							},

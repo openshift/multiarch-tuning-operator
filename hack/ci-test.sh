@@ -46,6 +46,10 @@ fi
 
 if [ "${TEST_LABEL}" == "e2e" ]; then
   export NAMESPACE="openshift-multiarch-tuning-operator"
+  # NetworkPolicy default-deny coverage plus OLM install on multi-arch
+  # clusters regularly approaches or exceeds the default 60m wall-clock.
+  # Prefer the last --timeout value if GINKGO_ARGS already set one.
+  GINKGO_ARGS="${GINKGO_ARGS} --timeout=90m"
 fi
 
 # Print the command we are going to run as Make would.

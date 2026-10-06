@@ -446,11 +446,23 @@ var _ = Describe("internal/Controller/ClusterPodPlacementConfig/ClusterPodPlacem
 				By("Creating the ClusterPodPlacementConfig")
 				err := k8sClient.Create(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
 				Expect(err).NotTo(HaveOccurred(), "failed to create ClusterPodPlacementConfig", err)
-				By("imeditately deleting it after creation")
+				// Wait only for the finalizer so Delete is blocked until handleDelete runs.
+				// Deleting before the finalizer is persisted lets the object vanish while a
+				// create-path reconcile is still applying operands (NetworkPolicies widened
+				// that race), leaving orphans that envtest cannot GC.
+				By("Waiting for the pod-placement finalizer before delete")
+				Eventually(func(g Gomega) {
+					cppc := &v1beta1.ClusterPodPlacementConfig{}
+					g.Expect(k8sClient.Get(ctx, crclient.ObjectKey{
+						Name: common.SingletonResourceObjectName,
+					}, cppc)).To(Succeed())
+					g.Expect(cppc.Finalizers).To(ContainElement(utils.PodPlacementFinalizerName))
+				}).Should(Succeed(), "the pod-placement finalizer should be added before delete")
+				By("immediately deleting it after creation")
 				err = k8sClient.Delete(ctx, builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName).Build())
 				Expect(err).NotTo(HaveOccurred(), "failed to delete ClusterPodPlacementConfig", err)
 				By("Verify all corresponding resources are deleted")
-				Eventually(framework.ValidateDeletion(k8sClient, ctx)).Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
+				Eventually(framework.ValidateDeletion(k8sClient, ctx), "30s", "500ms").Should(Succeed(), "the ClusterPodPlacementConfig should be deleted")
 			})
 		})
 	})

@@ -856,6 +856,26 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		return mergeWithStatusErr(r.updateStatus(ctx, clusterPodPlacementConfig), errs...)
 	}
 
+	// Re-check against the API before ApplyResources. A concurrent delete can race a
+	// create-path reconcile that already passed the DeletionTimestamp switch: without
+	// this guard, ApplyResources can recreate operands after handleDelete finished and
+	// leave orphans (envtest has no GC; production relies on ownerRefs which may lag).
+	fresh := &multiarchv1beta1.ClusterPodPlacementConfig{}
+	fresh.SetName(common.SingletonResourceObjectName)
+	if r.APIReader != nil {
+		if err := r.APIReader.Get(ctx, client.ObjectKeyFromObject(fresh), fresh); err != nil {
+			if apierrors.IsNotFound(err) {
+				log.Info("ClusterPodPlacementConfig gone before apply; skipping ApplyResources to avoid orphans")
+				return nil
+			}
+			return err
+		}
+		if !fresh.DeletionTimestamp.IsZero() {
+			log.Info("ClusterPodPlacementConfig is deleting before apply; switching to delete path")
+			return r.handleDelete(ctx, fresh)
+		}
+	}
+
 	if err := utils.ApplyResources(ctx, r.ClientSet, r.DynamicClient, r.Recorder, objects); err != nil {
 		log.Error(err, "Unable to apply resources")
 		return mergeWithStatusErr(r.updateStatus(ctx, clusterPodPlacementConfig), err)

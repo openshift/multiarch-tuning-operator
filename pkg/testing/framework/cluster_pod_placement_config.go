@@ -82,6 +82,8 @@ func getObjects() []client.Object {
 		builder.NewRoleBinding().WithName(utils.PodPlacementControllerName).WithNamespace(utils.Namespace()).Build(),
 		builder.NewServiceAccount().WithName(utils.PodPlacementControllerName).WithNamespace(utils.Namespace()).Build(),
 		builder.NewServiceAccount().WithName(utils.PodPlacementWebhookName).WithNamespace(utils.Namespace()).Build(),
+		builder.NewNetworkPolicy().WithName(utils.PodPlacementNetworkPolicyName).WithNamespace(utils.Namespace()).Build(),
+		builder.NewNetworkPolicy().WithName(utils.PodPlacementImageInspectionNetworkPolicyName).WithNamespace(utils.Namespace()).Build(),
 		builder.NewClusterPodPlacementConfig().WithName(common.SingletonResourceObjectName),
 	}
 }
@@ -104,6 +106,7 @@ func getENoExecEventsDeploymentObjects() []client.Object {
 		builder.NewClusterRoleBinding().WithName(utils.EnoexecControllerName).Build(),
 		builder.NewRole().WithName(utils.EnoexecControllerName).WithNamespace(utils.Namespace()).Build(),
 		builder.NewRoleBinding().WithName(utils.EnoexecControllerName).WithNamespace(utils.Namespace()).Build(),
+		builder.NewNetworkPolicy().WithName(utils.EnoexecDaemonSet).WithNamespace(utils.Namespace()).Build(),
 	}
 }
 
@@ -122,9 +125,10 @@ func ValidateDeletion(cl client.Client, ctx context.Context, pluginObjectsSet ..
 	return func(g gomega.Gomega) {
 		for _, obj := range getObjectsFor(pluginObjectsSet...) {
 			newObj := obj.DeepCopyObject().(client.Object)
-			err := cl.Get(ctx, client.ObjectKeyFromObject(obj), newObj)
-			g.Expect(err).To(gomega.HaveOccurred(), "the object should be deleted", err)
-			g.Expect(errors.IsNotFound(err)).To(gomega.BeTrue(), "the error should be \"Not found\"", err)
+			key := client.ObjectKeyFromObject(obj)
+			err := cl.Get(ctx, key, newObj)
+			g.Expect(err).To(gomega.HaveOccurred(), "the object %T %s should be deleted", obj, key)
+			g.Expect(errors.IsNotFound(err)).To(gomega.BeTrue(), "the error for %T %s should be NotFound; got: %v", obj, key, err)
 		}
 	}
 }

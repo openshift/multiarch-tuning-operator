@@ -1,8 +1,6 @@
 package operator_test
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -44,88 +42,6 @@ done
 `
 	openshiftMonitoringNamespace = "openshift-monitoring"
 )
-
-type prometheusTargetsResponse struct {
-	Status string `json:"status"`
-	Data   struct {
-		ActiveTargets []struct {
-			DiscoveredLabels map[string]string `json:"discoveredLabels"`
-			Labels           map[string]string `json:"labels"`
-			Health           string            `json:"health"`
-			LastError        string            `json:"lastError"`
-		} `json:"activeTargets"`
-	} `json:"data"`
-}
-
-// mtoMetricsTargetsHealthy checks the scrape status reported by OpenShift's
-// Prometheus pods. A healthy target confirms that Prometheus, running in the
-// namespace allowed by metricsIngressRule, reached /metrics using the
-// ServiceMonitor's bearer token and service CA configuration.
-func mtoMetricsTargetsHealthy(ctx context.Context, serviceNames ...string) (bool, error) {
-	pods, err := clientset.CoreV1().Pods(openshiftMonitoringNamespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/name=prometheus",
-	})
-	if err != nil {
-		return false, fmt.Errorf("list Prometheus pods: %w", err)
-	}
-	if len(pods.Items) == 0 {
-		return false, fmt.Errorf("no Prometheus pods found in namespace %s", openshiftMonitoringNamespace)
-	}
-
-	wanted := make(map[string]bool, len(serviceNames))
-	for _, name := range serviceNames {
-		wanted[name] = false
-	}
-	var lastProxyErr error
-	queried := false
-	for _, pod := range pods.Items {
-		if pod.Status.Phase != corev1.PodRunning {
-			continue
-		}
-		responseBody, err := clientset.CoreV1().Pods(openshiftMonitoringNamespace).
-			ProxyGet("http", pod.Name, "9090", "/api/v1/targets", map[string]string{"state": "active"}).
-			DoRaw(ctx)
-		if err != nil {
-			lastProxyErr = fmt.Errorf("proxy to Prometheus pod %s: %w", pod.Name, err)
-			continue
-		}
-		queried = true
-
-		var response prometheusTargetsResponse
-		if err := json.Unmarshal(responseBody, &response); err != nil {
-			return false, fmt.Errorf("decode Prometheus targets response: %w", err)
-		}
-		if response.Status != "success" {
-			return false, fmt.Errorf("Prometheus targets API returned status %q", response.Status)
-		}
-		for _, target := range response.Data.ActiveTargets {
-			namespace := target.DiscoveredLabels["__meta_kubernetes_namespace"]
-			if namespace == "" {
-				namespace = target.Labels["namespace"]
-			}
-			if namespace != utils.Namespace() {
-				continue
-			}
-			serviceName := target.DiscoveredLabels["__meta_kubernetes_service_name"]
-			if serviceName == "" {
-				serviceName = target.Labels["service"]
-			}
-			if _, ok := wanted[serviceName]; ok && target.Health == "up" {
-				wanted[serviceName] = true
-			}
-		}
-	}
-	if !queried && lastProxyErr != nil {
-		return false, lastProxyErr
-	}
-
-	for _, healthy := range wanted {
-		if !healthy {
-			return false, nil
-		}
-	}
-	return true, nil
-}
 
 var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 	var (
@@ -310,15 +226,12 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			}, e2e.WaitShort).Should(Succeed())
 
 			By("Verifying OpenShift Prometheus successfully scrapes both operand metrics endpoints under default-deny")
-			Eventually(func(g Gomega) {
-				healthy, err := mtoMetricsTargetsHealthy(ctx,
-					utils.PodPlacementControllerName,
-					utils.PodPlacementWebhookName,
-				)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(healthy).To(BeTrue(),
-					"Prometheus targets should be healthy after scraping the MTO /metrics endpoints")
-			}, e2e.WaitMedium).Should(Succeed())
+			prometheusForward, err := startPrometheusPortForward(ctx, clientset)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(verifyFreshPrometheusScrapes(ctx, prometheusForward,
+				utils.PodPlacementControllerName,
+				utils.PodPlacementWebhookName,
+			)).To(Succeed())
 
 			By("Verifying all operands remain healthy after exercising all flows under default-deny")
 			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin), e2e.WaitShort).Should(Succeed())

@@ -79,6 +79,45 @@ func TestValidatePrometheusTargetFreshness(t *testing.T) {
 	}
 }
 
+func TestPortForwardOutput(t *testing.T) {
+	output := &portForwardOutput{ready: make(chan string, 1)}
+	// oc output may arrive in separate writes. An incomplete readiness message
+	// must not be interpreted as an allocated port.
+	if _, err := output.Write([]byte("Forwarding from 127.0.0.1:45")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case address := <-output.ready:
+		t.Fatalf("reported ready before the complete message: %s", address)
+	default:
+	}
+	if _, err := output.Write([]byte("123 -> 9090\n")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case address := <-output.ready:
+		if address != "http://127.0.0.1:45123" {
+			t.Fatalf("allocated address = %q", address)
+		}
+	default:
+		t.Fatal("complete oc readiness message did not report an address")
+	}
+
+	diagnostic := &portForwardOutput{ready: make(chan string, 1)}
+	message := "error: pods/portforward is forbidden\n"
+	if _, err := diagnostic.Write([]byte(message)); err != nil {
+		t.Fatal(err)
+	}
+	if diagnostic.String() != message {
+		t.Fatal("oc error output was not preserved")
+	}
+	select {
+	case address := <-diagnostic.ready:
+		t.Fatalf("error output reported readiness: %s", address)
+	default:
+	}
+}
+
 func testPrometheusTarget(namespace, serviceName string, lastScrape time.Time, health, lastError string) prometheusTarget {
 	return prometheusTarget{
 		DiscoveredLabels: map[string]string{

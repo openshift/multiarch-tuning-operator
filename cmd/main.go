@@ -112,10 +112,15 @@ func main() {
 		DefaultTransform: cache.TransformStripManagedFields(),
 	}
 
-	// Build the leader election ID deterministically and based on the flags
+	// Build the leader election ID deterministically and based on the flags.
+	// Modes are mutually exclusive, so ByObject / DefaultNamespaces are never merged.
 	leaderID := "208d7abd.multiarch.openshift.io"
 	if enableOperator {
 		leaderID = fmt.Sprintf("operator-%s", leaderID)
+		// NetworkPolicy is bound by a namespace-scoped Role; scope its informer
+		// to the operator namespace so the ClusterRole is not needed for it.
+		// All other types use the ClusterRole and cluster-wide informers.
+		cacheOpts.ByObject = operator.CacheByObject()
 	}
 	if enableClusterPodPlacementConfigOperandControllers {
 		leaderID = fmt.Sprintf("ppc-controllers-%s", leaderID)
@@ -129,6 +134,8 @@ func main() {
 	}
 	if enableENoExecEventControllers {
 		leaderID = fmt.Sprintf("enoexecevent-controllers-%s", leaderID)
+		// ENoExecEvents are created in the operator namespace. Referenced Pods
+		// may live elsewhere and are fetched via the live API, not this cache.
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{
 			utils.Namespace(): {},
 		}
@@ -150,7 +157,14 @@ func main() {
 		CertDir: certDir,
 		TLSOpts: tlsOpts,
 	})
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	restConfig := ctrl.GetConfigOrDie()
+	if enableOperator {
+		dynClient := dynamic.NewForConfigOrDie(restConfig)
+		if utils.IsResourceAvailable(context.Background(), dynClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+			operator.AddMonitoringCache(cacheOpts.ByObject)
+		}
+	}
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress:    metricsAddr,
@@ -236,6 +250,11 @@ func RunOperator(mgr ctrl.Manager) {
 			clock.RealClock{},
 		),
 	}).SetupWithManager(mgr), unableToCreateController, controllerKey, "ClusterPodPlacementConfig")
+	must((&operator.ManagerNetworkPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr),
+		unableToCreateController, controllerKey, "ManagerNetworkPolicy")
 	must((&multiarchv1beta1.ClusterPodPlacementConfig{}).SetupWebhookWithManager(mgr), unableToCreateController,
 		controllerKey, "ClusterPodPlacementConfigConversionWebhook")
 }

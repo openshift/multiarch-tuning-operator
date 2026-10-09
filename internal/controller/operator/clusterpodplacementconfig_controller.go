@@ -25,6 +25,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -124,14 +125,13 @@ const (
 //+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;update
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;update
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch;create;delete
 //+kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=deployments/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch;create;delete
 //+kubebuilder:rbac:groups=core,resources=services/status,verbs=get
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=get;list;watch;create;update;patch;delete
-
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;update;patch;create;delete
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts/status,verbs=get
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts/finalizers,verbs=update
@@ -558,6 +558,14 @@ func (r *ClusterPodPlacementConfigReconciler) handleDelete(ctx context.Context,
 			NamespacedTypedClient: r.ClientSet.CoreV1().ServiceAccounts(utils.Namespace()),
 			ObjName:               utils.PodPlacementControllerName,
 		},
+		{
+			NamespacedTypedClient: r.ClientSet.NetworkingV1().NetworkPolicies(utils.Namespace()),
+			ObjName:               utils.PodPlacementNetworkPolicyName,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.NetworkingV1().NetworkPolicies(utils.Namespace()),
+			ObjName:               utils.PodPlacementImageInspectionNetworkPolicyName,
+		},
 	}
 
 	if utils.IsResourceAvailable(ctx, r.DynamicClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
@@ -615,6 +623,10 @@ func (r *ClusterPodPlacementConfigReconciler) handleEnoexecDelete(ctx context.Co
 		},
 		{
 			NamespacedTypedClient: r.ClientSet.AppsV1().DaemonSets(utils.Namespace()),
+			ObjName:               utils.EnoexecDaemonSet,
+		},
+		{
+			NamespacedTypedClient: r.ClientSet.NetworkingV1().NetworkPolicies(utils.Namespace()),
 			ObjName:               utils.EnoexecDaemonSet,
 		},
 	}
@@ -844,6 +856,26 @@ func (r *ClusterPodPlacementConfigReconciler) reconcile(ctx context.Context, clu
 		return mergeWithStatusErr(r.updateStatus(ctx, clusterPodPlacementConfig), errs...)
 	}
 
+	// Re-check against the API before ApplyResources. A concurrent delete can race a
+	// create-path reconcile that already passed the DeletionTimestamp switch: without
+	// this guard, ApplyResources can recreate operands after handleDelete finished and
+	// leave orphans (envtest has no GC; production relies on ownerRefs which may lag).
+	fresh := &multiarchv1beta1.ClusterPodPlacementConfig{}
+	fresh.SetName(common.SingletonResourceObjectName)
+	if r.APIReader != nil {
+		if err := r.APIReader.Get(ctx, client.ObjectKeyFromObject(fresh), fresh); err != nil {
+			if apierrors.IsNotFound(err) {
+				log.Info("ClusterPodPlacementConfig gone before apply; skipping ApplyResources to avoid orphans")
+				return nil
+			}
+			return err
+		}
+		if !fresh.DeletionTimestamp.IsZero() {
+			log.Info("ClusterPodPlacementConfig is deleting before apply; switching to delete path")
+			return r.handleDelete(ctx, fresh)
+		}
+	}
+
 	if err := utils.ApplyResources(ctx, r.ClientSet, r.DynamicClient, r.Recorder, objects); err != nil {
 		log.Error(err, "Unable to apply resources")
 		return mergeWithStatusErr(r.updateStatus(ctx, clusterPodPlacementConfig), err)
@@ -937,6 +969,8 @@ func (r *ClusterPodPlacementConfigReconciler) buildPodPlacementConfigObjects(clu
 		}),
 		buildControllerDeployment(clusterPodPlacementConfig, requiredSCCHostmountAnyUID, seLinuxOptionsType),
 		buildWebhookDeployment(clusterPodPlacementConfig),
+		buildNetworkPolicyPodPlacement(),
+		buildNetworkPolicyPodPlacementImageInspection(),
 	}
 	return objects, nil
 }
@@ -1020,6 +1054,7 @@ func (r *ClusterPodPlacementConfigReconciler) buildENoExecEventObjects(ctx conte
 			},
 		),
 		buildDeploymentENoExecEventHandler(logVerbosityLevel),
+		buildNetworkPolicyENoExecDaemon(),
 	}
 
 	// If the servicemonitors.monitoring.coreos.com CRD is available, we create the ServiceMonitor objects
@@ -1211,6 +1246,7 @@ func (r *ClusterPodPlacementConfigReconciler) SetupWithManager(mgr ctrl.Manager)
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
 		Owns(&corev1.ServiceAccount{}).
+		Owns(&networkingv1.NetworkPolicy{}).
 		Owns(&admissionv1.MutatingWebhookConfiguration{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}))
 	if utils.IsResourceAvailable(context.Background(), r.DynamicClient,
 		monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {

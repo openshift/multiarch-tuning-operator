@@ -13,9 +13,11 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/api/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/internal/controller/podplacement"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/client-go/util/retry"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
@@ -38,6 +40,7 @@ for i in $(seq 1 10); do
   sleep 1
 done
 `
+	openshiftMonitoringNamespace = "openshift-monitoring"
 )
 
 var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
@@ -98,6 +101,158 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			c := &v1beta1.ClusterPodPlacementConfig{}
 			err = client.Get(ctx, runtimeclient.ObjectKey{Name: "cluster"}, c)
 			Expect(err).NotTo(HaveOccurred())
+		})
+		It("should create NetworkPolicies for the operands and manager", func() {
+			err := client.Create(ctx, &v1beta1.ClusterPodPlacementConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(framework.ValidateCreation(client, ctx)).Should(Succeed())
+			Eventually(framework.VerifyOperandNetworkPolicies(ctx, client)).Should(Succeed())
+			Eventually(framework.VerifyManagerNetworkPolicy(ctx, client)).Should(Succeed())
+		})
+		It("should deploy operands, inspect images, apply fallback, and scrape metrics under namespace-wide default-deny", func() {
+			By("Deploying default-deny before CPPC creation while the manager is running")
+			defaultDeny := &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "default-deny-all",
+					Namespace: utils.Namespace(),
+				},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{
+						networkingv1.PolicyTypeIngress,
+						networkingv1.PolicyTypeEgress,
+					},
+				},
+			}
+			err := client.Create(ctx, defaultDeny)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				By("Cleaning up the default-deny NetworkPolicy")
+				Expect(runtimeclient.IgnoreNotFound(client.Delete(ctx, defaultDeny))).To(Succeed(),
+					"failed to delete the default-deny NetworkPolicy")
+			})
+
+			By("Creating CPPC with all plugins and fallbackArchitecture under default-deny")
+			err = client.Create(ctx,
+				NewClusterPodPlacementConfig().
+					WithName(common.SingletonResourceObjectName).
+					WithExecFormatErrorMonitor(true).
+					WithNodeAffinityScoring(true).
+					WithNodeAffinityScoringTerm(utils.ArchitectureAmd64, 50).
+					WithFallbackArchitecture(utils.ArchitectureAmd64).
+					Build(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for all operands including ENoExec to deploy under default-deny")
+			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin), e2e.WaitOverMedium).Should(Succeed())
+
+			By("Verifying all four NetworkPolicies exist")
+			Eventually(framework.VerifyOperandNetworkPolicies(ctx, client)).Should(Succeed())
+			Eventually(framework.VerifyManagerNetworkPolicy(ctx, client)).Should(Succeed())
+			Eventually(framework.VerifyENoExecDaemonNetworkPolicy(ctx, client)).Should(Succeed())
+
+			By("Exercising webhook admission and successful image inspection under default-deny")
+			ns := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, ns)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(runtimeclient.IgnoreNotFound(client.Delete(ctx, ns))).To(Succeed(),
+					"failed to delete the valid-image test namespace")
+			})
+
+			ps := NewPodSpec().
+				WithContainersImages(helloOpenshiftPublicMultiarchImage).
+				Build()
+			ps.Containers[0].ImagePullPolicy = corev1.PullAlways
+			// PullAlways bypasses MTO's inspection cache. The fixture's manifest
+			// list supports Linux amd64, arm64, ppc64le, and s390x.
+			verifyPlacement := func(namespace, fallback string, architectures ...string) func(Gomega) {
+				return func(g Gomega) {
+					pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=test"})
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(pods.Items).NotTo(BeEmpty())
+					expectedTerm := NewNodeSelectorTerm().WithMatchExpressions(
+						NewNodeSelectorRequirement().WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, architectures...).Build(),
+					).Build()
+					for _, pod := range pods.Items {
+						g.Expect(pod.Spec.SchedulingGates).To(BeEmpty(), "pod %s", pod.Name)
+						g.Expect(pod.Labels).To(HaveKeyWithValue(utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved))
+						if fallback == "" {
+							g.Expect(pod.Labels).NotTo(HaveKey(utils.FallbackArchitectureLabel))
+						} else {
+							g.Expect(pod.Labels).To(HaveKeyWithValue(utils.FallbackArchitectureLabel, fallback))
+						}
+						g.Expect(pod).To(framework.HaveEquivalentNodeAffinity(&corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{*expectedTerm}},
+						}))
+					}
+				}
+			}
+			d := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(ps).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-default-deny").
+				WithNamespace(ns.Name).
+				Build()
+			err = client.Create(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(verifyPlacement(ns.Name, "", utils.ArchitectureAmd64, utils.ArchitectureArm64,
+				utils.ArchitecturePpc64le, utils.ArchitectureS390x), e2e.WaitMedium).Should(Succeed())
+
+			By("Exercising fallback architecture (proves image inspection failure path under deny)")
+			nsFallback := framework.NewEphemeralNamespace()
+			err = client.Create(ctx, nsFallback)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(runtimeclient.IgnoreNotFound(client.Delete(ctx, nsFallback))).To(Succeed(),
+					"failed to delete the fallback-image test namespace")
+			})
+
+			psFallback := NewPodSpec().
+				WithContainersImages("quay.io/non-existing/image:latest").
+				Build()
+			dFallback := NewDeployment().
+				WithSelectorAndPodLabels(podLabel).
+				WithPodSpec(psFallback).
+				WithReplicas(utils.NewPtr(int32(1))).
+				WithName("test-default-deny-fallback").
+				WithNamespace(nsFallback.Name).
+				Build()
+			err = client.Create(ctx, dFallback)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(verifyPlacement(nsFallback.Name, utils.ArchitectureAmd64, utils.ArchitectureAmd64), e2e.WaitMedium).Should(Succeed())
+
+			By("Verifying ENoExec daemon pods reach the Running phase under default-deny")
+			Eventually(func(g Gomega) {
+				pods, err := clientset.CoreV1().Pods(utils.Namespace()).List(ctx, metav1.ListOptions{
+					LabelSelector: "app=" + utils.EnoexecDaemonSet,
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(pods.Items).NotTo(BeEmpty(), "enoexec daemon pods should exist")
+				for _, pod := range pods.Items {
+					g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning),
+						fmt.Sprintf("enoexec daemon pod %s should be Running", pod.Name))
+				}
+			}, e2e.WaitShort).Should(Succeed())
+
+			By("Verifying OpenShift Prometheus successfully scrapes both operand metrics endpoints under default-deny")
+			prometheusForward, err := startPrometheusPortForward(ctx, clientset)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(verifyFreshPrometheusScrapes(ctx, prometheusForward,
+				utils.PodPlacementControllerName,
+				utils.PodPlacementWebhookName,
+			)).To(Succeed())
+
+			By("Verifying all operands remain healthy after exercising all flows under default-deny")
+			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin), e2e.WaitShort).Should(Succeed())
 		})
 	})
 	Context("The webhook should get requests only for pods matching the namespaceSelector in the ClusterPodPlacementConfig CR", func() {
@@ -425,8 +580,16 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			By("Verifying the FallbackArchitecture field is still set after round-trip conversion")
 			Expect(v1beta1obj.Spec.FallbackArchitecture).To(Equal("amd64"))
 			By("Clearing the FallbackArchitecture field")
-			v1beta1obj.Spec.FallbackArchitecture = ""
-			err = client.Update(ctx, v1beta1obj)
+			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				latest := &v1beta1.ClusterPodPlacementConfig{}
+				if err := client.Get(ctx, runtimeclient.ObjectKey{
+					Name: common.SingletonResourceObjectName,
+				}, latest); err != nil {
+					return err
+				}
+				latest.Spec.FallbackArchitecture = ""
+				return client.Update(ctx, latest)
+			})
 			Expect(err).NotTo(HaveOccurred())
 			v1alpha1obj = &v1alpha1.ClusterPodPlacementConfig{}
 			err = client.Get(ctx, runtimeclient.ObjectKey{
@@ -679,6 +842,8 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create the ClusterPodPlacementConfig", err)
 			By("validate the clusterPodPlacementConfig and eNoExecEvent objects exist")
 			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin)).Should(Succeed())
+			Eventually(framework.VerifyOperandNetworkPolicies(ctx, client)).Should(Succeed())
+			Eventually(framework.VerifyENoExecDaemonNetworkPolicy(ctx, client)).Should(Succeed())
 			By("Deleting the clusterpodplacementconfig")
 			err = client.Delete(ctx, &v1beta1.ClusterPodPlacementConfig{
 				ObjectMeta: metav1.ObjectMeta{

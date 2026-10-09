@@ -13,6 +13,12 @@ func TestValidatePrometheusTargetFreshness(t *testing.T) {
 	services := []string{"pod-placement-controller", "pod-placement-web-hook"}
 	initialTime := time.Date(2026, time.October, 8, 12, 0, 0, 0, time.UTC)
 	freshTime := initialTime.Add(time.Minute)
+	unhealthyReplica := testPrometheusTarget(namespace, services[0], freshTime, "down", "connection refused")
+	unhealthyReplica.Labels["instance"] = "replica-2:8443"
+	unhealthyReplica.ScrapeURL = "https://replica-2:8443/metrics"
+	healthyReplica := testPrometheusTarget(namespace, services[0], initialTime, "up", "")
+	healthyReplica.Labels["instance"] = "replica-2:8443"
+	healthyReplica.ScrapeURL = "https://replica-2:8443/metrics"
 	initial := []prometheusTarget{
 		testPrometheusTarget(namespace, services[0], initialTime, "up", ""),
 		testPrometheusTarget(namespace, services[1], initialTime, "up", ""),
@@ -24,6 +30,21 @@ func TestValidatePrometheusTargetFreshness(t *testing.T) {
 		wantKind      targetValidationKind
 		wantNoFailure bool
 	}{
+		{
+			name:     "fresh healthy replica followed by unhealthy replica fails",
+			current:  []prometheusTarget{testPrometheusTarget(namespace, services[0], freshTime, "up", ""), unhealthyReplica, testPrometheusTarget(namespace, services[1], freshTime, "up", "")},
+			wantKind: targetUnhealthy,
+		},
+		{
+			name:     "unhealthy replica followed by fresh healthy replica fails",
+			current:  []prometheusTarget{unhealthyReplica, testPrometheusTarget(namespace, services[0], freshTime, "up", ""), testPrometheusTarget(namespace, services[1], freshTime, "up", "")},
+			wantKind: targetUnhealthy,
+		},
+		{
+			name:          "all healthy replicas with one advancing scrape per service pass",
+			current:       []prometheusTarget{healthyReplica, testPrometheusTarget(namespace, services[0], freshTime, "up", ""), testPrometheusTarget(namespace, services[1], freshTime, "up", "")},
+			wantNoFailure: true,
+		},
 		{
 			name:     "missing expected target fails",
 			current:  []prometheusTarget{testPrometheusTarget(namespace, services[0], freshTime, "up", "")},
@@ -74,6 +95,18 @@ func TestValidatePrometheusTargetFreshness(t *testing.T) {
 			}
 			if tt.wantKind == targetUnhealthy && !strings.Contains(validationErr.Error(), "connection refused") {
 				t.Errorf("unhealthy target error %q does not include lastError", validationErr)
+			}
+			if tt.wantKind == targetUnhealthy {
+				for _, target := range tt.current {
+					if target.Health == "up" {
+						continue
+					}
+					for _, detail := range []string{target.DiscoveredLabels["__meta_kubernetes_service_name"], target.Labels["instance"], target.LastScrape, target.LastError} {
+						if !strings.Contains(validationErr.Error(), detail) {
+							t.Errorf("unhealthy diagnostic %q missing %q", validationErr, detail)
+						}
+					}
+				}
 			}
 		})
 	}

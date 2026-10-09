@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -155,5 +156,32 @@ var _ = Describe("The ManagerNetworkPolicyReconciler", Serial, func() {
 			g.Expect(updated.OwnerReferences).NotTo(BeEmpty())
 			g.Expect(updated.OwnerReferences[0].UID).To(Equal(d.UID))
 		}).Should(Succeed(), "the NetworkPolicy should be adopted by the new Deployment UID")
+	})
+	It("should reject unrelated controller ownership without modifying the stored policy", func() {
+		key := crclient.ObjectKey{Name: utils.ManagerNetworkPolicyName, Namespace: utils.Namespace()}
+		Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			np := &networkingv1.NetworkPolicy{}
+			if err := k8sClient.Get(ctx, key, np); err != nil {
+				return err
+			}
+			np.OwnerReferences = []metav1.OwnerReference{{
+				APIVersion: "apps/v1", Kind: "Deployment", Name: "unrelated-manager", UID: "unrelated-uid",
+				Controller: utils.NewPtr(true),
+			}}
+			np.Spec.Egress = nil
+			return k8sClient.Update(ctx, np)
+		})).To(Succeed())
+		before := &networkingv1.NetworkPolicy{}
+		Expect(k8sClient.Get(ctx, key, before)).To(Succeed())
+		r := &ManagerNetworkPolicyReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		_, err := r.Reconcile(ctx, ctrl.Request{})
+		Expect(err).To(MatchError(ContainSubstring("ownership conflict")))
+		after := &networkingv1.NetworkPolicy{}
+		Expect(k8sClient.Get(ctx, key, after)).To(Succeed())
+		Expect(after.OwnerReferences).To(Equal(before.OwnerReferences))
+		Expect(after.Spec).To(Equal(before.Spec))
+		Expect(after.Labels).To(Equal(before.Labels))
+		Expect(after.Annotations).To(Equal(before.Annotations))
+		Expect(after.ResourceVersion).To(Equal(before.ResourceVersion))
 	})
 })

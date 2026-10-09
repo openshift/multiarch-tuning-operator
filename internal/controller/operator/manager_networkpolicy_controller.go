@@ -18,6 +18,7 @@ package operator
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -69,10 +70,9 @@ func (r *ManagerNetworkPolicyReconciler) Reconcile(ctx context.Context, _ ctrl.R
 		},
 	}
 	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, policy, func() error {
-		// Drop a stale controller ownerReference so SetControllerReference can
-		// adopt the policy when the manager Deployment is recreated with a new
-		// UID (envtest retries, OLM upgrade/reinstall).
-		dropControllerOwnerReferences(policy)
+		if err := prepareManagerPolicyOwner(policy, deployment); err != nil {
+			return err
+		}
 		if err := ctrl.SetControllerReference(deployment, policy, r.Scheme); err != nil {
 			return err
 		}
@@ -84,21 +84,32 @@ func (r *ManagerNetworkPolicyReconciler) Reconcile(ctx context.Context, _ ctrl.R
 	return ctrl.Result{}, err
 }
 
-// dropControllerOwnerReferences removes existing controller ownerReferences so a
-// replacement owner (new UID) can be set. Non-controller ownerReferences are kept.
-func dropControllerOwnerReferences(obj metav1.Object) {
+// prepareManagerPolicyOwner permits replacement only of the expected manager
+// Deployment identity. Inspect all controller references before changing metadata.
+func prepareManagerPolicyOwner(obj metav1.Object, deployment *appsv1.Deployment) error {
 	refs := obj.GetOwnerReferences()
-	if len(refs) == 0 {
-		return
+	for _, ref := range refs {
+		if ref.Controller != nil && *ref.Controller &&
+			(ref.Name != deployment.Name || ref.APIVersion != appsv1.SchemeGroupVersion.String() || ref.Kind != "Deployment") {
+			return fmt.Errorf("manager NetworkPolicy %s/%s ownership conflict: controller %s %s %s (UID %s), expected apps/v1 Deployment %s",
+				obj.GetNamespace(), obj.GetName(), ref.APIVersion, ref.Kind, ref.Name, ref.UID, deployment.Name)
+		}
 	}
 	cleaned := make([]metav1.OwnerReference, 0, len(refs))
 	for _, ref := range refs {
-		if ref.Controller != nil && *ref.Controller {
+		if ref.Controller != nil && *ref.Controller && ref.UID != deployment.UID {
 			continue
 		}
 		cleaned = append(cleaned, ref)
 	}
 	obj.SetOwnerReferences(cleaned)
+	return nil
+}
+
+func managerPolicyPredicate() predicate.Predicate {
+	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		return obj.GetName() == utils.ManagerNetworkPolicyName && obj.GetNamespace() == utils.Namespace()
+	})
 }
 
 func (r *ManagerNetworkPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -109,6 +120,6 @@ func (r *ManagerNetworkPolicyReconciler) SetupWithManager(mgr ctrl.Manager) erro
 		For(&appsv1.Deployment{}, builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
 			return obj.GetName() == managerName && obj.GetNamespace() == managerNamespace
 		}))).
-		Owns(&networkingv1.NetworkPolicy{}).
+		Owns(&networkingv1.NetworkPolicy{}, builder.WithPredicates(managerPolicyPredicate())).
 		Complete(r)
 }

@@ -438,12 +438,14 @@ func validatePrometheusTargetFreshness(namespace string, serviceNames []string, 
 		if len(current) == 0 {
 			return &targetValidationError{kind: targetMissing, msg: fmt.Sprintf("missing expected Prometheus target for service %s (expected scrapePool %s)", expectation.serviceName, expectation.scrapePool)}
 		}
+		for _, target := range current {
+			if target.Health != "up" {
+				return &targetValidationError{kind: targetUnhealthy, msg: fmt.Sprintf("unhealthy Prometheus target for service %s: target=%q health=%q lastScrape=%q lastError=%q", expectation.serviceName, prometheusTargetIdentity(target), target.Health, target.LastScrape, target.LastError)}
+			}
+		}
 		fresh := false
 		staleDetails := make([]string, 0, len(current))
 		for _, target := range current {
-			if target.Health != "up" {
-				return &targetValidationError{kind: targetUnhealthy, msg: fmt.Sprintf("unhealthy Prometheus target for service %s: health=%q lastScrape=%q lastError=%q", expectation.serviceName, target.Health, target.LastScrape, target.LastError)}
-			}
 			previousScrape, exists := baseline[prometheusTargetIdentity(target)]
 			if !exists {
 				continue
@@ -456,7 +458,7 @@ func validatePrometheusTargetFreshness(namespace string, serviceNames []string, 
 				fresh = true
 				break
 			}
-			staleDetails = append(staleDetails, fmt.Sprintf("lastScrape=%q initialLastScrape=%q", target.LastScrape, baseline[prometheusTargetIdentity(target)].Format(time.RFC3339Nano)))
+			staleDetails = append(staleDetails, fmt.Sprintf("target=%q lastScrape=%q initialLastScrape=%q lastError=%q", prometheusTargetIdentity(target), target.LastScrape, previousScrape.Format(time.RFC3339Nano), target.LastError))
 		}
 		if !fresh {
 			return &targetValidationError{kind: targetStale, msg: fmt.Sprintf("target for service %s has not advanced beyond its initial lastScrape: %s", expectation.serviceName, strings.Join(staleDetails, "; "))}

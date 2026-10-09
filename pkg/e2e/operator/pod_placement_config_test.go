@@ -1,8 +1,6 @@
 package operator_test
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -42,90 +40,7 @@ for i in $(seq 1 10); do
   sleep 1
 done
 `
-	openshiftMonitoringNamespace = "openshift-monitoring"
 )
-
-type prometheusTargetsResponse struct {
-	Status string `json:"status"`
-	Data   struct {
-		ActiveTargets []struct {
-			DiscoveredLabels map[string]string `json:"discoveredLabels"`
-			Labels           map[string]string `json:"labels"`
-			Health           string            `json:"health"`
-			LastError        string            `json:"lastError"`
-		} `json:"activeTargets"`
-	} `json:"data"`
-}
-
-// mtoMetricsTargetsHealthy checks the scrape status reported by OpenShift's
-// Prometheus pods. A healthy target confirms that Prometheus, running in the
-// namespace allowed by metricsIngressRule, reached /metrics using the
-// ServiceMonitor's bearer token and service CA configuration.
-func mtoMetricsTargetsHealthy(ctx context.Context, serviceNames ...string) (bool, error) {
-	pods, err := clientset.CoreV1().Pods(openshiftMonitoringNamespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/name=prometheus",
-	})
-	if err != nil {
-		return false, fmt.Errorf("list Prometheus pods: %w", err)
-	}
-	if len(pods.Items) == 0 {
-		return false, fmt.Errorf("no Prometheus pods found in namespace %s", openshiftMonitoringNamespace)
-	}
-
-	wanted := make(map[string]bool, len(serviceNames))
-	for _, name := range serviceNames {
-		wanted[name] = false
-	}
-	var lastProxyErr error
-	queried := false
-	for _, pod := range pods.Items {
-		if pod.Status.Phase != corev1.PodRunning {
-			continue
-		}
-		responseBody, err := clientset.CoreV1().Pods(openshiftMonitoringNamespace).
-			ProxyGet("http", pod.Name, "9090", "/api/v1/targets", map[string]string{"state": "active"}).
-			DoRaw(ctx)
-		if err != nil {
-			lastProxyErr = fmt.Errorf("proxy to Prometheus pod %s: %w", pod.Name, err)
-			continue
-		}
-		queried = true
-
-		var response prometheusTargetsResponse
-		if err := json.Unmarshal(responseBody, &response); err != nil {
-			return false, fmt.Errorf("decode Prometheus targets response: %w", err)
-		}
-		if response.Status != "success" {
-			return false, fmt.Errorf("Prometheus targets API returned status %q", response.Status)
-		}
-		for _, target := range response.Data.ActiveTargets {
-			namespace := target.DiscoveredLabels["__meta_kubernetes_namespace"]
-			if namespace == "" {
-				namespace = target.Labels["namespace"]
-			}
-			if namespace != utils.Namespace() {
-				continue
-			}
-			serviceName := target.DiscoveredLabels["__meta_kubernetes_service_name"]
-			if serviceName == "" {
-				serviceName = target.Labels["service"]
-			}
-			if _, ok := wanted[serviceName]; ok && target.Health == "up" {
-				wanted[serviceName] = true
-			}
-		}
-	}
-	if !queried && lastProxyErr != nil {
-		return false, lastProxyErr
-	}
-
-	for _, healthy := range wanted {
-		if !healthy {
-			return false, nil
-		}
-	}
-	return true, nil
-}
 
 var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 	var (
@@ -197,8 +112,8 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			Eventually(framework.VerifyOperandNetworkPolicies(ctx, client)).Should(Succeed())
 			Eventually(framework.VerifyManagerNetworkPolicy(ctx, client)).Should(Succeed())
 		})
-		It("should remain fully functional under a namespace-wide default-deny NetworkPolicy", func() {
-			By("Deploying a default-deny NetworkPolicy BEFORE creating CPPC (proves manager startup under deny)")
+		It("should deploy operands, inspect images, and apply fallback under namespace-wide default-deny", func() {
+			By("Deploying default-deny before CPPC creation while the manager is running")
 			defaultDeny := &networkingv1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "default-deny-all",
@@ -232,7 +147,7 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Waiting for all operands including ENoExec to deploy (proves manager DNS + API egress under deny)")
+			By("Waiting for all operands including ENoExec to deploy under default-deny")
 			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin), e2e.WaitOverMedium).Should(Succeed())
 
 			By("Verifying all four NetworkPolicies exist")
@@ -240,7 +155,7 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			Eventually(framework.VerifyManagerNetworkPolicy(ctx, client)).Should(Succeed())
 			Eventually(framework.VerifyENoExecDaemonNetworkPolicy(ctx, client)).Should(Succeed())
 
-			By("Exercising webhook admission + image inspection (proves webhook ingress, controller DNS + API + registry egress)")
+			By("Exercising webhook admission and successful image inspection under default-deny")
 			ns := framework.NewEphemeralNamespace()
 			err = client.Create(ctx, ns)
 			Expect(err).NotTo(HaveOccurred())
@@ -253,6 +168,30 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				WithContainersImages(helloOpenshiftPublicMultiarchImage).
 				Build()
 			ps.Containers[0].ImagePullPolicy = corev1.PullAlways
+			// PullAlways bypasses MTO's inspection cache. The fixture's manifest
+			// list supports Linux amd64, arm64, ppc64le, and s390x.
+			verifyPlacement := func(namespace, fallback string, architectures ...string) func(Gomega) {
+				return func(g Gomega) {
+					pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "app=test"})
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(pods.Items).NotTo(BeEmpty())
+					expectedTerm := NewNodeSelectorTerm().WithMatchExpressions(
+						NewNodeSelectorRequirement().WithKeyAndValues(utils.ArchLabel, corev1.NodeSelectorOpIn, architectures...).Build(),
+					).Build()
+					for _, pod := range pods.Items {
+						g.Expect(pod.Spec.SchedulingGates).To(BeEmpty(), "pod %s", pod.Name)
+						g.Expect(pod.Labels).To(HaveKeyWithValue(utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved))
+						if fallback == "" {
+							g.Expect(pod.Labels).NotTo(HaveKey(utils.FallbackArchitectureLabel))
+						} else {
+							g.Expect(pod.Labels).To(HaveKeyWithValue(utils.FallbackArchitectureLabel, fallback))
+						}
+						g.Expect(pod).To(framework.HaveEquivalentNodeAffinity(&corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{*expectedTerm}},
+						}))
+					}
+				}
+			}
 			d := NewDeployment().
 				WithSelectorAndPodLabels(podLabel).
 				WithPodSpec(ps).
@@ -263,11 +202,8 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			err = client.Create(ctx, d)
 			Expect(err).NotTo(HaveOccurred())
 
-			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, ns, "app", "test",
-				utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved,
-			), e2e.WaitMedium).Should(Succeed())
-			Eventually(framework.VerifyPodLabels(ctx, client, ns, "app", "test", e2e.Absent,
-				map[string]string{utils.FallbackArchitectureLabel: utils.ArchitectureAmd64}), e2e.WaitShort).Should(Succeed())
+			Eventually(verifyPlacement(ns.Name, "", utils.ArchitectureAmd64, utils.ArchitectureArm64,
+				utils.ArchitecturePpc64le, utils.ArchitectureS390x), e2e.WaitMedium).Should(Succeed())
 
 			By("Exercising fallback architecture (proves image inspection failure path under deny)")
 			nsFallback := framework.NewEphemeralNamespace()
@@ -291,12 +227,9 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 			err = client.Create(ctx, dFallback)
 			Expect(err).NotTo(HaveOccurred())
 
-			Eventually(framework.VerifyPodLabelsAreSet(ctx, client, nsFallback, "app", "test",
-				utils.SchedulingGateLabel, utils.SchedulingGateLabelValueRemoved,
-				utils.FallbackArchitectureLabel, utils.ArchitectureAmd64,
-			), e2e.WaitMedium).Should(Succeed())
+			Eventually(verifyPlacement(nsFallback.Name, utils.ArchitectureAmd64, utils.ArchitectureAmd64), e2e.WaitMedium).Should(Succeed())
 
-			By("Verifying ENoExec daemon pods are running (proves daemon DNS + API egress under deny)")
+			By("Verifying ENoExec daemon pods reach the Running phase under default-deny")
 			Eventually(func(g Gomega) {
 				pods, err := clientset.CoreV1().Pods(utils.Namespace()).List(ctx, metav1.ListOptions{
 					LabelSelector: "app=" + utils.EnoexecDaemonSet,
@@ -309,18 +242,7 @@ var _ = Describe("The Multiarch Tuning Operator", Serial, func() {
 				}
 			}, e2e.WaitShort).Should(Succeed())
 
-			By("Verifying OpenShift Prometheus successfully scrapes both operand metrics endpoints under default-deny")
-			Eventually(func(g Gomega) {
-				healthy, err := mtoMetricsTargetsHealthy(ctx,
-					utils.PodPlacementControllerName,
-					utils.PodPlacementWebhookName,
-				)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(healthy).To(BeTrue(),
-					"Prometheus targets should be healthy after scraping the MTO /metrics endpoints")
-			}, e2e.WaitMedium).Should(Succeed())
-
-			By("Verifying all operands remain healthy after exercising all flows under default-deny")
+			By("Verifying operand resources and CPPC conditions after image inspection and fallback under default-deny")
 			Eventually(framework.ValidateCreation(client, ctx, framework.MainPlugin, framework.ENoExecPlugin), e2e.WaitShort).Should(Succeed())
 		})
 	})

@@ -18,247 +18,146 @@ package framework
 
 import (
 	"context"
-
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"encoding/json"
+	"fmt"
+	"sort"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
 )
 
-const (
-	networkPolicyHealthPort  int32 = 8081
-	networkPolicyMetricsPort int32 = 8443
-	networkPolicyWebhookPort int32 = 9443
-	networkPolicyDNSPort     int32 = 5353
-	networkPolicyAPIPort     int32 = 6443
-)
+// Independent MTO-0006 specifications, never derived from production builders.
+var expectedNetworkPolicySpecs = map[string]string{
+	utils.PodPlacementNetworkPolicyName: `{
+		"podSelector":{"matchLabels":{"multiarch.openshift.io/operand":"pod-placement-controller"}},
+		"policyTypes":["Ingress","Egress"],
+		"ingress":[
+			{"ports":[{"protocol":"TCP","port":8443}],"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"openshift-monitoring"}}}]},
+			{"ports":[{"protocol":"TCP","port":9443}]}
+		],
+		"egress":[
+			{"ports":[{"protocol":"TCP","port":5353},{"protocol":"UDP","port":5353}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"openshift-dns"}}}]},
+			{"ports":[{"protocol":"TCP","port":6443}]}
+		]}`,
+	utils.PodPlacementImageInspectionNetworkPolicyName: `{
+		"podSelector":{"matchLabels":{"multiarch.openshift.io/operand":"pod-placement-controller","controller":"pod-placement-controller"}},
+		"policyTypes":["Egress"],
+		"egress":[{"ports":[{"protocol":"TCP"}]}]}`,
+	utils.EnoexecDaemonSet: `{
+		"podSelector":{"matchLabels":{"app":"enoexec-event-daemon"}},
+		"policyTypes":["Egress"],
+		"egress":[
+			{"ports":[{"protocol":"TCP","port":5353},{"protocol":"UDP","port":5353}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"openshift-dns"}}}]},
+			{"ports":[{"protocol":"TCP","port":6443}]}
+		]}`,
+	utils.ManagerNetworkPolicyName: `{
+		"podSelector":{"matchLabels":{"control-plane":"controller-manager"}},
+		"policyTypes":["Ingress","Egress"],
+		"ingress":[
+			{"ports":[{"protocol":"TCP","port":8443}],"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"openshift-monitoring"}}}]},
+			{"ports":[{"protocol":"TCP","port":9443}]}
+		],
+		"egress":[
+			{"ports":[{"protocol":"TCP","port":5353},{"protocol":"UDP","port":5353}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"openshift-dns"}}}]},
+			{"ports":[{"protocol":"TCP","port":6443}]}
+		]}`,
+}
 
-// VerifyOperandNetworkPolicies asserts the ClusterPodPlacementConfig operand
-// NetworkPolicies exist and match the OpenShift/OLM contract.
-func VerifyOperandNetworkPolicies(ctx context.Context, c client.Client) func(gomega.Gomega) {
-	return func(g gomega.Gomega) {
-		ginkgo.By("Verify the shared operand NetworkPolicy")
-		operands := &networkingv1.NetworkPolicy{}
-		err := c.Get(ctx, client.ObjectKey{
-			Name:      utils.PodPlacementNetworkPolicyName,
-			Namespace: utils.Namespace(),
-		}, operands)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get operand NetworkPolicy")
-		assertSharedOperandNetworkPolicy(g, operands)
-
-		ginkgo.By("Verify the image-inspection NetworkPolicy")
-		inspection := &networkingv1.NetworkPolicy{}
-		err = c.Get(ctx, client.ObjectKey{
-			Name:      utils.PodPlacementImageInspectionNetworkPolicyName,
-			Namespace: utils.Namespace(),
-		}, inspection)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get image-inspection NetworkPolicy")
-		assertImageInspectionNetworkPolicy(g, inspection)
+// MatchNetworkPolicySpec compares the complete security contract, ignoring only
+// collection order, nil/empty collections, and API-defaulted TCP protocols.
+func MatchNetworkPolicySpec(name string) types.GomegaMatcher {
+	var expected networkingv1.NetworkPolicySpec
+	if err := json.Unmarshal([]byte(expectedNetworkPolicySpecs[name]), &expected); err != nil {
+		panic(fmt.Sprintf("invalid expected NetworkPolicy %q: %v", name, err))
 	}
+	return gomega.WithTransform(canonicalNetworkPolicySpec, gomega.Equal(canonicalNetworkPolicySpec(expected)))
 }
 
-// VerifyENoExecDaemonNetworkPolicy asserts the ENoExec daemon NetworkPolicy.
-func VerifyENoExecDaemonNetworkPolicy(ctx context.Context, c client.Client) func(gomega.Gomega) {
-	return func(g gomega.Gomega) {
-		ginkgo.By("Verify the ENoExec daemon NetworkPolicy")
-		np := &networkingv1.NetworkPolicy{}
-		err := c.Get(ctx, client.ObjectKey{
-			Name:      utils.EnoexecDaemonSet,
-			Namespace: utils.Namespace(),
-		}, np)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get ENoExec daemon NetworkPolicy")
-		assertENoExecDaemonNetworkPolicy(g, np)
-	}
-}
-
-// VerifyManagerNetworkPolicy asserts the runtime manager NetworkPolicy.
-func VerifyManagerNetworkPolicy(ctx context.Context, c client.Client) func(gomega.Gomega) {
-	return func(g gomega.Gomega) {
-		ginkgo.By("Verify the manager NetworkPolicy")
-		np := &networkingv1.NetworkPolicy{}
-		err := c.Get(ctx, client.ObjectKey{
-			Name:      utils.ManagerNetworkPolicyName,
-			Namespace: utils.Namespace(),
-		}, np)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get manager NetworkPolicy")
-		assertManagerNetworkPolicy(g, np)
-	}
-}
-
-func assertSharedOperandNetworkPolicy(g gomega.Gomega, np *networkingv1.NetworkPolicy) {
-	g.Expect(np.Spec.PodSelector.MatchLabels).To(gomega.Equal(map[string]string{
-		utils.OperandLabelKey: utils.PodPlacementControllerName,
-	}))
-	g.Expect(np.Spec.PodSelector.MatchLabels).NotTo(gomega.HaveKey(utils.ControllerNameKey))
-	assertPolicyTypes(g, np, networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress)
-	assertNoIPBlock(g, np)
-	assertNoIngressPort(g, np, networkPolicyHealthPort)
-	assertMetricsIngressFromMonitoring(g, np)
-	assertOpenIngressPort(g, np, networkPolicyWebhookPort)
-	assertDNSEgress(g, np)
-	assertDestinationLessEgressPort(g, np, networkPolicyAPIPort)
-	g.Expect(hasDestinationLessTCPAllPorts(np)).To(gomega.BeFalse(),
-		"shared operand policy must not allow destination-less TCP on all ports")
-}
-
-func assertImageInspectionNetworkPolicy(g gomega.Gomega, np *networkingv1.NetworkPolicy) {
-	g.Expect(np.Spec.PodSelector.MatchLabels).To(gomega.Equal(map[string]string{
-		utils.OperandLabelKey:   utils.PodPlacementControllerName,
-		utils.ControllerNameKey: utils.PodPlacementControllerName,
-	}))
-	assertPolicyTypes(g, np, networkingv1.PolicyTypeEgress)
-	g.Expect(np.Spec.Ingress).To(gomega.BeEmpty(), "image-inspection policy must be egress-only")
-	assertNoIPBlock(g, np)
-	g.Expect(hasDestinationLessTCPAllPorts(np)).To(gomega.BeTrue(),
-		"image-inspection policy must allow destination-less TCP on all ports")
-}
-
-func assertENoExecDaemonNetworkPolicy(g gomega.Gomega, np *networkingv1.NetworkPolicy) {
-	g.Expect(np.Spec.PodSelector.MatchLabels).To(gomega.Equal(map[string]string{
-		"app": utils.EnoexecDaemonSet,
-	}))
-	assertPolicyTypes(g, np, networkingv1.PolicyTypeEgress)
-	g.Expect(np.Spec.Ingress).To(gomega.BeEmpty(), "daemon policy must be egress-only")
-	assertNoIPBlock(g, np)
-	assertDNSEgress(g, np)
-	assertDestinationLessEgressPort(g, np, networkPolicyAPIPort)
-	g.Expect(hasDestinationLessTCPAllPorts(np)).To(gomega.BeFalse(),
-		"daemon policy must not allow destination-less TCP on all ports")
-}
-
-func assertManagerNetworkPolicy(g gomega.Gomega, np *networkingv1.NetworkPolicy) {
-	g.Expect(np.Spec.PodSelector.MatchLabels).To(gomega.Equal(map[string]string{
-		"control-plane": "controller-manager",
-	}))
-	assertPolicyTypes(g, np, networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress)
-	assertNoIPBlock(g, np)
-	assertNoIngressPort(g, np, networkPolicyHealthPort)
-	assertOpenIngressPort(g, np, networkPolicyWebhookPort)
-	assertMetricsIngressFromMonitoring(g, np)
-	assertDNSEgress(g, np)
-	assertDestinationLessEgressPort(g, np, networkPolicyAPIPort)
-	g.Expect(hasDestinationLessTCPAllPorts(np)).To(gomega.BeFalse(),
-		"manager policy must not allow destination-less TCP on all ports")
-	for key := range np.Annotations {
-		g.Expect(key).NotTo(gomega.HavePrefix("include.release.openshift.io/"),
-			"manager policy must not include CVO payload annotation %s", key)
-	}
-}
-
-func assertPolicyTypes(g gomega.Gomega, np *networkingv1.NetworkPolicy, want ...networkingv1.PolicyType) {
-	g.Expect(np.Spec.PolicyTypes).To(gomega.Equal(want))
-}
-
-func assertNoIPBlock(g gomega.Gomega, np *networkingv1.NetworkPolicy) {
-	for _, rule := range np.Spec.Egress {
-		for _, peer := range rule.To {
-			g.Expect(peer.IPBlock).To(gomega.BeNil(), "unexpected egress ipBlock")
-		}
-	}
-	for _, rule := range np.Spec.Ingress {
-		for _, peer := range rule.From {
-			g.Expect(peer.IPBlock).To(gomega.BeNil(), "unexpected ingress ipBlock")
-		}
-	}
-}
-
-func assertDNSEgress(g gomega.Gomega, np *networkingv1.NetworkPolicy) {
-	for _, rule := range np.Spec.Egress {
-		if !hasPort(rule.Ports, corev1.ProtocolTCP, networkPolicyDNSPort) || !hasPort(rule.Ports, corev1.ProtocolUDP, networkPolicyDNSPort) {
-			continue
-		}
-		g.Expect(rule.To).To(gomega.HaveLen(1), "dns egress should have one peer")
-		peer := rule.To[0]
-		g.Expect(peer.NamespaceSelector).NotTo(gomega.BeNil())
-		g.Expect(peer.NamespaceSelector.MatchLabels).To(gomega.HaveKeyWithValue(
-			utils.OpenShiftDNSNamespaceLabelKey, utils.OpenShiftDNSNamespaceName))
-		g.Expect(peer.PodSelector).To(gomega.BeNil(), "dns egress must be namespace-only")
-		return
-	}
-	g.Expect(true).To(gomega.BeFalse(), "missing DNS egress to openshift-dns on TCP/UDP 5353")
-}
-
-func assertDestinationLessEgressPort(g gomega.Gomega, np *networkingv1.NetworkPolicy, port int32) {
-	g.Expect(hasDestinationLessEgressPort(np, port)).To(gomega.BeTrue(),
-		"missing destination-less egress TCP %d", port)
-}
-
-func assertOpenIngressPort(g gomega.Gomega, np *networkingv1.NetworkPolicy, port int32) {
-	for _, rule := range np.Spec.Ingress {
-		if !hasPort(rule.Ports, corev1.ProtocolTCP, port) {
-			continue
-		}
-		g.Expect(rule.From).To(gomega.BeEmpty(), "port %d should have no From peers", port)
-		return
-	}
-	g.Expect(true).To(gomega.BeFalse(), "missing ingress TCP %d", port)
-}
-
-func assertNoIngressPort(g gomega.Gomega, np *networkingv1.NetworkPolicy, port int32) {
-	for _, rule := range np.Spec.Ingress {
-		g.Expect(hasPort(rule.Ports, corev1.ProtocolTCP, port)).To(gomega.BeFalse(),
-			"ingress TCP %d must not be listed; kubelet probes are host-networked", port)
-	}
-}
-
-func assertMetricsIngressFromMonitoring(g gomega.Gomega, np *networkingv1.NetworkPolicy) {
-	for _, rule := range np.Spec.Ingress {
-		if !hasPort(rule.Ports, corev1.ProtocolTCP, networkPolicyMetricsPort) {
-			continue
-		}
-		g.Expect(rule.From).To(gomega.HaveLen(1), "metrics ingress should have one peer")
-		peer := rule.From[0]
-		g.Expect(peer.NamespaceSelector).NotTo(gomega.BeNil())
-		g.Expect(peer.NamespaceSelector.MatchLabels).To(gomega.HaveKeyWithValue(
-			utils.OpenShiftMonitoringNamespaceLabelKey, utils.OpenShiftMonitoringNamespace))
-		return
-	}
-	g.Expect(true).To(gomega.BeFalse(), "missing metrics ingress from openshift-monitoring")
-}
-
-func hasDestinationLessEgressPort(np *networkingv1.NetworkPolicy, port int32) bool {
-	for _, rule := range np.Spec.Egress {
-		if len(rule.To) != 0 {
-			continue
-		}
-		if hasPort(rule.Ports, corev1.ProtocolTCP, port) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasDestinationLessTCPAllPorts(np *networkingv1.NetworkPolicy) bool {
-	for _, rule := range np.Spec.Egress {
-		if len(rule.To) != 0 {
-			continue
-		}
-		if len(rule.Ports) == 0 {
-			return true
-		}
-		for _, p := range rule.Ports {
-			if p.Protocol != nil && *p.Protocol == corev1.ProtocolTCP && p.Port == nil {
-				return true
+func canonicalNetworkPolicySpec(spec networkingv1.NetworkPolicySpec) string {
+	spec = *spec.DeepCopy()
+	defaultProtocols := func(ports []networkingv1.NetworkPolicyPort) {
+		for i := range ports {
+			if ports[i].Protocol == nil {
+				ports[i].Protocol = utils.NewPtr(corev1.ProtocolTCP)
 			}
 		}
 	}
-	return false
-}
-
-func hasPort(ports []networkingv1.NetworkPolicyPort, protocol corev1.Protocol, port int32) bool {
-	want := intstr.FromInt32(port)
-	for _, p := range ports {
-		if p.Port == nil || p.Protocol == nil {
-			continue
-		}
-		if *p.Protocol == protocol && *p.Port == want {
-			return true
+	for i := range spec.Ingress {
+		defaultProtocols(spec.Ingress[i].Ports)
+	}
+	for i := range spec.Egress {
+		defaultProtocols(spec.Egress[i].Ports)
+	}
+	// API JSON omitempty equates nil/empty collections, preserving nil versus
+	// empty selector pointers. Arrays are unordered; retain multiplicity and
+	// rule/peer boundaries when sorting them.
+	data, err := json.Marshal(spec)
+	if err != nil {
+		panic(err)
+	}
+	var value interface{}
+	if err := json.Unmarshal(data, &value); err != nil {
+		panic(err)
+	}
+	var normalize func(interface{})
+	normalize = func(v interface{}) {
+		switch v := v.(type) {
+		case map[string]interface{}:
+			for _, child := range v {
+				normalize(child)
+			}
+		case []interface{}:
+			for _, child := range v {
+				normalize(child)
+			}
+			sort.Slice(v, func(i, j int) bool {
+				a, _ := json.Marshal(v[i])
+				b, _ := json.Marshal(v[j])
+				return string(a) < string(b)
+			})
 		}
 	}
-	return false
+	normalize(value)
+	data, err = json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
+}
+
+func verifyNetworkPolicies(ctx context.Context, c client.Client, names ...string) func(gomega.Gomega) {
+	return func(g gomega.Gomega) {
+		for _, name := range names {
+			ginkgo.By("Verify the NetworkPolicy " + name)
+			np := &networkingv1.NetworkPolicy{}
+			g.Expect(c.Get(ctx, client.ObjectKey{Name: name, Namespace: utils.Namespace()}, np)).To(gomega.Succeed())
+			g.Expect(np.Spec).To(MatchNetworkPolicySpec(name), "NetworkPolicy %s", name)
+			if name == utils.ManagerNetworkPolicyName {
+				for key := range np.Annotations {
+					g.Expect(key).NotTo(gomega.HavePrefix("include.release.openshift.io/"))
+				}
+			}
+		}
+	}
+}
+
+// VerifyOperandNetworkPolicies verifies both complete operand policy contracts.
+func VerifyOperandNetworkPolicies(ctx context.Context, c client.Client) func(gomega.Gomega) {
+	return verifyNetworkPolicies(ctx, c, utils.PodPlacementNetworkPolicyName, utils.PodPlacementImageInspectionNetworkPolicyName)
+}
+
+// VerifyENoExecDaemonNetworkPolicy verifies the complete daemon policy contract.
+func VerifyENoExecDaemonNetworkPolicy(ctx context.Context, c client.Client) func(gomega.Gomega) {
+	return verifyNetworkPolicies(ctx, c, utils.EnoexecDaemonSet)
+}
+
+// VerifyManagerNetworkPolicy verifies the complete runtime manager policy contract.
+func VerifyManagerNetworkPolicy(ctx context.Context, c client.Client) func(gomega.Gomega) {
+	return verifyNetworkPolicies(ctx, c, utils.ManagerNetworkPolicyName)
 }

@@ -35,7 +35,8 @@ spec:
   - name: build-args
     value:
     - BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.16
-    - OCP_VERSION=fbc-v4-16
+    - FBC_VERSION=fbc-v4-16
+    - OCP_VERSION=4.16
   pipelineRef:
     resolver: git
     params:

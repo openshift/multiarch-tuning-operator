@@ -74,7 +74,7 @@ IMG ?= registry.ci.openshift.org/origin/multiarch-tuning-operator:v1.x
 # https://github.com/kubernetes-sigs/kustomize/releases
 KUSTOMIZE_VERSION ?= v5.8.1
 # https://github.com/kubernetes-sigs/controller-tools/releases
-CONTROLLER_TOOLS_VERSION ?= v0.20.1
+CONTROLLER_TOOLS_VERSION ?= v0.21.0
 # https://github.com/operator-framework/operator-sdk/releases
 # v1.42.3 is the CLI used by `make bundle`. There is no Go module bump; runtime
 # versions stay on the newer Go/Kubernetes modules already in go.mod.

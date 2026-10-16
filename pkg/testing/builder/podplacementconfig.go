@@ -21,6 +21,12 @@ func (p *PodPlacementConfigBuilder) WithName(name string) *PodPlacementConfigBui
 	return p
 }
 
+func (p *PodPlacementConfigBuilder) WithGenerateName(prefix string) *PodPlacementConfigBuilder {
+	p.GenerateName = prefix
+	p.Name = "" // Name must be empty when GenerateName is set
+	return p
+}
+
 func (p *PodPlacementConfigBuilder) WithNamespace(namespace string) *PodPlacementConfigBuilder {
 	p.Namespace = namespace
 	return p
@@ -72,4 +78,65 @@ func (p *PodPlacementConfigBuilder) WithNodeAffinityScoringTerm(architecture str
 func (p *PodPlacementConfigBuilder) WithPriority(priority uint8) *PodPlacementConfigBuilder {
 	p.Spec.Priority = priority
 	return p
+}
+
+func (p *PodPlacementConfigBuilder) WithCelArchitecturePlacement(
+	enabled bool,
+	fallbackArchitectures []string,
+	rules []plugins.ArchitectureRule,
+) *PodPlacementConfigBuilder {
+	if p.Spec.Plugins == nil {
+		p.Spec.Plugins = &plugins.LocalPlugins{}
+	}
+	p.Spec.Plugins.CelArchitecturePlacement = &plugins.CelArchitecturePlacement{
+		BasePlugin: plugins.BasePlugin{
+			Enabled: enabled,
+		},
+		FallbackArchitectures: fallbackArchitectures,
+		Rules:                 rules,
+	}
+	return p
+}
+
+func (p *PodPlacementConfigBuilder) WithCelEnabled(enabled bool) *PodPlacementConfigBuilder {
+	if p.Spec.Plugins == nil {
+		p.Spec.Plugins = &plugins.LocalPlugins{}
+	}
+	if p.Spec.Plugins.CelArchitecturePlacement == nil {
+		p.Spec.Plugins.CelArchitecturePlacement = &plugins.CelArchitecturePlacement{}
+	}
+	p.Spec.Plugins.CelArchitecturePlacement.Enabled = enabled
+	return p
+}
+
+func (p *PodPlacementConfigBuilder) WithCelFallbackArchitectures(archs ...string) *PodPlacementConfigBuilder {
+	if p.Spec.Plugins == nil {
+		p.Spec.Plugins = &plugins.LocalPlugins{}
+	}
+	if p.Spec.Plugins.CelArchitecturePlacement == nil {
+		p.Spec.Plugins.CelArchitecturePlacement = &plugins.CelArchitecturePlacement{}
+	}
+	p.Spec.Plugins.CelArchitecturePlacement.FallbackArchitectures = archs
+	return p
+}
+
+func (p *PodPlacementConfigBuilder) WithCelRule(rule plugins.ArchitectureRule) *PodPlacementConfigBuilder {
+	if p.Spec.Plugins == nil {
+		p.Spec.Plugins = &plugins.LocalPlugins{}
+	}
+	if p.Spec.Plugins.CelArchitecturePlacement == nil {
+		p.Spec.Plugins.CelArchitecturePlacement = &plugins.CelArchitecturePlacement{}
+	}
+	p.Spec.Plugins.CelArchitecturePlacement.Rules = append(
+		p.Spec.Plugins.CelArchitecturePlacement.Rules, rule,
+	)
+	return p
+}
+
+func NewRule(name, expression string, archs ...string) plugins.ArchitectureRule {
+	return plugins.ArchitectureRule{
+		Name:          name,
+		Expression:    expression,
+		Architectures: archs,
+	}
 }

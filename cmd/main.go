@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -112,10 +113,15 @@ func main() {
 		DefaultTransform: cache.TransformStripManagedFields(),
 	}
 
-	// Build the leader election ID deterministically and based on the flags
+	// Build the leader election ID deterministically and based on the flags.
+	// Modes are mutually exclusive, so ByObject / DefaultNamespaces are never merged.
 	leaderID := "208d7abd.multiarch.openshift.io"
 	if enableOperator {
 		leaderID = fmt.Sprintf("operator-%s", leaderID)
+		// NetworkPolicy is bound by a namespace-scoped Role; scope its informer
+		// to the operator namespace so the ClusterRole is not needed for it.
+		// All other types use the ClusterRole and cluster-wide informers.
+		cacheOpts.ByObject = operator.CacheByObject()
 	}
 	if enableClusterPodPlacementConfigOperandControllers {
 		leaderID = fmt.Sprintf("ppc-controllers-%s", leaderID)
@@ -129,6 +135,8 @@ func main() {
 	}
 	if enableENoExecEventControllers {
 		leaderID = fmt.Sprintf("enoexecevent-controllers-%s", leaderID)
+		// ENoExecEvents are created in the operator namespace. Referenced Pods
+		// may live elsewhere and are fetched via the live API, not this cache.
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{
 			utils.Namespace(): {},
 		}
@@ -150,7 +158,14 @@ func main() {
 		CertDir: certDir,
 		TLSOpts: tlsOpts,
 	})
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	restConfig := ctrl.GetConfigOrDie()
+	if enableOperator {
+		dynClient := dynamic.NewForConfigOrDie(restConfig)
+		if utils.IsResourceAvailable(context.Background(), dynClient, monitoringv1.SchemeGroupVersion.WithResource("servicemonitors")) {
+			operator.AddMonitoringCache(cacheOpts.ByObject)
+		}
+	}
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress:    metricsAddr,
@@ -236,6 +251,11 @@ func RunOperator(mgr ctrl.Manager) {
 			clock.RealClock{},
 		),
 	}).SetupWithManager(mgr), unableToCreateController, controllerKey, "ClusterPodPlacementConfig")
+	must((&operator.ManagerNetworkPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr),
+		unableToCreateController, controllerKey, "ManagerNetworkPolicy")
 	must((&multiarchv1beta1.ClusterPodPlacementConfig{}).SetupWebhookWithManager(mgr), unableToCreateController,
 		controllerKey, "ClusterPodPlacementConfigConversionWebhook")
 }
@@ -246,6 +266,7 @@ func RunClusterPodPlacementConfigOperandControllers(mgr ctrl.Manager) {
 
 	must((&podplacement.PodReconciler{
 		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,
 		Recorder:  mgr.GetEventRecorderFor(utils.OperatorName), //nolint:staticcheck // MULTIARCH-6087: will be fixed with events API migration
@@ -269,7 +290,46 @@ func RunClusterPodPlacementConfigOperandWebHook(mgr ctrl.Manager) {
 		}
 		ants.Release()
 	})
-	handler := podplacement.NewPodSchedulingGateMutatingWebHook(mgr.GetClient(), clientset, mgr.GetScheme(),
+
+	// ppcCacheSynced returns true once the PodPlacementConfig informer cache has
+	// completed its initial list/sync.
+	//
+	// GetInformerForKind can fail if the manager cache has not yet started (e.g.,
+	// the first call arrives before the leader-elected manager is ready).  We retry
+	// on every call — once the informer is successfully obtained we short-circuit by
+	// caching the HasSynced func in ppcHasSynced.  This avoids a permanent fallback
+	// that would occur if sync.Once captured a transient startup error.
+	var (
+		ppcHasSynced     func() bool
+		ppcHasSyncedOnce sync.Mutex
+	)
+	ppcCacheSynced := func() bool {
+		ppcHasSyncedOnce.Lock()
+		local := ppcHasSynced
+		ppcHasSyncedOnce.Unlock()
+		if local != nil {
+			return local()
+		}
+		// Informer not yet obtained — try to get it.
+		informer, err := mgr.GetCache().GetInformerForKind(
+			context.Background(),
+			multiarchv1beta1.GroupVersion.WithKind(multiarchv1beta1.PodPlacementConfigKind),
+		)
+		if err != nil {
+			// Transient failure: cache may not be started yet.
+			// Return false so apiReader fallback remains active; retry next call.
+			setupLog.V(1).Info("PodPlacementConfig informer not yet available; retrying on next call",
+				"error", err)
+			return false
+		}
+		// Persist the resolved HasSynced function so future calls skip GetInformerForKind.
+		ppcHasSyncedOnce.Lock()
+		ppcHasSynced = informer.HasSynced
+		ppcHasSyncedOnce.Unlock()
+		return informer.HasSynced()
+	}
+
+	handler := podplacement.NewPodSchedulingGateMutatingWebHook(mgr.GetClient(), mgr.GetAPIReader(), ppcCacheSynced, clientset, mgr.GetScheme(),
 		mgr.GetEventRecorderFor(utils.OperatorName), pool) //nolint:staticcheck // MULTIARCH-6087: will be fixed with events API migration
 	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: handler})
 }

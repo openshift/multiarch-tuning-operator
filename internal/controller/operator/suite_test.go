@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -43,6 +44,7 @@ import (
 	"k8s.io/utils/clock"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -145,6 +147,7 @@ func startTestEnv() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
+		BinaryAssetsDirectory: getFirstFoundEnvTestBinaryDir(),
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
 			ValidatingWebhooks: []*v1.ValidatingWebhookConfiguration{getValidatingWebHook()},
 		},
@@ -227,6 +230,10 @@ func runManager() {
 		HealthProbeBindAddress: ":4980",
 		Logger:                 suiteLog,
 		WebhookServer:          webhookServer,
+		Cache: cache.Options{
+			DefaultTransform: cache.TransformStripManagedFields(),
+			ByObject:         CacheByObject(),
+		},
 	})
 	Expect(err).NotTo(HaveOccurred())
 
@@ -246,6 +253,10 @@ func runManager() {
 		ClientSet:     clientset,
 		DynamicClient: dynamic.NewForConfigOrDie(cfg),
 		Recorder:      events.NewKubeRecorder(clientset.CoreV1().Events(utils.Namespace()), utils.OperatorName, ctrlref, clock.RealClock{}),
+	}).SetupWithManager(mgr)).NotTo(HaveOccurred())
+	Expect((&ManagerNetworkPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr)).NotTo(HaveOccurred())
 	Expect((&apiv1beta1.ClusterPodPlacementConfig{}).SetupWebhookWithManager(mgr)).NotTo(HaveOccurred())
 
@@ -338,4 +349,20 @@ func getValidatingWebHook() *v1.ValidatingWebhookConfiguration {
 			},
 		},
 	}
+}
+
+// getFirstFoundEnvTestBinaryDir returns the first envtest asset directory under bin/k8s.
+// An empty result leaves discovery to KUBEBUILDER_ASSETS, which make unit sets.
+func getFirstFoundEnvTestBinaryDir() string {
+	basePath := filepath.Join("..", "..", "..", "bin", "k8s")
+	entries, err := os.ReadDir(basePath)
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			return filepath.Join(basePath, entry.Name())
+		}
+	}
+	return ""
 }

@@ -32,7 +32,8 @@ spec:
   - name: build-args
     value:
       - 'BASE_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.22'
-      - 'OCP_VERSION=fbc-v4-22'
+      - 'FBC_VERSION=fbc-v4-22'
+      - 'OCP_VERSION=v4.22'
   taskRunTemplate:
     serviceAccountName: build-pipeline-fbc-v4-22
   pipelineRef:

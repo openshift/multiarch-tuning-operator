@@ -39,7 +39,7 @@ spec:
   - name: hermetic
     value: "true"
   - name: prefetch-input
-    value: '{"packages": [{"type": "gomod"}], "flags": ["gomod-vendor-check"]}'
+    value: '{"packages": [{"type": "gomod", "path": "."}], "flags": ["gomod-vendor-check"]}'
   - name: build-source-image
     value: "true"
   pipelineRef:

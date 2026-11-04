@@ -1,3 +1,16 @@
+FROM registry.access.redhat.com/ubi9/go-toolset:1.26.7 as builder
+ARG IMG=registry.redhat.io/multiarch-tuning/multiarch-tuning-rhel9-operator@sha256:5a82186a034fb6404a710e6c1b5e252d6bb07d2a62e43125e74cc019c054cc47
+ARG ORIGINAL_IMG=registry.ci.openshift.org/origin/multiarch-tuning-operator:main
+WORKDIR /code
+COPY ./ ./
+
+# Replace the bundle image in the repository with the one specified by the IMG build argument.
+RUN chmod -R g+rwX ./ && find bundle/ && find bundle -type f -exec sed -i \
+    "s|${ORIGINAL_IMG}|${IMG}|g" {} \+; \
+    grep -rq "${ORIGINAL_IMG}" bundle/ && \
+    { echo "Failed to replace image references"; exit 1; } || echo "Image references replaced" && \
+    grep -r "${IMG}" bundle/
+
 FROM scratch
 
 # Core bundle labels.
@@ -16,9 +29,9 @@ LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 
 # Copy files to locations specified by labels.
-COPY bundle/manifests /manifests/
-COPY bundle/metadata /metadata/
-COPY bundle/tests/scorecard /tests/scorecard/
+COPY --from=builder /code/bundle/manifests /manifests/
+COPY --from=builder /code/bundle/metadata /metadata/
+COPY --from=builder /code/bundle/tests/scorecard /tests/scorecard/
 
 # Labels from hack/patch-bundle-dockerfile.sh
 LABEL com.redhat.component="Multiarch Tuning Operator"

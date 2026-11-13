@@ -258,13 +258,15 @@ pipelinesascode.tekton.dev/on-cel-expression: |
    "api/***".pathChanged() || 
    "internal/***".pathChanged() || 
    "pkg/***".pathChanged() || 
-   "test/***".pathChanged() || 
-   "konflux.Dockerfile".pathChanged() || 
-   "go.mod".pathChanged() || 
+   "test/***".pathChanged() ||
+   "Dockerfile".pathChanged() ||
+   "rpms.in.yaml".pathChanged() ||
+   "rpms.lock.yaml".pathChanged() ||
+   "ubi9.repo".pathChanged() ||
+   "go.mod".pathChanged() ||
    "cmd/***".pathChanged() || 
    "go.sum".pathChanged() || 
    "bundle/***".pathChanged() ||           # ← Bundle changes trigger operator build
-   "bundle.konflux.Dockerfile".pathChanged() ||
    "trigger-konflux-builds.txt".pathChanged())
 ```
 
@@ -320,7 +322,7 @@ When the PR merges to the release branch (e.g., `v1.x`):
    - All subsequent build tasks use this versioned source
 
 3. **Bundle built with correct operator reference:**
-   - Bundle's `bundle.konflux.Dockerfile` uses `ARG IMG=` pointing to operator's registry path
+   - Bundle's `bundle.Dockerfile` uses `ARG IMG=` pointing to operator's registry path
    - The bundle build replaces image references in CSV with the operator image digest
    - Operator and bundle have **identical versions** (both `1.4.0+abc1234` or both `1.4.0`)
 

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go 1.26.7+** (`go.mod` — `go 1.26.7`)
+- **Go 1.26.10+** (`go.mod` — `go 1.26.10`)
 - **gpgme-devel** (RHEL/Fedora) or **libgpgme-dev** (Debian) — CGO dependency for image inspection
 - **Podman** or **Docker** — containerized builds run by default
 - **qemu-user-static** — required only for multi-arch builds via `docker buildx`
@@ -13,9 +13,52 @@
 make build                  # Local build (requires gpgme-devel, CGO_ENABLED=1)
 make docker-build IMG=<img> # Single-arch container image
 make docker-buildx IMG=<img> # Multi-arch image (linux/arm64,linux/amd64)
+make rpm-lockfile           # Regenerate rpms.lock.yaml for Konflux hermetic builds
 ```
 
 **Containerized vs local execution:** `make build` compiles the binary on the host. Targets that use `DOCKER_CMD` run inside a container (`BUILD_IMAGE`) by default; set `NO_DOCKER=1` in the environment or `.env` file to run those targets locally. See `dotenv.example` for all options.
+
+## Operator Image Build (Dockerfile)
+
+The standard `Dockerfile` is the single build definition for local, CI and
+Konflux builds (consolidated in MULTIARCH-6532). It builds `manager` and
+`enoexec-daemon` with `CGO_ENABLED=1` and `GOEXPERIMENT=strictfipsruntime` on
+the `ubi9/go-toolset` builder (a Red Hat toolchain — upstream `golang` images
+do **not** support the `strictfipsruntime` experiment) and runs on
+`ubi9/ubi-minimal` as non-root user `65532:65532`.
+
+**gpgme-devel dependency:** the builder stage installs `gpgme-devel` from the
+public UBI 9 CodeReady Builder repository. Locally this resolves online from
+the public UBI CDN; no Red Hat entitlement is needed. In Konflux hermetic
+builds the RPMs come from the prefetched local repository instead (below).
+
+### Konflux Hermetic RPM Prefetching
+
+The Konflux operator PipelineRuns (`.tekton/multiarch-tuning-operator-{pull-request,push}.yaml`)
+prefetch both Go modules and RPMs (`prefetch-input` contains a `gomod` and an
+`rpm` entry). The RPM inputs live at the repository root:
+
+- `rpms.in.yaml` — packages to resolve (`gpgme-devel`), target arches
+  (x86_64, aarch64, ppc64le, s390x) and the builder image used as resolution
+  context (`ubi9/go-toolset`)
+- `rpms.lock.yaml` — generated lockfile with the pinned RPMs and SRPMs
+  (everything not already installed in the builder image)
+- `ubi9.repo` — public UBI 9 repository definitions used for resolution
+
+During the hermetic build the pipeline mounts the prefetched RPMs as a local
+repository over `/etc/yum.repos.d`, so the `dnf install -y gpgme-devel` in the
+Dockerfile works unchanged without network access.
+
+**Regenerating the lockfile** (required whenever the builder image version
+changes, packages are added/removed, or dependencies drift):
+
+```bash
+make rpm-lockfile
+```
+
+This requires the [rpm-lockfile-prototype](https://github.com/konflux-ci/rpm-lockfile-prototype)
+tool with system dnf bindings and network access to the public UBI CDN. The
+lockfile is always regenerated with the tool — never hand-edited.
 
 ## Code Quality Pipeline
 
@@ -29,7 +72,7 @@ make fmt          # gofmt -s (hack/go-fmt.sh)
 make vet          # go vet ./...
 make goimports    # Import grouping check (hack/goimports.sh)
 make gosec        # SAST security scan (hack/gosec.sh)
-make lint         # golangci-lint v2.12.2 (hack/golangci-lint.sh)
+make lint         # golangci-lint v2.15.0 (hack/golangci-lint.sh)
 make unit         # Ginkgo unit/integration tests with coverage
 ```
 
@@ -85,7 +128,34 @@ make catalog-build CATALOG_IMG=<img> # Build catalog image
 make catalog-push CATALOG_IMG=<img>  # Push catalog image
 ```
 
-**Bundle verify** (`make bundle-verify`) regenerates the bundle and runs `verify-diff` to ensure deterministic output. It preserves `createdAt` timestamps in CSV files (Makefile lines 346-361).
+**Builder preservation:** `bundle.Dockerfile` is the source of truth for the builder stage, including its base image and operator image digest. `make bundle` snapshots it before SDK generation, then `hack/patch-bundle-dockerfile.sh` restores the builder stage and global declarations before the first `FROM` (including `ARG`s). Konflux-nudged values remain unchanged; SDK metadata/core labels and custom labels still refresh, and bundle COPY instructions use `--from=builder`. Change builder instructions in `bundle.Dockerfile`, not in the patch script.
+
+A named `AS builder` stage is required (case-insensitive); `FROM builder` alone names an image, not a stage. Missing builder alias causes `make bundle` to fail before generators run, without changing generated files.
+
+### Use a custom operator image locally
+
+Pass the same `IMG` to generation and build:
+
+```bash
+make bundle IMG=quay.io/your-user/operator:dev
+make bundle-build IMG=quay.io/your-user/operator:dev \
+  BUNDLE_IMG=quay.io/your-user/operator-bundle:dev
+```
+
+`make bundle IMG=...` updates operator image references in generated manifests and the image annotation in `config/manager`; it does not change the preserved Dockerfile's `ARG IMG` default. `make bundle-build` passes Makefile `IMG` explicitly as a build argument, overriding that Dockerfile default. `BUNDLE_IMG` names the output bundle image, not the operator image.
+
+`ORIGINAL_IMG` is a Dockerfile build argument identifying the image reference to replace, not a Makefile override. To replace references at build time without regenerating manifests, use the container builder directly:
+
+```bash
+podman build -f bundle.Dockerfile \
+  --build-arg ORIGINAL_IMG=registry.ci.openshift.org/origin/multiarch-tuning-operator:main \
+  --build-arg IMG=quay.io/your-user/operator:dev \
+  -t quay.io/your-user/operator-bundle:dev .
+```
+
+If manifests already contain the custom image, build-time replacement skips when `ORIGINAL_IMG` is absent. Setting `make bundle ORIGINAL_IMG=...` has no effect.
+
+**Bundle verify** (`make bundle-verify`) regenerates the bundle and runs `verify-diff` to ensure deterministic output. It preserves `createdAt` timestamps in CSV files. Run with committed generated files and a clean working tree; intentional custom-image changes will otherwise appear as differences.
 
 ## Deployment
 
@@ -128,7 +198,7 @@ Create a `.env` file (see `dotenv.example`):
 |----------|---------|---------|
 | `VERSION` | `1.3.4` | Operator version |
 | `IMAGE_TAG_BASE` | `registry.ci.openshift.org/origin/multiarch-tuning-operator` | Image registry base |
-| `GOLINT_VERSION` | `v2.12.2` | golangci-lint version |
+| `GOLINT_VERSION` | `v2.15.0` | golangci-lint version |
 | `CONTROLLER_TOOLS_VERSION` | `v0.21.0` | controller-gen version |
 | `OPERATOR_SDK_VERSION` | `v1.42.3` | operator-sdk version |
 | `KUSTOMIZE_VERSION` | `v5.8.1` | kustomize version |

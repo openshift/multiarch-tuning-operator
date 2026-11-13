@@ -9,7 +9,7 @@ ARTIFACT_DIR ?= ./_output
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 1.4.0
+VERSION ?= 1.4.1
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -252,6 +252,11 @@ docker-buildx: manifests generate ## Build and push docker image for the manager
 	- [ -f .persistent-buildx ] || docker buildx rm project-v3-builder
 	# rm Dockerfile.cross
 
+
+.PHONY: rpm-lockfile
+rpm-lockfile: ## Regenerate rpms.lock.yaml for Konflux hermetic RPM prefetching
+	rpm-lockfile-prototype rpms.in.yaml
+
 ##@ Deployment
 
 ifndef ignore-not-found
@@ -329,13 +334,20 @@ $(OPERATOR_SDK): $(LOCALBIN)
 	}
 
 .PHONY: bundle
-bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
-	$(OPERATOR_SDK) generate kustomize manifests -q
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	cd config/manager && $(KUSTOMIZE) edit set annotation multiarch.openshift.io/image:$(IMG)
-	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
-	$(OPERATOR_SDK) bundle validate ./bundle
-	VERSION=$(VERSION) hack/patch-bundle-dockerfile.sh
+bundle: ## Generate bundle manifests and metadata, then validate generated files.
+	@set -e; \
+		dockerfile=$$(mktemp); \
+		trap 'rm -f "$$dockerfile"' EXIT; \
+		cp bundle.Dockerfile "$$dockerfile"; \
+		awk 'toupper($$1) == "FROM" && NF >= 4 && toupper($$(NF-1)) == "AS" && tolower($$NF) == "builder" { found = 1; exit } END { exit !found }' "$$dockerfile" || \
+			{ echo "No builder stage found in bundle.Dockerfile" >&2; exit 1; }; \
+		$(MAKE) manifests kustomize operator-sdk; \
+		$(OPERATOR_SDK) generate kustomize manifests -q; \
+		(cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)); \
+		(cd config/manager && $(KUSTOMIZE) edit set annotation multiarch.openshift.io/image:$(IMG)); \
+		$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS); \
+		$(OPERATOR_SDK) bundle validate ./bundle; \
+		VERSION=$(VERSION) hack/patch-bundle-dockerfile.sh "$$dockerfile"
 
 .PHONY: bundle-verify
 bundle-verify:
@@ -360,10 +372,6 @@ bundle-verify:
 		sed -i 's/createdAt: .*$$/createdAt: "'$${created_at}'"/' bundle/manifests/$${file%.created-at}; \
 	done
 	rm -f ./*.clusterserviceversion.yaml.created-at
-	@echo "#########################################################################################################"
-	@echo "#### Verifying that the bundle.konflux.Dockerfile labels are in sync with the bundle.Dockerfile ones ####"
-	@echo "#########################################################################################################"
-	diff <(grep ^LABEL bundle.konflux.Dockerfile | sort) <(grep ^LABEL bundle.Dockerfile | sort)
 	@echo "################################################################################################"
 	@echo "#### Verifying no other files changed in the working tree after the bundle generation test #####"
 	@echo "################################################################################################"
@@ -374,7 +382,7 @@ bundle-verify:
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
-	$(ENGINE) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(ENGINE) build -f bundle.Dockerfile --build-arg IMG="$(IMG)" -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.

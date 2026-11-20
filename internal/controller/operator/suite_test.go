@@ -22,14 +22,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"sigs.k8s.io/kustomize/api/resmap"
 
-	v1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/kustomize/api/krusty"
@@ -64,6 +63,7 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/pkg/webhookserver"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -78,6 +78,8 @@ var (
 	testEnv    *envtest.Environment
 	ctx        context.Context
 	suiteLog   = ctrl.Log.WithName("setup")
+	// simulateMonitoringCheckFailure makes the monitoring availability check of the reconciler fail while set.
+	simulateMonitoringCheckFailure atomic.Bool
 )
 
 func init() {
@@ -149,7 +151,7 @@ func startTestEnv() {
 		ErrorIfCRDPathMissing: true,
 		BinaryAssetsDirectory: getFirstFoundEnvTestBinaryDir(),
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
-			ValidatingWebhooks: []*v1.ValidatingWebhookConfiguration{getValidatingWebHook()},
+			Paths: []string{filepath.Join("..", "..", "..", "config", "webhook", "manifests.yaml")},
 		},
 	}
 	var err error
@@ -220,11 +222,11 @@ func applyResources(resources resmap.ResMap) error {
 
 func runManager() {
 	By("Creating the manager")
-	webhookServer := webhook.NewServer(webhook.Options{
+	webhookServer := webhookserver.WithSecurityHeaders(webhook.NewServer(webhook.Options{
 		Port:    testEnv.WebhookInstallOptions.LocalServingPort,
 		Host:    testEnv.WebhookInstallOptions.LocalServingHost,
 		CertDir: testEnv.WebhookInstallOptions.LocalServingCertDir,
-	})
+	}))
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme.Scheme,
 		HealthProbeBindAddress: ":4980",
@@ -242,6 +244,15 @@ func runManager() {
 	clientset := kubernetes.NewForConfigOrDie(cfg)
 
 	By("Setting up ClusterPodPlacementConfig controller")
+	// Let specs simulate a failure of the monitoring availability check. monitoringAvailableFunc is replaced once,
+	// before the manager starts, so that specs only toggle an atomic flag while the reconciler is running.
+	defaultMonitoringAvailableFunc := monitoringAvailableFunc
+	monitoringAvailableFunc = func(ctx context.Context, r *ClusterPodPlacementConfigReconciler) (bool, error) {
+		if simulateMonitoringCheckFailure.Load() {
+			return false, errors.NewServiceUnavailable("simulated monitoring availability check failure")
+		}
+		return defaultMonitoringAvailableFunc(ctx, r)
+	}
 	ctrlref, err := events.GetControllerReferenceForCurrentPod(context.TODO(), clientset, utils.Namespace(), nil)
 	if err != nil {
 		suiteLog.Error(err, "unable to get controller reference for current pod (falling back to namespace)")
@@ -285,70 +296,6 @@ func runManager() {
 	}).MustPassRepeatedly(3).Should(
 		Succeed(), "manager is not ready yet")
 	suiteLog.Info("Manager is ready")
-}
-
-func getValidatingWebHook() *v1.ValidatingWebhookConfiguration {
-	return &v1.ValidatingWebhookConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "validating-webhook-configuration",
-		},
-		Webhooks: []v1.ValidatingWebhook{
-			{
-				Name:                    "validate-clusterpodplacementconfig.multiarch.openshift.io",
-				AdmissionReviewVersions: []string{"v1"},
-				ClientConfig: v1.WebhookClientConfig{
-					Service: &v1.ServiceReference{
-						Name:      "webhook-service",
-						Namespace: "system",
-						Path:      utils.NewPtr("/validate-multiarch-openshift-io-v1beta1-clusterpodplacementconfig"),
-					},
-				},
-				FailurePolicy: utils.NewPtr(v1.Fail),
-				SideEffects:   utils.NewPtr(v1.SideEffectClassNone),
-				Rules: []v1.RuleWithOperations{
-					{
-						Operations: []v1.OperationType{
-							v1.Create,
-							v1.Update,
-							v1.Delete,
-						},
-						Rule: v1.Rule{
-							APIGroups:   []string{"multiarch.openshift.io"},
-							APIVersions: []string{"v1beta1"},
-							Resources:   []string{"clusterpodplacementconfigs"},
-						},
-					},
-				},
-			},
-			{
-				Name:                    "validate-podplacementconfig.multiarch.openshift.io",
-				AdmissionReviewVersions: []string{"v1"},
-				ClientConfig: v1.WebhookClientConfig{
-					Service: &v1.ServiceReference{
-						Name:      "webhook-service",
-						Namespace: "system",
-						Path:      utils.NewPtr("/validate-multiarch-openshift-io-v1beta1-podplacementconfig"),
-					},
-				},
-				FailurePolicy: utils.NewPtr(v1.Fail),
-				SideEffects:   utils.NewPtr(v1.SideEffectClassNone),
-				Rules: []v1.RuleWithOperations{
-					{
-						Operations: []v1.OperationType{
-							v1.Create,
-							v1.Update,
-							v1.Delete,
-						},
-						Rule: v1.Rule{
-							APIGroups:   []string{"multiarch.openshift.io"},
-							APIVersions: []string{"v1beta1"},
-							Resources:   []string{"podplacementconfigs"},
-						},
-					},
-				},
-			},
-		},
-	}
 }
 
 // getFirstFoundEnvTestBinaryDir returns the first envtest asset directory under bin/k8s.

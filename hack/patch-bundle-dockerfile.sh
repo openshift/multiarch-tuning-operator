@@ -1,11 +1,11 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Extract major.minor version for CPE label (e.g., 1.3.4 -> 1.3)
 MAJOR_MINOR=$(echo "${VERSION:-0.9.0}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
 
-# shellcheck disable=SC2016
-# shellcheck disable=SC1004
-CONTENT='# Labels from hack/patch-bundle-dockerfile.sh
+LABELS='# Labels from hack/patch-bundle-dockerfile.sh
 LABEL com.redhat.component="Multiarch Tuning Operator"
 LABEL distribution-scope="public"
 LABEL name="multiarch-tuning/multiarch-tuning-operator-bundle"
@@ -26,20 +26,50 @@ LABEL summary="The Multiarch Tuning Operator enhances the user experience for ad
 LABEL io.k8s.display-name="Multiarch Tuning Operator"
 LABEL io.openshift.tags="openshift,operator,multiarch,scheduling"'
 
-# Remove the content of the bundle.konflux.Dockerfile starting from the line with the comment "# Labels from hack/patch-bundle-dockerfile.sh"
+# SDK overwrites the Dockerfile, so make bundle supplies its pre-generation snapshot.
+BUILDER_SOURCE=${1:-bundle.Dockerfile}
+TEMP_FILE=$(mktemp)
+trap 'rm -f "$TEMP_FILE"' EXIT
+awk '
+    !seen_from && toupper($1) != "FROM" { preamble = preamble $0 ORS; next }
+    toupper($1) == "FROM" {
+        seen_from = 1
+        if (builder) exit
+        if (NF >= 4 && toupper($(NF-1)) == "AS" && tolower($NF) == "builder") {
+            builder = 1
+            printf "%s", preamble
+        }
+    }
+    builder { print }
+' "$BUILDER_SOURCE" > "$TEMP_FILE"
+if [[ ! -s "$TEMP_FILE" ]]; then
+    echo "No builder stage found in $BUILDER_SOURCE" >&2
+    exit 1
+fi
+
+# Keep generated bundle labels and COPY instructions, not its overwritten builder.
+if ! grep -q '^FROM scratch' bundle.Dockerfile; then
+    echo "No bundle stage found in bundle.Dockerfile" >&2
+    exit 1
+fi
+awk '/^FROM scratch/ { bundle = 1 } bundle { print }' bundle.Dockerfile >> "$TEMP_FILE"
+
+# Replace the simple COPY statements with --from=builder versions
 if [[ "$(uname)" == "Darwin" ]]; then
     # macOS BSD sed
-    sed -i '' '/# Labels from hack\/patch-bundle-dockerfile.sh/,$d' bundle.konflux.Dockerfile
+    sed -i '' 's|^COPY bundle/manifests|COPY --from=builder /code/bundle/manifests|' "$TEMP_FILE"
+    sed -i '' 's|^COPY bundle/metadata|COPY --from=builder /code/bundle/metadata|' "$TEMP_FILE"
+    sed -i '' 's|^COPY bundle/tests/scorecard|COPY --from=builder /code/bundle/tests/scorecard|' "$TEMP_FILE"
 else
     # Linux GNU sed
-    sed -i '/# Labels from hack\/patch-bundle-dockerfile.sh/,$d' bundle.konflux.Dockerfile
+    sed -i 's|^COPY bundle/manifests|COPY --from=builder /code/bundle/manifests|' "$TEMP_FILE"
+    sed -i 's|^COPY bundle/metadata|COPY --from=builder /code/bundle/metadata|' "$TEMP_FILE"
+    sed -i 's|^COPY bundle/tests/scorecard|COPY --from=builder /code/bundle/tests/scorecard|' "$TEMP_FILE"
 fi
-# Append the content to the bundle.Dockerfile and bundle.konflux.Dockerfile
-cat <<EOF >>bundle.Dockerfile
 
-$CONTENT
-EOF
-# DO NOT ADD an empty line for the bundle.konflux.Dockerfile.
-cat <<EOF >>bundle.konflux.Dockerfile
-$CONTENT
-EOF
+# Command substitution trims trailing newlines so repeated patching stays idempotent.
+CONTENT=$(sed '/# Labels from hack\/patch-bundle-dockerfile.sh/,$d' "$TEMP_FILE")
+printf '%s\n\n%s\n' "$CONTENT" "$LABELS" > "$TEMP_FILE"
+
+# Replace the original file
+mv "$TEMP_FILE" bundle.Dockerfile

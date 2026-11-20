@@ -63,11 +63,13 @@ import (
 	"github.com/openshift/multiarch-tuning-operator/api/v1alpha1"
 	"github.com/openshift/multiarch-tuning-operator/api/v1beta1"
 	"github.com/openshift/multiarch-tuning-operator/pkg/e2e"
+	operandevents "github.com/openshift/multiarch-tuning-operator/pkg/events"
 	"github.com/openshift/multiarch-tuning-operator/pkg/informers/clusterpodplacementconfig"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/builder"
 	testingutils "github.com/openshift/multiarch-tuning-operator/pkg/testing/framework"
 	"github.com/openshift/multiarch-tuning-operator/pkg/testing/image/fake/registry"
 	"github.com/openshift/multiarch-tuning-operator/pkg/utils"
+	"github.com/openshift/multiarch-tuning-operator/pkg/webhookserver"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -81,6 +83,8 @@ var (
 	registryCert    []byte
 	stopMgr         context.CancelFunc
 	mgrStopped      chan struct{}
+	cleanupRecorder func()
+	eventWebhook    *PodSchedulingGateMutatingWebHook
 	testEnv         *envtest.Environment
 
 	dir      string
@@ -239,8 +243,18 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 		case <-mgrStopped:
 			suiteLog.Info("Manager stopped successfully")
 		case <-time.After(10 * time.Second):
-			suiteLog.Error(nil, "Timeout waiting for manager to stop")
+			Fail("Timeout waiting for manager to stop")
 		}
+	}
+	if eventWebhook != nil {
+		err := eventWebhook.ShutdownEventJobs(30 * time.Second)
+		if cleanupRecorder != nil {
+			cleanupRecorder()
+		}
+		Expect(err).To(Succeed())
+	}
+	if cleanupRecorder != nil {
+		cleanupRecorder()
 	}
 	// TODO: we miss a way to gracefully shutdown the registry server in the AfterSuite fixture.
 	err = testEnv.Stop()
@@ -335,11 +349,11 @@ func seedK8S() {
 
 func runManager() {
 	By("Creating the manager")
-	webhookServer := webhook.NewServer(webhook.Options{
+	webhookServer := webhookserver.WithSecurityHeaders(webhook.NewServer(webhook.Options{
 		Port:    testEnv.WebhookInstallOptions.LocalServingPort,
 		Host:    testEnv.WebhookInstallOptions.LocalServingHost,
 		CertDir: testEnv.WebhookInstallOptions.LocalServingCertDir,
-	})
+	}))
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme.Scheme,
 		HealthProbeBindAddress: ":4980",
@@ -350,6 +364,25 @@ func runManager() {
 	suiteLog.Info("Manager created")
 
 	clientset := kubernetes.NewForConfigOrDie(cfg)
+	recordingCtx, cancelRecording := context.WithCancel(logf.IntoContext(context.Background(), suiteLog))
+	recorder, cleanup, err := operandevents.NewRecorder(recordingCtx, clientset, mgr.GetScheme(), utils.OperatorName)
+	Expect(err).NotTo(HaveOccurred())
+	cleanupRecorder = func() { cleanup(); cancelRecording() }
+	setupComplete := false
+	defer func() {
+		if !setupComplete {
+			if stopMgr != nil {
+				stopMgr()
+				if mgrStopped != nil {
+					<-mgrStopped
+				}
+			}
+			if eventWebhook != nil {
+				_ = eventWebhook.ShutdownEventJobs(30 * time.Second)
+			}
+			cleanupRecorder()
+		}
+	}()
 
 	By("Setting up PodPlacement controller")
 	Expect((&PodReconciler{
@@ -357,15 +390,13 @@ func runManager() {
 		APIReader: mgr.GetAPIReader(),
 		Scheme:    mgr.GetScheme(),
 		ClientSet: clientset,
-		Recorder:  mgr.GetEventRecorderFor(utils.OperatorName), //nolint:staticcheck // MULTIARCH-6087: will be fixed with events API migration
+		Recorder:  recorder,
 	}).SetupWithManager(mgr)).NotTo(HaveOccurred())
 	pool, err := ants.NewMultiPool(10, 10, ants.LeastTasks, ants.WithPreAlloc(true),
 		ants.WithNonblocking(true))
 	Expect(err).NotTo(HaveOccurred())
-	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{
-		Handler: NewPodSchedulingGateMutatingWebHook(
-			mgr.GetClient(), mgr.GetAPIReader(), nil, clientset, mgr.GetScheme(), mgr.GetEventRecorderFor(utils.OperatorName), pool), //nolint:staticcheck // MULTIARCH-6087: will be fixed with events API migration
-	})
+	eventWebhook = NewPodSchedulingGateMutatingWebHook(recordingCtx, mgr.GetClient(), mgr.GetAPIReader(), nil, clientset, mgr.GetScheme(), recorder, pool)
+	mgr.GetWebhookServer().Register("/add-pod-scheduling-gate", &webhook.Admission{Handler: eventWebhook})
 
 	policyConfig := []byte(`{"default":[{"type":"insecureAcceptAnything"}],"transports":{"atomic":{},"docker":{},"docker-daemon":{"":[{"type":"insecureAcceptAnything"}]}}}`)
 	registryConfig, err := toml.Marshal(map[string]interface{}{
@@ -404,12 +435,12 @@ func runManager() {
 
 	By("Starting the manager")
 	mgrStopped = make(chan struct{})
+	mgrCtx, cancelMgr := context.WithCancel(ctx)
+	stopMgr = cancelMgr
 	go func() {
+		defer GinkgoRecover()
 		defer close(mgrStopped)
-		var mgrCtx context.Context
-		mgrCtx, stopMgr = context.WithCancel(ctx)
-		err = mgr.Start(mgrCtx)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(mgr.Start(mgrCtx)).To(Succeed())
 	}()
 
 	By("Waiting for the manager to be ready...")
@@ -426,6 +457,7 @@ func runManager() {
 		g.Expect(mgr.GetCache().WaitForCacheSync(ctx)).To(BeTrue())
 	}).Should(Succeed(), "cache did not sync")
 	suiteLog.Info("Manager cache synced")
+	setupComplete = true
 }
 
 func getMutatingWebHook() *v1.MutatingWebhookConfiguration {

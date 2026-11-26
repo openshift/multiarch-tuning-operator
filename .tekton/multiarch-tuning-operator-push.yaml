@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
       == "main" && (".tekton/***".pathChanged() || "api/***".pathChanged() || "internal/***".pathChanged()
       || "pkg/***".pathChanged() || "test/***".pathChanged() || "Dockerfile".pathChanged()
-      || "rpms.in.yaml".pathChanged() || "rpms.lock.yaml".pathChanged() || "ubi9.repo".pathChanged()
+      || "rpms.in.yaml".pathChanged() || "rpms.lock.yaml".pathChanged() || "runtime/rpms.in.yaml".pathChanged() || "runtime/rpms.lock.yaml".pathChanged() || "ubi9.repo".pathChanged()
       || "go.mod".pathChanged() || "cmd/***".pathChanged() || "go.sum".pathChanged() || "bundle/***".pathChanged() ||
       "trigger-konflux-builds.txt".pathChanged() )
   creationTimestamp: null
@@ -40,7 +40,7 @@ spec:
   - name: hermetic
     value: "true"
   - name: prefetch-input
-    value: '{"packages": [{"type": "gomod", "path": "."}, {"type": "rpm", "path": "."}], "flags": ["gomod-vendor-check"]}'
+    value: '{"packages": [{"type": "gomod", "path": "."}, {"type": "rpm", "path": "."}, {"type": "rpm", "path": "./runtime"}], "flags": ["gomod-vendor-check"]}'
   - name: build-source-image
     value: "true"
   pipelineRef:

@@ -1,0 +1,14 @@
+# Runtime package closure for the UBI 9 micro based operator image (MULTIARCH-6559).
+# Resolved against the same ubi-micro image the Dockerfile seeds the runtime rootfs from,
+# so the lockfile contains everything that must be installed on top of it.
+packages:
+  - gpgme
+  - gnupg2
+  - ca-certificates
+  - openssl-libs
+arches: [x86_64, aarch64, ppc64le, s390x]
+context:
+  image: registry.access.redhat.com/ubi9/ubi-micro:latest
+contentOrigin:
+  repofiles:
+    - ../ubi9.repo

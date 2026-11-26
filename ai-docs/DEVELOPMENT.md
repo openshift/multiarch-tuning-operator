@@ -25,7 +25,8 @@ Konflux builds (consolidated in MULTIARCH-6532). It builds `manager` and
 `enoexec-daemon` with `CGO_ENABLED=1` and `GOEXPERIMENT=strictfipsruntime` on
 the `ubi9/go-toolset` builder (a Red Hat toolchain — upstream `golang` images
 do **not** support the `strictfipsruntime` experiment) and runs on
-`ubi9/ubi-minimal` as non-root user `65532:65532`.
+`ubi9/ubi-micro` (runtime packages installed by `dnf --installroot` in a separate
+tools stage) as non-root user `65532:65532`.
 
 **gpgme-devel dependency:** the builder stage installs `gpgme-devel` from the
 public UBI 9 CodeReady Builder repository. Locally this resolves online from
@@ -35,19 +36,25 @@ builds the RPMs come from the prefetched local repository instead (below).
 ### Konflux Hermetic RPM Prefetching
 
 The Konflux operator PipelineRuns (`.tekton/multiarch-tuning-operator-{pull-request,push}.yaml`)
-prefetch both Go modules and RPMs (`prefetch-input` contains a `gomod` and an
-`rpm` entry). The RPM inputs live at the repository root:
+prefetch both Go modules and RPMs (`prefetch-input` contains a `gomod` entry and
+two `rpm` entries). The RPM inputs are:
 
-- `rpms.in.yaml` — packages to resolve (`gpgme-devel`), target arches
-  (x86_64, aarch64, ppc64le, s390x) and the builder image used as resolution
-  context (`ubi9/go-toolset`)
-- `rpms.lock.yaml` — generated lockfile with the pinned RPMs and SRPMs
-  (everything not already installed in the builder image)
-- `ubi9.repo` — public UBI 9 repository definitions used for resolution
+- `rpms.in.yaml` (repository root) — packages to resolve (`gpgme-devel`), target
+  arches (x86_64, aarch64, ppc64le, s390x) and the builder image used as
+  resolution context (`ubi9/go-toolset`)
+- `rpms.lock.yaml` (repository root) — generated lockfile with the pinned RPMs
+  and SRPMs (everything not already installed in the builder image)
+- `runtime/rpms.in.yaml` and `runtime/rpms.lock.yaml` — the runtime package
+  closure for the UBI 9 micro based runtime image (`gpgme`, `gnupg2`,
+  `ca-certificates`, `openssl-libs`), resolved against `ubi9/ubi-micro`, which
+  the Dockerfile's tools stage installs with `dnf --installroot`
+- `ubi9.repo` — public UBI 9 repository definitions used for resolution (the
+  runtime input references it as `../ubi9.repo`)
 
 During the hermetic build the pipeline mounts the prefetched RPMs as a local
 repository over `/etc/yum.repos.d`, so the `dnf install -y gpgme-devel` in the
-Dockerfile works unchanged without network access.
+builder stage and the `dnf --installroot` in the runtime tools stage both work
+unchanged without network access.
 
 **Regenerating the lockfile** (required whenever the builder image version
 changes, packages are added/removed, or dependencies drift):
@@ -190,7 +197,8 @@ Create a `.env` file (see `dotenv.example`):
 | `NO_DOCKER=1` | Run targets that use `DOCKER_CMD` locally |
 | `FORCE_DOCKER=1` | Force Docker instead of Podman |
 | `BUILD_IMAGE=<img>` | Override builder image (default: `ubi9/go-toolset:1.26`) |
-| `RUNTIME_IMAGE=<img>` | Override runtime base image (default: `ubi9/ubi-minimal:latest`) |
+| `RUNTIME_IMAGE=<img>` | Override runtime base image, without a package manager (default: `ubi9/ubi-micro:latest`) |
+| `RUNTIME_TOOLS_IMAGE=<img>` | Override the image whose `dnf` installs the runtime packages into the runtime base; not shipped (default: `ubi9/ubi:latest`) |
 
 ## Key Makefile Variables
 
